@@ -64,7 +64,3 @@ Any correctness, profiling, or performance claim must identify the relevant base
 3. **host execution environment** — OS, CPU, GPU, GPU driver, graphics backend, and relevant emulator configuration.
 
 Do not compare captures, benchmarks, or correctness observations across materially different baselines without recording the difference explicitly.
-
-## Bootstrap transition
-
-The current `ROADMAP.md` is still milestone-level planning input. Until the dedicated roadmap-normalization PR replaces it with executable items, do not start ordinary milestone implementation work under the one-item-per-PR contract. The only planned follow-up to this bootstrap is the bounded roadmap-normalization change itself.
