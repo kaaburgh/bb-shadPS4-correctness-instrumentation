@@ -13,11 +13,15 @@ When sources disagree, prefer: the current task and explicit maintainer decision
 
 `ROADMAP.md` is live project state. A PR must update its selected item when the PR changes status, evidence, dependencies, sequencing, compatibility, direction, or acceptance criteria. Preserve negative results and disproved premises instead of silently deleting the reasoning.
 
+For normalized roadmap items, keep IDs unique and dependency references valid and acyclic. Structural validation checks graph consistency only; it does not replace evidence-based review of whether the dependencies are semantically correct.
+
 Keep work bounded. Do not opportunistically absorb adjacent roadmap items unless inseparable. A PR must be understandable without chat history.
 
 ## Validation and claims
 
 Run the narrowest meaningful checks first, then broader checks warranted by the change. State exactly what ran and what did not. Compilation, linting, or synthetic tests do not establish real-target behavior.
+
+When an evidence-producing CI job uses selective triggers, include every material producer, parser, schema, manifest, and configuration input that can change the validated output. Use broader triggering when a narrow dependency set cannot be maintained reliably.
 
 Do not invent commands, targets, performance numbers, supported versions, or architecture details. If an important premise is unknown, turn it into an observation or experiment before implementation.
 
@@ -43,13 +47,29 @@ Prefer **observe → hypothesize → instrument → test → update model → pa
 
 Keep evidence classes distinct: `static`, `runtime`, `synthetic`, `reported`, and `assumed`. A plausible symbol/function name is not a fact. Tie target-specific findings to exact target/version provenance.
 
+Validation evidence must be independent of the transformation or mapping being validated. Do not validate a parser-derived address, mapping, decode, or identity by feeding values produced through that same derivation back into it. Prefer an independently pinned relationship, a second implementation/tool, raw-byte observation, runtime observation, or a structural invariant that can fail independently. If only internal consistency is checked, describe it as such rather than as independent validation.
+
+Machine-readable derived RE artifacts must carry enough provenance to reject stale or semantically incompatible evidence: at minimum a schema/version identifier, identities or hashes for all material inputs that affect interpretation, and producer/tool or analysis-model identity where those can change semantics. Consumers should fail closed on missing or incompatible provenance instead of silently accepting legacy output.
+
+Preserve ambiguity in both machine output and prose. If uniqueness is not established, emit an explicit ambiguous/unmapped result rather than selecting a convenient candidate by ordering, nearest address, fuzzy score, or other arbitrary tie-break. Heuristic relationships may rank investigation leads but remain hypotheses until stronger evidence establishes identity.
+
+Treat ABI and calling convention as target evidence, not a compiler-default assumption. Before interpreting arguments across a closed-target call boundary or designing a hook/trampoline around it, establish the relevant register/stack behavior from real call sites, callee entry/exit behavior, known-arity calls, or equivalent direct evidence when practical.
+
+For runtime experiments, define success with an oracle that directly distinguishes the claimed target state or behavior. Liveness, a changed frame/hash, non-empty output, or a generic timing delta proves only that something happened unless that is exactly the claim being tested. Declare termination/liveness expectations and bound waits, retries, logging, captures, and total runtime so a hung or noisy run fails closed rather than producing accidental evidence.
+
+Keep harness capability separate from target-specific evidence. A synthetic fixture, redistributable control target, or mock can establish that input injection, breakpoint control, capture, decoding, or artifact generation works; it does not establish the corresponding behavior on the exact target until that target is run under the stated scenario and oracle.
+
 Substantial findings belong under `docs/re/`; reproducible experiments and negative results belong under `docs/experiments/`. Save signatures, structures, call sequences, scripts, parsers, and other reusable RE outputs in the repository when licensing permits.
 
 ## Proprietary target material
 
 Do not commit proprietary executables/assets, private dumps, secrets, credentials, or unnecessarily large captures. Commit only the minimal derived metadata and tooling needed to reproduce and review the work.
 
-When a target machine is required, prepare the smallest reproducible one-shot experiment. Prefer a script/tool that emits a self-contained artifact containing safe metadata, hashes/version identifiers, configuration, bounded logs, and only the requested captures/dumps.
+Treat operator-supplied proprietary target trees as immutable evidence inputs. Verify the exact target/fixture identity before use and, when the target or harness can write to its mounted tree, execute against a verified copy, isolated work directory, overlay, or equivalent mechanism rather than mutating the source evidence in place. Reject ambiguous target/fixture selection instead of choosing one silently.
+
+When a target machine is required, prepare the smallest reproducible one-shot experiment. Prefer a script/tool that verifies the target/fixture identity, executes one bounded scenario, and emits a self-contained artifact containing only safe metadata, hashes/version identifiers, configuration, bounded logs, and the requested captures/dumps.
+
+The detached machine-readable run record should have an explicit schema/version and preserve enough provenance to replay and audit the evidence without redistributing the target: target/fixture identities, scenario/config identity, harness/tool versions or hashes, material environment facts, termination result, semantic oracle results, and artifact names/digests. Sanitize private host paths, user identifiers, credentials, and unrelated environment data. Do not embed proprietary payload bytes in the run record merely for convenience.
 
 ## Emulator correctness
 
@@ -63,7 +83,9 @@ Correctness evidence precedes performance specialization. Instrumentation must m
 
 Do not infer the rendering pipeline from UI settings alone. Observe the relevant API/backend, device/queue/swapchain/resource descriptors, formats, resolutions, synchronization, barriers, render/depth targets, shader/pipeline identifiers, and timing paths needed by the question.
 
-Prefer objective validation: frame/resource captures, event sequences, descriptors/state dumps, screenshot or pixel comparisons, and timing distributions. Keep expensive tracing out of hot paths unless explicitly running a diagnostic mode; avoid per-draw/per-frame filesystem I/O, allocations, global locks, and unbounded logging.
+Prefer objective validation: frame/resource captures, event sequences, descriptors/state dumps, screenshot or pixel comparisons, and timing distributions. The acceptance oracle must prove the intended checkpoint or graphics state: a changed frame/hash, nonzero pixel delta, or generic GPU activity is not sufficient evidence of a particular screen/resource/state transition unless that change itself is the claim. Use checkpoint-specific regions, descriptors, event/resource identities, or other semantic invariants when full-frame/global thresholds would be misleading.
+
+Keep expensive tracing out of hot paths unless explicitly running a diagnostic mode; avoid per-draw/per-frame filesystem I/O, allocations, global locks, and unbounded logging.
 
 ## Upstream-first changes
 
@@ -80,3 +102,9 @@ Any correctness, profiling, or performance claim must identify the relevant base
 3. **host execution environment** — OS, CPU, GPU, GPU driver, graphics backend, and relevant emulator configuration.
 
 Do not compare captures, benchmarks, or correctness observations across materially different baselines without recording the difference explicitly.
+
+## agentic-repo-kit artifact and check procedure
+
+Use the `tool_version` in `.agentic-repo.lock.json` as the source of truth for normal contract checks; do not silently substitute `latest`. Follow `docs/agentic-repo-kit.md` to obtain the matching versioned GitHub Release artifact, verify it, and run `agentic-repo check`.
+
+If the current environment cannot read the private `kaaburgh/agentic-repo-kit` release, request the matching versioned archive plus `SHA256SUMS` from the operator and continue independent work. Lack of direct release access in one sandbox is an environment acquisition constraint, not evidence that repository validation is impossible.

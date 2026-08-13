@@ -45,6 +45,14 @@ A missing tool or failed acquisition in one sandbox is not, by itself, evidence 
 
 If local execution is genuinely required, prefer a one-shot experiment prepared by the agent that creates a self-contained safe artifact for later analysis.
 
+## Structural validation after normalization
+
+`agentic-repo check` leaves milestone-only planning documents alone. Once the roadmap contains structured ID-bearing item headings such as `## ID — Title` or `### ID — Title`, it also checks stable mechanical graph invariants: unique IDs, a status field, a dependency field, resolvable dependency IDs, and an acyclic dependency graph.
+
+The status may be a standalone `Status` field or part of a compact slash-separated field such as `Status / priority / execution`. Dependency values should be `none`/`None` or comma/semicolon-separated item IDs; ordinary Markdown links, code formatting, bold formatting, and short parenthetical annotations are accepted around an otherwise exact ID.
+
+This validation does not prove that a dependency is the right semantic dependency, that an item is truly ready, or that its acceptance criteria are sufficient. Those remain evidence-driven review questions.
+
 ## Roadmap reconciliation
 
 The PR that changes reality changes the relevant roadmap item in the same PR. Update status, evidence, dependencies, compatibility, acceptance criteria, sequencing, and negative results whenever they changed. Do not mark an item verified when only build or synthetic validation ran.
