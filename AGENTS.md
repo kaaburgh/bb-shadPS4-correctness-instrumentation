@@ -21,6 +21,22 @@ Run the narrowest meaningful checks first, then broader checks warranted by the 
 
 Do not invent commands, targets, performance numbers, supported versions, or architecture details. If an important premise is unknown, turn it into an observation or experiment before implementation.
 
+## Tool availability and operator handoff
+
+A missing tool or capability in one agent environment is **not** evidence that the capability is unavailable to the project or that the task is impossible. Escalate environment-specific acquisition failures as bounded operator handoffs instead of turning them into unsupported project conclusions.
+
+When a required capability is missing:
+
+- first decide whether a small in-project tool or script can provide the required evidence safely and within the current task scope; prefer that when it is a reasonable bounded solution rather than silently substituting a weaker analysis method;
+- otherwise try the normal installation, download, bootstrap, package-manager, or attached-artifact paths available in the current environment;
+- if sandbox, network/egress, package-manager, permission, platform, or similar constraints block acquisition, pause only the line of work that requires that capability and continue every independent line of work;
+- report the exact missing tool/capability, relevant version/platform requirements, why it is required, acquisition paths already attempted, and the concrete failures so an operator can supply or enable the missing piece;
+- if no operator is available in the current session, preserve the bounded blocker and continue independent work rather than idling or declaring the entire task impossible;
+- treat operator-provided tools or artifacts as inputs subject to the repository's existing safety, licensing, provenance, and evidence rules; an operator handoff does not override stricter project/domain policy;
+- preserve reusable acquisition/bootstrap knowledge when the blocker is resolved, and record important negative acquisition results when they would otherwise be rediscovered.
+
+Failure to acquire a tool inside one sandbox is not, by itself, sufficient evidence to classify work `LOCAL ONLY`, mark the underlying capability unavailable, or close the task as impossible.
+
 ## Reverse engineering and evidence
 
 Prefer **observe → hypothesize → instrument → test → update model → patch**. If the cause is unknown, observability comes before a final fix. Choose experiments for information gain: one experiment that eliminates several hypotheses is better than several narrow confirmation attempts.

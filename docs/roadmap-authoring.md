@@ -41,6 +41,8 @@ When environment matters, classify work explicitly rather than assuming a workst
 - **GATED** — do not start until its named feasibility dependency resolves the environment.
 - **LOCAL ONLY** — use only after a documented feasibility investigation establishes the blocker.
 
+A missing tool or failed acquisition in one sandbox is not, by itself, evidence for `LOCAL ONLY`. When a required capability cannot be acquired because of environment constraints, keep independent work moving and use a bounded operator handoff; reserve `LOCAL ONLY` for a documented feasibility result that establishes an actual execution blocker.
+
 If local execution is genuinely required, prefer a one-shot experiment prepared by the agent that creates a self-contained safe artifact for later analysis.
 
 ## Roadmap reconciliation
