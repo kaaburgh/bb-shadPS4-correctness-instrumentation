@@ -36,12 +36,27 @@
 - [ ] The PR has one primary bounded outcome.
 - [ ] Claims match validation actually performed.
 - [ ] New evidence that invalidated the plan is reflected in roadmap/docs rather than hidden by the implementation.
+- [ ] Structured roadmap IDs/dependencies remain valid and acyclic when this PR changes roadmap sequencing.
+- [ ] Evidence-producing CI/path filters cover the material producer/parser/schema/manifest/config dependencies that can change the validated result.
 
 ### Reverse-engineering evidence
 
 - [ ] Established findings name evidence class and target/environment provenance.
+- [ ] Validation or corroboration is independent of the derived mapping/model being validated, or is explicitly labeled internal consistency only.
+- [ ] Serialized RE artifacts carry schema/input/producer provenance sufficient to reject stale or incompatible evidence.
+- [ ] Ambiguous matches or correlations remain explicit; no arbitrary tie-break is promoted to identity.
+- [ ] ABI/calling-convention claims used for argument interpretation or hook design are supported by observed target behavior where practical.
+- [ ] Runtime experiments use a semantic success/failure oracle and explicit bounded termination contract rather than accepting generic activity as proof of the intended behavior.
+- [ ] Harness/control capability evidence is not presented as target-specific runtime evidence.
 - [ ] Negative results that prevent repeated dead ends are durable.
 - [ ] Runtime behavior is not claimed from static or synthetic evidence alone.
+
+### Proprietary target experiment safety
+
+- [ ] Operator-supplied target/fixture inputs are identity-verified and left immutable; writable execution uses an isolated copy/overlay where needed.
+- [ ] The detached machine-readable run record has an explicit supported schema/version and captures target/fixture, scenario/config, harness/tool, material environment, termination, semantic oracle, and artifact provenance without embedding proprietary payloads.
+- [ ] Artifacts/logs are bounded and sanitize private paths, credentials, user identifiers, and unrelated host data.
+- [ ] Ambiguous target or fixture selection fails closed rather than choosing a candidate silently.
 
 ### Upstreamability
 
