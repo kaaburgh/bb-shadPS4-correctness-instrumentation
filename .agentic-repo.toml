@@ -1,0 +1,20 @@
+kit_version = 1
+profiles = [
+  "core",
+  "reverse-engineering",
+  "proprietary-target",
+  "emulator",
+  "graphics",
+  "upstream-first",
+]
+
+[project]
+name = "Bloodborne on shadPS4 correctness + instrumentation"
+kind = "emulator correctness / graphics instrumentation"
+roadmap = "ROADMAP.md"
+
+[workflow]
+cloud_first = true
+
+[local]
+policy_files = ["docs/agent-policy.local.md"]
