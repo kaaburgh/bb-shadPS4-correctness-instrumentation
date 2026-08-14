@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -35,9 +36,17 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def loads_strict(text: str) -> Any:
     """Parse JSON while rejecting duplicate object members."""
     try:
-        return json.loads(text, object_pairs_hook=_strict_object)
+        return json.loads(
+            text,
+            object_pairs_hook=_strict_object,
+            parse_constant=_reject_constant,
+        )
     except json.JSONDecodeError as error:
         raise ManifestError(f"invalid JSON: {error}") from error
+
+
+def _reject_constant(name: str) -> Any:
+    raise ManifestError(f"non-finite JSON constant is not valid JSON: {name}")
 
 
 def load_strict(path: Path) -> Any:
@@ -62,6 +71,8 @@ def validate_semantics(manifest: Mapping[str, Any]) -> None:
     configuration = manifest["configuration"]
     modifications = configuration["active_modifications"]
     order = configuration["modification_order"]["value"]
+    for setting in configuration["settings"].values():
+        _setting_value(setting)
     if len(order) != len(modifications) or set(order) != set(modifications):
         raise ManifestError(
             "modification_order must contain every active modification ID exactly once"
@@ -82,6 +93,7 @@ def validate_semantics(manifest: Mapping[str, Any]) -> None:
 def validate_manifest(
     manifest: Mapping[str, Any], *, schema_path: Path = SCHEMA_PATH
 ) -> None:
+    """Validate an already strictly parsed manifest mapping."""
     schema = load_strict(schema_path)
     validator = _jsonschema_validator(schema)
     errors = sorted(
@@ -93,6 +105,24 @@ def validate_manifest(
         location = "/" + "/".join(str(token) for token in first.absolute_path)
         raise ManifestError(f"schema validation failed at {location}: {first.message}")
     validate_semantics(manifest)
+
+
+def validate_document(text: str, *, schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
+    """Strictly parse and validate a manifest document in one safe operation."""
+    manifest = loads_strict(text)
+    if not isinstance(manifest, dict):
+        raise ManifestError("manifest document must contain a JSON object")
+    validate_manifest(manifest, schema_path=schema_path)
+    return manifest
+
+
+def validate_file(path: Path, *, schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
+    """Read, strictly parse, and validate one manifest file."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ManifestError(f"unable to read {path}") from error
+    return validate_document(text, schema_path=schema_path)
 
 
 def _escape_pointer_token(value: str) -> str:
@@ -119,6 +149,19 @@ def _artifact_value(artifact: Mapping[str, Any]) -> tuple[str, int]:
     return artifact["sha256"], artifact["size_bytes"]
 
 
+def _setting_value(setting: Mapping[str, Any]) -> tuple[str, Any]:
+    value = setting["value"]
+    if isinstance(value, bool):
+        return "boolean", value
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ManifestError("non-finite numeric setting value is not allowed")
+        return "number", value
+    if isinstance(value, str):
+        return "string", value
+    raise ManifestError("setting value must be boolean, number, or string")
+
+
 def _material_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
     build = manifest["build"]
     content = manifest["content"]
@@ -140,7 +183,7 @@ def _material_projection(manifest: Mapping[str, Any]) -> dict[str, Any]:
     }
     for key, setting in configuration["settings"].items():
         pointer = f"/configuration/settings/{_escape_pointer_token(key)}"
-        projection[pointer] = setting["value"]
+        projection[pointer] = _setting_value(setting)
     for identifier, modification in configuration["active_modifications"].items():
         pointer = f"/configuration/active_modifications/{_escape_pointer_token(identifier)}"
         projection[pointer] = (
@@ -210,7 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         if args.command == "validate":
-            validate_manifest(load_strict(args.manifest), schema_path=args.schema)
+            validate_file(args.manifest, schema_path=args.schema)
             print("valid")
             return 0
         result = compare_manifests(

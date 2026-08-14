@@ -27,6 +27,40 @@ class ParserAndComparisonTests(unittest.TestCase):
         with self.assertRaisesRegex(target_manifest.ManifestError, "duplicate JSON member"):
             target_manifest.loads_strict('{"settings":{"game.language":1,"game.language":2}}')
 
+    def test_validate_document_is_strict(self):
+        with self.assertRaisesRegex(target_manifest.ManifestError, "duplicate JSON member"):
+            target_manifest.validate_document('{"manifest_kind":"a","manifest_kind":"b"}')
+
+    def test_non_finite_json_constants_are_rejected(self):
+        for constant in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(constant=constant):
+                with self.assertRaisesRegex(target_manifest.ManifestError, "non-finite JSON constant"):
+                    target_manifest.loads_strict(constant)
+
+    def test_boolean_and_numeric_settings_have_distinct_material_values(self):
+        left = copy.deepcopy(self.example)
+        right = copy.deepcopy(self.example)
+        left["configuration"]["settings"]["synthetic.flag"] = {
+            "value": True,
+            "evidence_class": "synthetic",
+        }
+        right["configuration"]["settings"]["synthetic.flag"] = {
+            "value": 1,
+            "evidence_class": "synthetic",
+        }
+
+        self.assertEqual(target_manifest.compare_validated(left, right), "different")
+
+    def test_overflowed_numeric_setting_is_rejected(self):
+        manifest = copy.deepcopy(self.example)
+        manifest["configuration"]["settings"]["synthetic.overflow"] = {
+            "value": float("inf"),
+            "evidence_class": "synthetic",
+        }
+
+        with self.assertRaisesRegex(target_manifest.ManifestError, "non-finite numeric setting"):
+            target_manifest.validate_semantics(manifest)
+
     def test_identical_complete_manifests_are_same(self):
         self.assertEqual(
             target_manifest.compare_validated(self.example, copy.deepcopy(self.example)),
