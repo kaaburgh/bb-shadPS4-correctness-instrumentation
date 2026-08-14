@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kaaburgh/bb-shadPS4-correctness-instrumentation/main/schemas/host-environment.schema.json",
+  "title": "Bloodborne/shadPS4 host and run environment manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "collector",
+    "captured_at_utc",
+    "host",
+    "run",
+    "unknown_fields",
+    "collection_warnings"
+  ],
+  "properties": {
+    "schema_id": { "const": "bb-host-environment/v1" },
+    "schema_version": { "const": 1 },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "bb-host-environment" },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "captured_at_utc": { "type": "string", "format": "date-time" },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "cpu", "memory", "gpus"],
+      "properties": {
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "name", "version", "build", "kernel"],
+          "properties": {
+            "family": { "$ref": "#/$defs/nullableString" },
+            "name": { "$ref": "#/$defs/nullableString" },
+            "version": { "$ref": "#/$defs/nullableString" },
+            "build": { "$ref": "#/$defs/nullableString" },
+            "kernel": { "$ref": "#/$defs/nullableString" }
+          }
+        },
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["architecture", "vendor", "model", "logical_processors"],
+          "properties": {
+            "architecture": { "$ref": "#/$defs/nullableString" },
+            "vendor": { "$ref": "#/$defs/nullableString" },
+            "model": { "$ref": "#/$defs/nullableString" },
+            "logical_processors": {
+              "type": ["integer", "null"],
+              "minimum": 1,
+              "maximum": 65536
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["physical_bytes"],
+          "properties": {
+            "physical_bytes": {
+              "type": ["integer", "null"],
+              "minimum": 1
+            }
+          }
+        },
+        "gpus": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/gpu" }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["graphics_backend", "emulator_config"],
+      "properties": {
+        "graphics_backend": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z0-9][a-z0-9_.+-]{0,63}$"
+        },
+        "emulator_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256"],
+          "properties": {
+            "sha256": {
+              "type": ["string", "null"],
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "unknown_fields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^/" }
+    },
+    "collection_warnings": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "field"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "field": { "type": "string", "pattern": "^/" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nullableString": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "vendor_id", "device_id", "driver"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nullableString" },
+        "vendor_id": {
+          "type": ["string", "null"],
+          "pattern": "^0x[0-9a-f]{4}$"
+        },
+        "device_id": {
+          "type": ["string", "null"],
+          "pattern": "^0x[0-9a-f]{4}$"
+        },
+        "driver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "$ref": "#/$defs/nullableString" },
+            "version": { "$ref": "#/$defs/nullableString" }
+          }
+        }
+      }
+    }
+  }
+}

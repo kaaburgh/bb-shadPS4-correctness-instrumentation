@@ -49,11 +49,11 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Small
 
 ### BB-BL3 — Define host/run environment manifest and collector
-- **Status / priority / execution:** Open / High / CLOUD
+- **Status / priority / execution:** Implemented, validation incomplete / High / CLOUD
 - **Depends on:** None
 - **Question:** Как автоматически фиксировать host factors, влияющие на correctness/performance?
-- **Next experiment / information gain:** Определить bounded OS/CPU/GPU/driver/backend/emulator-config fields и redaction rules; сделать synthetic-testable collector.
-- **Acceptance / artifacts:** `docs/baseline/host-environment.md` + tool/tests выдают stable manifest с explicit unknown fields и без sensitive user data.
+- **Evidence / result:** `bb-host-environment/v1` schema и stdlib-only collector фиксируют allowlisted host/run fields, explicit unknown pointers и config fingerprint без путей/содержимого. Synthetic tests проверяют normalization, hardware-backed Windows CPU identity, bounded GPU inventory и privacy boundary; cross-platform CI validation ожидается для текущего implementation commit.
+- **Acceptance / artifacts:** `docs/baseline/host-environment.md`, `schemas/host-environment.schema.json`, `tools/collect_host_environment.py` и tests выдают stable manifest с explicit unknown fields и без sensitive user data.
 - **Scope:** Medium
 
 ### BB-ENV1 — Resolve target execution feasibility and handoff
