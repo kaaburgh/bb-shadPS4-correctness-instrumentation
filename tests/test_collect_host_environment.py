@@ -1,3 +1,4 @@
+import copy
 import datetime as dt
 import hashlib
 import io
@@ -279,6 +280,66 @@ class ManifestTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "host.os has unexpected fields"):
             collector.validate_manifest(manifest)
+
+    def test_validation_enforces_published_value_constraints(self):
+        base = collector.build_manifest(
+            synthetic_host(),
+            captured_at_utc=FIXED_TIME,
+            graphics_backend=None,
+            emulator_config_sha256=None,
+        )
+        cases = [
+            ("collector name", lambda value: value["collector"].update(name="spoofed"), "collector.name"),
+            ("collector version", lambda value: value["collector"].update(version=""), "collector.version"),
+            ("oversized OS field", lambda value: value["host"]["os"].update(name="x" * 257), "host.os.name"),
+            (
+                "logical processor lower bound",
+                lambda value: value["host"]["cpu"].update(logical_processors=0),
+                "host.cpu.logical_processors",
+            ),
+            (
+                "physical memory lower bound",
+                lambda value: value["host"]["memory"].update(physical_bytes=0),
+                "host.memory.physical_bytes",
+            ),
+            (
+                "graphics backend pattern",
+                lambda value: value["run"].update(graphics_backend="Vulkan"),
+                "run.graphics_backend",
+            ),
+            (
+                "warning count bound",
+                lambda value: value.update(
+                    collection_warnings=[{"code": "warning", "field": "/host/gpus"}] * 33
+                ),
+                "collection_warnings contains too many",
+            ),
+        ]
+        for name, mutate, message in cases:
+            with self.subTest(name=name):
+                candidate = copy.deepcopy(base)
+                mutate(candidate)
+                with self.assertRaisesRegex(ValueError, message):
+                    collector.validate_manifest(candidate)
+
+        gpu_manifest = collector.build_manifest(
+            synthetic_host(
+                gpus=[
+                    {
+                        "name": "Synthetic GPU",
+                        "vendor_id": "0x1002",
+                        "device_id": "0x73bf",
+                        "driver": {"name": None, "version": None},
+                    }
+                ]
+            ),
+            captured_at_utc=FIXED_TIME,
+            graphics_backend=None,
+            emulator_config_sha256=None,
+        )
+        gpu_manifest["host"]["gpus"][0]["vendor_id"] = "NVIDIA-GARBAGE"
+        with self.assertRaisesRegex(ValueError, r"host.gpus\[0\].vendor_id"):
+            collector.validate_manifest(gpu_manifest)
 
     def test_linux_gpu_discovery_ignores_connector_entries(self):
         with tempfile.TemporaryDirectory() as directory:
