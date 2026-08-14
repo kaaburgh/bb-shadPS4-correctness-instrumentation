@@ -42,6 +42,8 @@ Negative and ambiguity cases fail closed:
 - an unknown active-modification set also marks application order unknown;
 - mismatches confined to unknown projected paths compare `indeterminate`, not `different`;
 - a partial manifest never compares `same`;
+- boolean and numeric settings with the same Python truthiness compare `different` when their JSON scalar kinds differ;
+- non-finite JSON constants and overflowed numeric values are rejected before comparison;
 - a separately known projected mismatch still compares `different` even when another path is uncertain;
 - reversing modification order changes material identity.
 
