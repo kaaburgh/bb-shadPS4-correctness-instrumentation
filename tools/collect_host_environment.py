@@ -2,9 +2,9 @@
 """Collect a privacy-bounded host/run environment manifest.
 
 The collector intentionally records only allowlisted facts.  In particular, it
-does not serialize host names, user names, paths, command lines, environment
-variables, network identifiers, hardware serial numbers, or configuration
-contents.
+does not serialize host names, user names, paths, command lines, arbitrary
+environment variables, network identifiers, hardware serial numbers, or
+configuration contents.
 """
 
 from __future__ import annotations
@@ -519,6 +519,8 @@ def build_manifest(
 
 def validate_manifest(manifest: Mapping[str, Any]) -> None:
     """Fail closed on producer/schema drift before serializing output."""
+    if not isinstance(manifest, Mapping):
+        raise ValueError("host-environment manifest must be an object")
     if manifest.get("schema_id") != SCHEMA_ID or manifest.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported host-environment manifest schema")
     expected_top_level = {
@@ -534,25 +536,71 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     if set(manifest) != expected_top_level:
         raise ValueError("host-environment manifest has unexpected top-level fields")
     _require_exact_keys(manifest["collector"], {"name", "version"}, "collector")
+    if manifest["collector"]["name"] != COLLECTOR_NAME:
+        raise ValueError("collector.name does not match the published schema")
+    _validate_string(manifest["collector"]["version"], "collector.version", 1, 64)
     _require_exact_keys(manifest["host"], {"os", "cpu", "memory", "gpus"}, "host")
     _require_exact_keys(
         manifest["host"]["os"],
         {"family", "name", "version", "build", "kernel"},
         "host.os",
     )
+    for field, value in manifest["host"]["os"].items():
+        _validate_nullable_string(value, f"host.os.{field}")
     _require_exact_keys(
         manifest["host"]["cpu"],
         {"architecture", "vendor", "model", "logical_processors"},
         "host.cpu",
     )
+    for field in ("architecture", "vendor", "model"):
+        _validate_nullable_string(manifest["host"]["cpu"][field], f"host.cpu.{field}")
+    _validate_bounded_integer(
+        manifest["host"]["cpu"]["logical_processors"],
+        "host.cpu.logical_processors",
+        minimum=1,
+        maximum=65536,
+    )
     _require_exact_keys(manifest["host"]["memory"], {"physical_bytes"}, "host.memory")
+    _validate_bounded_integer(
+        manifest["host"]["memory"]["physical_bytes"],
+        "host.memory.physical_bytes",
+        minimum=1,
+    )
+    if not isinstance(manifest["host"]["gpus"], list):
+        raise ValueError("host.gpus must be an array")
     _require_exact_keys(manifest["run"], {"graphics_backend", "emulator_config"}, "run")
     _require_exact_keys(manifest["run"]["emulator_config"], {"sha256"}, "run.emulator_config")
+    _validate_pattern(
+        manifest["run"]["graphics_backend"],
+        r"[a-z0-9][a-z0-9_.+-]{0,63}",
+        "run.graphics_backend",
+        nullable=True,
+    )
     for index, gpu in enumerate(manifest["host"]["gpus"]):
         _require_exact_keys(gpu, {"name", "vendor_id", "device_id", "driver"}, f"host.gpus[{index}]")
         _require_exact_keys(gpu["driver"], {"name", "version"}, f"host.gpus[{index}].driver")
+        field_prefix = f"host.gpus[{index}]"
+        _validate_nullable_string(gpu["name"], f"{field_prefix}.name")
+        for field in ("vendor_id", "device_id"):
+            _validate_pattern(gpu[field], r"0x[0-9a-f]{4}", f"{field_prefix}.{field}", nullable=True)
+        _validate_nullable_string(gpu["driver"]["name"], f"{field_prefix}.driver.name")
+        _validate_nullable_string(gpu["driver"]["version"], f"{field_prefix}.driver.version")
+    if not isinstance(manifest["unknown_fields"], list):
+        raise ValueError("unknown_fields must be an array")
+    if any(not isinstance(pointer, str) for pointer in manifest["unknown_fields"]):
+        raise ValueError("unknown_fields items must be JSON Pointers")
+    if len(set(manifest["unknown_fields"])) != len(manifest["unknown_fields"]):
+        raise ValueError("unknown_fields must contain unique JSON Pointers")
+    for pointer in manifest["unknown_fields"]:
+        _validate_pattern(pointer, r"/.*", "unknown_fields item")
+    if not isinstance(manifest["collection_warnings"], list):
+        raise ValueError("collection_warnings must be an array")
+    if len(manifest["collection_warnings"]) > 32:
+        raise ValueError("collection_warnings contains too many entries")
     for index, warning in enumerate(manifest["collection_warnings"]):
         _require_exact_keys(warning, {"code", "field"}, f"collection_warnings[{index}]")
+        _validate_string(warning["code"], f"collection_warnings[{index}].code", 1, 64)
+        _validate_pattern(warning["field"], r"/.*", f"collection_warnings[{index}].field")
     if manifest["unknown_fields"] != _unknown_fields(manifest):
         raise ValueError("host-environment manifest has stale unknown_fields")
     if len(manifest["host"]["gpus"]) > MAX_GPU_COUNT:
@@ -567,13 +615,49 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     if parsed_timestamp.utcoffset() != dt.timedelta(0):
         raise ValueError("captured_at_utc must be UTC")
     config_digest = manifest["run"]["emulator_config"]["sha256"]
-    if config_digest is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", config_digest):
-        raise ValueError("emulator configuration fingerprint must be SHA-256")
+    _validate_pattern(
+        config_digest,
+        r"sha256:[0-9a-f]{64}",
+        "run.emulator_config.sha256",
+        nullable=True,
+    )
 
 
 def _require_exact_keys(value: Any, expected: set[str], field: str) -> None:
     if not isinstance(value, Mapping) or set(value) != expected:
         raise ValueError(f"{field} has unexpected fields")
+
+
+def _validate_string(value: Any, field: str, minimum: int, maximum: int) -> None:
+    if not isinstance(value, str) or not minimum <= len(value) <= maximum:
+        raise ValueError(f"{field} must be a string with length {minimum}-{maximum}")
+
+
+def _validate_nullable_string(value: Any, field: str) -> None:
+    if value is not None:
+        _validate_string(value, field, 1, 256)
+
+
+def _validate_pattern(value: Any, pattern: str, field: str, *, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
+        raise ValueError(f"{field} does not match the published schema")
+
+
+def _validate_bounded_integer(
+    value: Any,
+    field: str,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"{field} must be an integer at least {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{field} must be an integer no greater than {maximum}")
 
 
 def _capture_timestamp(clock: Callable[[], dt.datetime]) -> str:
