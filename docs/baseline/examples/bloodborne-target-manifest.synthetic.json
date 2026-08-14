@@ -18,7 +18,10 @@
   },
   "target": {
     "name": "Bloodborne",
-    "title_id": "CUSA00000",
+    "title_id": {
+      "value": "CUSA00000",
+      "evidence_class": "synthetic"
+    },
     "distribution_region": null
   },
   "build": {
@@ -26,11 +29,13 @@
     "master_version": null,
     "eboot": {
       "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
-      "size_bytes": 4096
+      "size_bytes": 4096,
+      "evidence_class": "synthetic"
     },
     "param_sfo": {
       "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
-      "size_bytes": 512
+      "size_bytes": 512,
+      "evidence_class": "synthetic"
     }
   },
   "content": {
@@ -46,22 +51,30 @@
         "version": "00.01",
         "source_package": {
           "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
-          "size_bytes": 8192
+          "size_bytes": 8192,
+          "evidence_class": "synthetic"
         }
       }
     },
-    "dlc": [],
+    "dlc": {},
     "resolved_tree": {
       "algorithm": "sha256-tree-v1",
       "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
       "file_count": 3,
-      "total_bytes": 12288
+      "total_bytes": 12288,
+      "evidence_class": "synthetic"
     }
   },
   "configuration": {
     "settings": {
-      "game.language": "en-US",
-      "target.network_mode": "offline"
+      "game.language": {
+        "value": "en-US",
+        "evidence_class": "synthetic"
+      },
+      "target.network_mode": {
+        "value": "offline",
+        "evidence_class": "synthetic"
+      }
     },
     "active_modifications": {
       "synthetic-frame-pacing-fixture": {
@@ -69,9 +82,16 @@
         "version": "1",
         "artifact": {
           "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
-          "size_bytes": 128
+          "size_bytes": 128,
+          "evidence_class": "synthetic"
         }
       }
+    },
+    "modification_order": {
+      "value": [
+        "synthetic-frame-pacing-fixture"
+      ],
+      "evidence_class": "synthetic"
     }
   }
 }

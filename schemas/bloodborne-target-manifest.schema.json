@@ -45,41 +45,14 @@
       "$ref": "#/$defs/configuration"
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "identity_completeness": {
-            "properties": {
-              "state": {
-                "const": "complete"
-              }
-            },
-            "required": ["state"]
-          }
-        },
-        "required": ["identity_completeness"]
-      },
-      "then": {
-        "properties": {
-          "provenance": {
-            "properties": {
-              "evidence_classes": {
-                "contains": {
-                  "enum": ["static", "runtime", "synthetic"]
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  ],
   "$defs": {
+    "exactEvidenceClass": {
+      "enum": ["static", "runtime", "synthetic"]
+    },
     "sha256Artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sha256", "size_bytes"],
+      "required": ["sha256", "size_bytes", "evidence_class"],
       "properties": {
         "sha256": {
           "type": "string",
@@ -88,6 +61,9 @@
         "size_bytes": {
           "type": "integer",
           "minimum": 0
+        },
+        "evidence_class": {
+          "$ref": "#/$defs/exactEvidenceClass"
         }
       }
     },
@@ -180,7 +156,7 @@
               "uniqueItems": true,
               "items": {
                 "type": "string",
-                "pattern": "^/(target|build|content|configuration)(/.*)?$"
+                "pattern": "^/(target|build|content|configuration)(/(?:[^~/]|~[01])*)*$"
               }
             }
           }
@@ -196,8 +172,7 @@
           "const": "Bloodborne"
         },
         "title_id": {
-          "type": "string",
-          "pattern": "^[A-Z]{4}[0-9]{5}$"
+          "$ref": "#/$defs/titleId"
         },
         "distribution_region": {
           "oneOf": [
@@ -208,6 +183,20 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "titleId": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence_class"],
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^[A-Z]{4}[0-9]{5}$"
+        },
+        "evidence_class": {
+          "$ref": "#/$defs/exactEvidenceClass"
         }
       }
     },
@@ -286,7 +275,7 @@
     "resolvedTree": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "sha256", "file_count", "total_bytes"],
+      "required": ["algorithm", "sha256", "file_count", "total_bytes", "evidence_class"],
       "properties": {
         "algorithm": {
           "const": "sha256-tree-v1"
@@ -302,6 +291,9 @@
         "total_bytes": {
           "type": "integer",
           "minimum": 1
+        },
+        "evidence_class": {
+          "$ref": "#/$defs/exactEvidenceClass"
         }
       }
     },
@@ -317,14 +309,30 @@
           "$ref": "#/$defs/update"
         },
         "dlc": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/contentComponent"
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/dlcComponent"
           }
         },
         "resolved_tree": {
           "$ref": "#/$defs/resolvedTree"
+        }
+      }
+    },
+    "dlcComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_package"],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "source_package": {
+          "$ref": "#/$defs/optionalArtifact"
         }
       }
     },
@@ -334,16 +342,26 @@
           "type": "boolean"
         },
         {
-          "type": "integer"
+          "type": "number"
         },
         {
           "type": "string",
           "maxLength": 256
-        },
-        {
-          "type": "null"
         }
       ]
+    },
+    "setting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "evidence_class"],
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/settingValue"
+        },
+        "evidence_class": {
+          "$ref": "#/$defs/exactEvidenceClass"
+        }
+      }
     },
     "modification": {
       "type": "object",
@@ -364,7 +382,7 @@
     "configuration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["settings", "active_modifications"],
+      "required": ["settings", "active_modifications", "modification_order"],
       "properties": {
         "settings": {
           "type": "object",
@@ -373,7 +391,7 @@
             "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
           },
           "additionalProperties": {
-            "$ref": "#/$defs/settingValue"
+            "$ref": "#/$defs/setting"
           }
         },
         "active_modifications": {
@@ -384,6 +402,25 @@
           },
           "additionalProperties": {
             "$ref": "#/$defs/modification"
+          }
+        },
+        "modification_order": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "evidence_class"],
+          "properties": {
+            "value": {
+              "type": "array",
+              "maxItems": 128,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              }
+            },
+            "evidence_class": {
+              "$ref": "#/$defs/exactEvidenceClass"
+            }
           }
         }
       }

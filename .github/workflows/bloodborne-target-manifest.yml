@@ -1,0 +1,25 @@
+name: Bloodborne target manifest
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install schema validator
+        run: python -m pip install jsonschema==4.25.1
+      - name: Run target-manifest regressions
+        run: python -m unittest discover -s tests -p "test_bloodborne_target_manifest.py" -v
+      - name: Validate committed synthetic manifest through the real entry point
+        run: >-
+          python tools/bloodborne_target_manifest.py validate
+          docs/baseline/examples/bloodborne-target-manifest.synthetic.json

@@ -15,9 +15,9 @@ Schema version 1 separates four concerns:
 - `content` records base/update/DLC labels and a digest of the resolved guest-visible content tree;
 - `configuration` records the complete set of target-visible settings and active mods, patches, or configuration overlays not already represented by the resolved tree.
 
-Version strings and content IDs are useful human-readable corroboration, but they are not exact identities. The `eboot`, `param_sfo`, resolved-tree, and active-modification digests are the exact identifiers.
+Version strings and content IDs are useful human-readable corroboration, but they are not exact identities. `target.title_id`, the `eboot`, `param_sfo`, resolved-tree, target-visible setting values, active-modification digests, and modification application order form the exact identity projection.
 
-Use JSON `null` when an optional descriptive label is unavailable; do not serialize placeholders such as `unknown`, `n/a`, or a guessed version. `provenance.evidence_classes` lists every evidence class used to populate the manifest. A `complete` identity must include direct `static`, `runtime`, or `synthetic` evidence for its exact identity values; reported-only or assumed identity remains `partial`.
+Use JSON `null` only when an optional descriptive label is unavailable; do not serialize placeholders such as `unknown`, `n/a`, or a guessed version. Every exact projected value carries its own `evidence_class`, limited to `static`, `runtime`, or `synthetic`. `provenance.evidence_classes` is an audit summary and cannot upgrade a reported or assumed projected value into direct evidence. A `complete` identity asserts both that every projected value is directly evidenced and that the setting/modification sets were enumerated completely.
 
 `source_package` is optional acquisition provenance. It is `null` when the original package was not retained or was not hashed. Its absence does not make the runtime-material identity incomplete because `resolved_tree` records the content actually exposed to the guest. A repacked package can therefore have different package provenance while producing the same resolved target baseline.
 
@@ -27,11 +27,18 @@ All artifact SHA-256 values are lowercase hexadecimal digests of the exact raw f
 
 `sha256-tree-v1` identifies the resolved, read-only content view presented to the title after base, update, DLC, and file-replacement overlays have been applied, but before the title is launched. User saves, shader caches, emulator logs, captures, and other host-generated mutable data are outside this tree.
 
-To compute it:
+Schema v1 has exactly these content namespaces:
 
-1. Enumerate every regular file in every resolved guest-visible content namespace. Prefix each relative path with its guest namespace so two mounts cannot collide.
-2. Normalize separators to `/` and path text to UTF-8 NFC. Reject absolute paths, `.` or `..` components, duplicate normalized paths, symlinks, and unsupported entry types rather than guessing how to hash them.
-3. For each file, form the byte record `path + NUL + decimal size + NUL + lowercase file SHA-256 + LF`.
+- `app/` is the final resolved application view after base, update, and file-replacement overlays;
+- `dlc/<content-id>/` is one installed DLC view for each key in `content.dlc`.
+
+Namespace names are lowercase ASCII exactly as shown, have no leading slash, and use one `/` between components. DLC content IDs are copied byte-for-byte from their manifest object key; the schema restricts those keys to ASCII letters, digits, `.`, `_`, and `-`. A content view requiring any other namespace is not representable by `sha256-tree-v1` and must remain partial or use a future algorithm version.
+
+To compute the digest:
+
+1. Enumerate every regular file in `app/` and each declared `dlc/<content-id>/` view.
+2. Normalize the path relative to that namespace to UTF-8 NFC with `/` separators, then prefix it with the canonical namespace above. Reject empty/absolute relative paths, `.` or `..` components, duplicate normalized full paths, symlinks, and unsupported entry types rather than guessing how to hash them.
+3. For each file, form the byte record `canonical full path + NUL + decimal size + NUL + lowercase file SHA-256 + LF`. `NUL` is one `0x00` byte and `LF` is one `0x0a` byte; the decimal size has no sign or leading zeroes except the value `0`.
 4. Sort records by the UTF-8 bytes of the normalized path, concatenate them, and SHA-256 the result.
 5. Record the aggregate digest, number of files, and total raw byte count.
 
@@ -39,11 +46,13 @@ This algorithm commits to file names and contents without placing either in the 
 
 ## Configuration rules
 
-`settings` contains only target-visible inputs that can change the observed game behavior and are not already captured by the resolved tree. Keys use stable project-owned names such as `game.language`; values are bounded scalar JSON values.
+`settings` contains only target-visible inputs that can change the observed game behavior and are not already captured by the resolved tree. Keys use stable project-owned names such as `game.language`; each member carries a bounded scalar JSON `value` plus field-level direct evidence. Boolean, numeric (including fractional), and string values are supported. `null` is forbidden: an unreadable setting makes the manifest `partial` and is named in `identity_completeness.unknown_fields`.
 
-`active_modifications` is keyed by stable modification ID and lists only enabled modifications. Each value has a kind, optional human-readable version, and an exact digest/size of the rule, patch, or configuration artifact that affects the run. Disabled mods are omitted because they do not affect the baseline. If the enabled set cannot be established completely, the manifest is `partial` and names the uncertain JSON Pointer paths in `identity_completeness.unknown_fields`.
+`active_modifications` is keyed by stable modification ID and lists only enabled modifications. Each value has a kind, optional human-readable version, and an exact digest/size plus field-level direct evidence for the rule, patch, or configuration artifact that affects the run. Disabled mods are omitted because they do not affect the baseline.
 
-Duplicate JSON object member names are invalid input even if a permissive parser would keep the last value. Collectors and consumers must reject them before schema validation so duplicate settings or modification IDs cannot be resolved by parser ordering.
+`modification_order.value` lists every `active_modifications` key exactly once, from lowest to highest precedence (first applied to last applied). Its field-level evidence identifies how that effective order was established. A consumer rejects a missing, duplicate, or extra key. If the enabled set cannot be established completely, the manifest is `partial` and marks both `/configuration/active_modifications` and `/configuration/modification_order` unknown; narrower uncertainty names the narrowest affected pointer.
+
+Duplicate JSON object member names are invalid input even if a permissive parser would keep the last value. Collectors and consumers must reject them before schema validation so duplicate settings or modification IDs cannot be resolved by parser ordering. The committed [validator/comparator](../../tools/bloodborne_target_manifest.py) enforces this rule and the cross-field modification-order invariant; [regression tests](../../tests/test_bloodborne_target_manifest.py) preserve the positive and negative cases.
 
 Emulator implementation settings such as renderer/backend selection do not belong here merely because they influence the run. They remain host/run-environment state unless they also select a target modification represented by this manifest.
 
@@ -53,20 +62,26 @@ A consumer must first validate the document against the exact supported schema v
 
 For material target comparison, use this projection:
 
-- `target.title_id`;
+- `target.title_id.value`;
 - `build.eboot` and `build.param_sfo`;
 - `content.resolved_tree`;
-- the complete `configuration.settings` and `configuration.active_modifications` objects, compared by member name rather than serialization order.
+- each target-visible `configuration.settings` value;
+- each active modification's kind and artifact identity;
+- `configuration.modification_order.value`.
+
+Evidence-class members and descriptive labels are excluded from the material value comparison, but the schema requires field-level direct evidence for every projected value. Object members are compared by name rather than serialization order.
 
 The result is:
 
-- **different** if any projected field differs;
+- **different** if at least one differing projected field is known in both manifests;
 - **same** only if both manifests are valid, use the same supported schema/algorithm versions, assert `identity_completeness.state: complete` with direct evidence, and every projected field is equal;
-- **indeterminate** otherwise.
+- **indeterminate** otherwise, including when the only mismatches overlap a JSON Pointer listed in either manifest's `unknown_fields`.
 
-Reported version labels, distribution region, component IDs, update state, DLC labels, source-package hashes, collection time, producer, and evidence classes remain in the audit record. They can reveal a collection error or explain a difference, but they do not override exact material digests.
+Pointer overlap includes ancestors and descendants. For example, `/configuration/active_modifications` makes a missing or extra modification inconclusive, while an independently known `target.title_id.value` mismatch can still establish **different**. A partial manifest never establishes **same**, even when all currently known projected values match.
 
-Synthetic schema validation proves only the shape and fail-closed format. It does not establish any real Bloodborne build, content, update, configuration, or runtime fact.
+Reported version labels, distribution region, component IDs, update state, DLC labels, source-package hashes, collection time, producer, and provenance summary remain in the audit record. They can reveal a collection error or explain a difference, but they do not override exact material values. `content.update.state: unknown` may appear in a complete material identity because the exact resolved tree already commits to the content actually presented to the title; the unknown label is descriptive rather than a hole in the comparison projection.
+
+The reproducible validation procedure and negative cases are recorded in [`docs/experiments/BB-BL2-target-manifest-validation.md`](../experiments/BB-BL2-target-manifest-validation.md). Synthetic schema/semantic validation proves only the shape and fail-closed format. It does not establish any real Bloodborne build, content, update, configuration, or runtime fact.
 
 ## Licensing and privacy boundary
 
