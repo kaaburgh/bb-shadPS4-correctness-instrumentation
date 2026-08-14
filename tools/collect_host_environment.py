@@ -160,7 +160,7 @@ def _collect_cpu(system: str, environ: Mapping[str, str], runner: CommandRunner)
     elif system.lower() == "windows":
         script = (
             "Get-CimInstance Win32_Processor | "
-            "Select-Object -First 1 Name,Manufacturer | ConvertTo-Json -Compress"
+            "Select-Object Name,Manufacturer | ConvertTo-Json -Compress"
         )
         try:
             result = runner(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script])
@@ -237,6 +237,8 @@ def parse_windows_cpu_json(text: str) -> tuple[str | None, str | None]:
     except json.JSONDecodeError:
         return None, None
     rows = payload if isinstance(payload, list) else [payload]
+    if len(rows) != 1:
+        return None, None
     row = rows[0] if rows and isinstance(rows[0], dict) else {}
     return _bounded_string(row.get("Manufacturer")), _bounded_string(row.get("Name"))
 
@@ -272,6 +274,11 @@ def _parse_windows_gpu_json(text: str) -> tuple[list[dict[str, Any]], bool]:
 
 
 def parse_windows_gpu_json(text: str) -> list[dict[str, Any]]:
+    """Return GPUs, or an empty list for invalid or over-limit input.
+
+    The collector uses ``_parse_windows_gpu_json`` when it needs to distinguish
+    an over-limit inventory from malformed command output.
+    """
     return _parse_windows_gpu_json(text)[0]
 
 
@@ -302,8 +309,6 @@ def _collect_linux_gpus(
         )
     except OSError:
         cards = []
-    if len(cards) > MAX_GPU_COUNT:
-        return [], "gpu-inventory-too-many"
     for card in cards:
         device = card / "device"
         if not device.is_dir():
@@ -328,6 +333,8 @@ def _collect_linux_gpus(
                 "driver": {"name": _bounded_string(driver_name), "version": None},
             }
         )
+        if len(gpus) > MAX_GPU_COUNT:
+            return [], "gpu-inventory-too-many"
     return (gpus, None) if gpus else ([], "gpu-query-empty-or-unavailable")
 
 
@@ -357,6 +364,11 @@ def _parse_macos_gpu_json(text: str) -> tuple[list[dict[str, Any]], bool]:
 
 
 def parse_macos_gpu_json(text: str) -> list[dict[str, Any]]:
+    """Return GPUs, or an empty list for invalid or over-limit input.
+
+    The collector uses ``_parse_macos_gpu_json`` when it needs to distinguish
+    an over-limit inventory from malformed command output.
+    """
     return _parse_macos_gpu_json(text)[0]
 
 

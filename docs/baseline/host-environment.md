@@ -49,16 +49,21 @@ only byte identity. A future consumer that needs named shadPS4 settings must add
 an allowlisted, versioned semantic extractor rather than serializing the full
 configuration.
 
-GPU discovery is best effort and bounded to 16 records. If a platform exposes
-more than 16 candidate controllers, the collector refuses to identify an
-arbitrary subset: `host.gpus` is empty, `/host/gpus` is unknown, and the bounded
-warning `gpu-inventory-too-many` is emitted. Windows queries the allowlisted
-`Name` and `Manufacturer` properties from `Win32_Processor`, plus `Name`,
-`DriverVersion`, and `PNPDeviceID` from `Win32_VideoController`; Linux reads PCI
-IDs and driver module names from sysfs; macOS reads the allowlisted
-display-controller fields from `system_profiler`. Some platforms intentionally
-report a driver field as unknown when there is no separate, reliably exposed
-version.
+GPU discovery is best effort and bounded to 16 actual controller records after
+platform-specific filtering. If a platform exposes more than 16 records, the
+collector refuses to identify an arbitrary subset: `host.gpus` is empty,
+`/host/gpus` is unknown, and the bounded warning `gpu-inventory-too-many` is
+emitted. Windows queries the allowlisted `Name` and `Manufacturer` properties
+from `Win32_Processor`, plus `Name`, `DriverVersion`, and `PNPDeviceID` from
+`Win32_VideoController`; Linux reads PCI IDs and driver module names from
+device-backed sysfs cards; macOS reads the allowlisted display-controller fields
+from `system_profiler`. Some platforms intentionally report a driver field as
+unknown when there is no separate, reliably exposed version.
+
+The v1 CPU object cannot represent multiple processor sockets. Windows therefore
+queries all `Win32_Processor` records and leaves `/host/cpu/vendor` and
+`/host/cpu/model` unknown when more than one record is returned, rather than
+silently selecting a representative socket.
 
 ## Unknowns and collection failures
 

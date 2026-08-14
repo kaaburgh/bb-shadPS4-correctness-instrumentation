@@ -152,6 +152,23 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(cpu["model"], "AMD Ryzen Synthetic CPU")
         self.assertIn("Win32_Processor", commands[0][-1])
 
+    def test_windows_cpu_collection_fails_closed_on_multiple_processors(self):
+        payload = json.dumps(
+            [
+                {"Name": "Socket A", "Manufacturer": "GenuineIntel"},
+                {"Name": "Socket B", "Manufacturer": "GenuineIntel"},
+            ]
+        )
+
+        cpu = collector._collect_cpu(
+            "Windows",
+            {},
+            lambda _argv: SimpleNamespace(returncode=0, stdout=payload, stderr=""),
+        )
+
+        self.assertIsNone(cpu["vendor"])
+        self.assertIsNone(cpu["model"])
+
     def test_gpu_inventory_over_limit_fails_closed(self):
         windows_payload = json.dumps(
             [
@@ -168,6 +185,7 @@ class ManifestTests(unittest.TestCase):
         )
         self.assertEqual(windows_gpus, [])
         self.assertEqual(windows_warning, "gpu-inventory-too-many")
+        self.assertEqual(collector.parse_windows_gpu_json(windows_payload), [])
 
         macos_payload = json.dumps(
             {
@@ -182,6 +200,7 @@ class ManifestTests(unittest.TestCase):
         )
         self.assertEqual(macos_gpus, [])
         self.assertEqual(macos_warning, "gpu-inventory-too-many")
+        self.assertEqual(collector.parse_macos_gpu_json(macos_payload), [])
 
         with tempfile.TemporaryDirectory() as directory:
             sysfs = Path(directory)
@@ -195,6 +214,20 @@ class ManifestTests(unittest.TestCase):
 
         self.assertEqual(linux_gpus, [])
         self.assertEqual(linux_warning, "gpu-inventory-too-many")
+
+        with tempfile.TemporaryDirectory() as directory:
+            sysfs = Path(directory)
+            for index in range(collector.MAX_GPU_COUNT):
+                (sysfs / f"card{index}").mkdir()
+            device = sysfs / f"card{collector.MAX_GPU_COUNT}" / "device"
+            device.mkdir(parents=True)
+            (device / "vendor").write_text("0x1002\n", encoding="ascii")
+            (device / "device").write_text("0x73bf\n", encoding="ascii")
+
+            linux_gpus, linux_warning = collector._collect_linux_gpus(sysfs)
+
+        self.assertEqual(len(linux_gpus), 1)
+        self.assertIsNone(linux_warning)
 
         manifest = collector.build_manifest(
             synthetic_host(),
