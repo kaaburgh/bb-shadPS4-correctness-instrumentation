@@ -40,12 +40,12 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL2 — Define Bloodborne target identity manifest
-- **Status / priority / execution:** Completed and verified / Critical / CLOUD
+- **Status / priority / execution:** Completed / Critical / CLOUD
 - **Depends on:** None
 - **Question:** Какие safe identifiers различают materially different Bloodborne baselines?
-- **Evidence / decision:** Schema v1 разделяет descriptive labels от exact executable/metadata/resolved-content/modification digests, сохраняет explicit partial identity и задаёт fail-closed three-way comparison (`same` / `different` / `indeterminate`). Evidence: `synthetic`; реальный Bloodborne target не использовался.
-- **Acceptance / artifacts:** [`docs/baseline/bloodborne.md`](./docs/baseline/bloodborne.md) + [JSON Schema](./schemas/bloodborne-target-manifest.schema.json) + [synthetic example](./docs/baseline/examples/bloodborne-target-manifest.synthetic.json) покрывают build/content/update/config state, hashing/comparison semantics и licensing/privacy boundary без proprietary payload.
-- **Validation:** Draft 2020-12 schema и synthetic example валидированы локально; это проверяет format/internal consistency, но не реальную target identity или runtime behavior.
+- **Evidence / decision:** Schema v1 разделяет descriptive labels от field-level evidenced exact identity, сохраняет explicit partial identity и задаёт fail-closed three-way comparison (`same` / `different` / `indeterminate`) с учётом unknown pointers. Evidence: `synthetic`; реальный Bloodborne target не использовался.
+- **Acceptance / artifacts:** [`docs/baseline/bloodborne.md`](./docs/baseline/bloodborne.md) + [JSON Schema](./schemas/bloodborne-target-manifest.schema.json) + [synthetic example](./docs/baseline/examples/bloodborne-target-manifest.synthetic.json) + [validator/comparator](./tools/bloodborne_target_manifest.py) + [tests](./tests/test_bloodborne_target_manifest.py) покрывают build/content/update/config state, hashing/comparison semantics и licensing/privacy boundary без proprietary payload.
+- **Validation:** Draft 2020-12 schema, executable semantic checks и positive/negative synthetic cases валидируют format/internal consistency; это не реальная target identity или runtime verification.
 - **Scope:** Small
 
 ### BB-BL3 — Define host/run environment manifest and collector
