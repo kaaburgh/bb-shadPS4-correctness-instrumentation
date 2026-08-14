@@ -10,6 +10,6 @@ Do not compare captures, benchmarks, or correctness observations across material
 
 ## agentic-repo-kit artifact and check procedure
 
-Use the `tool_version` in `.agentic-repo.lock.json` as the source of truth for normal contract checks; do not silently substitute `latest`. Follow `docs/agentic-repo-kit.md` to obtain the matching versioned GitHub Release artifact, verify it, and run `agentic-repo check`.
+Use `tool_version` and `distribution` in `.agentic-repo.lock.json` as the source of truth for normal contract checks; do not silently substitute `latest`. Follow `docs/agentic-repo-kit.md` to obtain the exact public `.pyz` named by the lock, verify its SHA-256 against `distribution.sha256`, and run `check`.
 
-If the current environment cannot read the private `kaaburgh/agentic-repo-kit` release, request the matching versioned archive plus `SHA256SUMS` from the operator and continue independent work. Lack of direct release access in one sandbox is an environment acquisition constraint, not evidence that repository validation is impossible.
+If the current environment cannot download the public release because of network/egress or platform constraints, request the exact `.pyz` artifact named in the lock from the operator. Verify the supplied bytes against the digest already committed in the lock before execution. A separately supplied checksum is not required for trust because the expected digest is already part of repository state. Lack of direct artifact access in one sandbox is an environment acquisition constraint, not evidence that repository validation is impossible.
