@@ -1,0 +1,77 @@
+{
+  "$schema": "../../../schemas/bloodborne-target-manifest.schema.json",
+  "manifest_kind": "bloodborne-target-identity",
+  "schema_version": 1,
+  "provenance": {
+    "evidence_classes": [
+      "synthetic"
+    ],
+    "collected_at": "2026-08-14T08:00:00Z",
+    "producer": {
+      "name": "bb-target-manifest-example",
+      "version": "1.0.0"
+    }
+  },
+  "identity_completeness": {
+    "state": "complete",
+    "unknown_fields": []
+  },
+  "target": {
+    "name": "Bloodborne",
+    "title_id": "CUSA00000",
+    "distribution_region": null
+  },
+  "build": {
+    "app_version": "00.00",
+    "master_version": null,
+    "eboot": {
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "size_bytes": 4096
+    },
+    "param_sfo": {
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "size_bytes": 512
+    }
+  },
+  "content": {
+    "base": {
+      "content_id": "SYNTHETIC-BLOODBORNE-BASE",
+      "version": "00.00",
+      "source_package": null
+    },
+    "update": {
+      "state": "installed",
+      "component": {
+        "content_id": "SYNTHETIC-BLOODBORNE-UPDATE",
+        "version": "00.01",
+        "source_package": {
+          "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+          "size_bytes": 8192
+        }
+      }
+    },
+    "dlc": [],
+    "resolved_tree": {
+      "algorithm": "sha256-tree-v1",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "file_count": 3,
+      "total_bytes": 12288
+    }
+  },
+  "configuration": {
+    "settings": {
+      "game.language": "en-US",
+      "target.network_mode": "offline"
+    },
+    "active_modifications": {
+      "synthetic-frame-pacing-fixture": {
+        "kind": "patch",
+        "version": "1",
+        "artifact": {
+          "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "size_bytes": 128
+        }
+      }
+    }
+  }
+}

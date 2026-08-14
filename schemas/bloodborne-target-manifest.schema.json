@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kaaburgh/bb-shadPS4-correctness-instrumentation/main/schemas/bloodborne-target-manifest.schema.json",
+  "title": "Bloodborne target identity manifest",
+  "description": "Safe, payload-free identity for a Bloodborne target baseline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_kind",
+    "schema_version",
+    "provenance",
+    "identity_completeness",
+    "target",
+    "build",
+    "content",
+    "configuration"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri-reference"
+    },
+    "manifest_kind": {
+      "const": "bloodborne-target-identity"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "identity_completeness": {
+      "$ref": "#/$defs/completeness"
+    },
+    "target": {
+      "$ref": "#/$defs/target"
+    },
+    "build": {
+      "$ref": "#/$defs/build"
+    },
+    "content": {
+      "$ref": "#/$defs/content"
+    },
+    "configuration": {
+      "$ref": "#/$defs/configuration"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "identity_completeness": {
+            "properties": {
+              "state": {
+                "const": "complete"
+              }
+            },
+            "required": ["state"]
+          }
+        },
+        "required": ["identity_completeness"]
+      },
+      "then": {
+        "properties": {
+          "provenance": {
+            "properties": {
+              "evidence_classes": {
+                "contains": {
+                  "enum": ["static", "runtime", "synthetic"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256Artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "optionalArtifact": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256Artifact"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableString": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_classes", "collected_at", "producer"],
+      "properties": {
+        "evidence_classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["static", "runtime", "synthetic", "reported", "assumed"]
+          }
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        }
+      }
+    },
+    "completeness": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "unknown_fields"],
+          "properties": {
+            "state": {
+              "const": "complete"
+            },
+            "unknown_fields": {
+              "type": "array",
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "unknown_fields"],
+          "properties": {
+            "state": {
+              "const": "partial"
+            },
+            "unknown_fields": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^/(target|build|content|configuration)(/.*)?$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title_id", "distribution_region"],
+      "properties": {
+        "name": {
+          "const": "Bloodborne"
+        },
+        "title_id": {
+          "type": "string",
+          "pattern": "^[A-Z]{4}[0-9]{5}$"
+        },
+        "distribution_region": {
+          "oneOf": [
+            {
+              "enum": ["americas", "europe", "japan", "asia"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_version", "master_version", "eboot", "param_sfo"],
+      "properties": {
+        "app_version": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "master_version": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "eboot": {
+          "$ref": "#/$defs/sha256Artifact"
+        },
+        "param_sfo": {
+          "$ref": "#/$defs/sha256Artifact"
+        }
+      }
+    },
+    "contentComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content_id", "version", "source_package"],
+      "properties": {
+        "content_id": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "version": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "source_package": {
+          "$ref": "#/$defs/optionalArtifact"
+        }
+      }
+    },
+    "update": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "component"],
+          "properties": {
+            "state": {
+              "const": "installed"
+            },
+            "component": {
+              "$ref": "#/$defs/contentComponent"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "const": "not_installed"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    },
+    "resolvedTree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "sha256", "file_count", "total_bytes"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-tree-v1"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "update", "dlc", "resolved_tree"],
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/contentComponent"
+        },
+        "update": {
+          "$ref": "#/$defs/update"
+        },
+        "dlc": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentComponent"
+          }
+        },
+        "resolved_tree": {
+          "$ref": "#/$defs/resolvedTree"
+        }
+      }
+    },
+    "settingValue": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string",
+          "maxLength": 256
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "artifact"],
+      "properties": {
+        "kind": {
+          "enum": ["mod", "patch", "config_overlay"]
+        },
+        "version": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "artifact": {
+          "$ref": "#/$defs/sha256Artifact"
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["settings", "active_modifications"],
+      "properties": {
+        "settings": {
+          "type": "object",
+          "maxProperties": 128,
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/settingValue"
+          }
+        },
+        "active_modifications": {
+          "type": "object",
+          "maxProperties": 128,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/modification"
+          }
+        }
+      }
+    }
+  }
+}

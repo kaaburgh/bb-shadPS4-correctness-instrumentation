@@ -23,7 +23,7 @@
 
 ## Ready now
 
-Независимо можно брать: **BB-BL2**, **BB-BL3**. После их завершения **BB-ENV1** определяет, где и как разрешены target runs. Остальные items имеют явные dependencies.
+Готовы к независимой работе baseline items со статусом `Open` и `Depends on: None`, если для item нет активного PR. После завершения всех трёх baseline items **BB-ENV1** определяет, где и как разрешены target runs. Остальные items имеют явные dependencies.
 
 ---
 
@@ -40,11 +40,12 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL2 — Define Bloodborne target identity manifest
-- **Status / priority / execution:** Open / Critical / CLOUD
+- **Status / priority / execution:** Completed and verified / Critical / CLOUD
 - **Depends on:** None
 - **Question:** Какие safe identifiers различают materially different Bloodborne baselines?
-- **Next experiment / information gain:** Спроектировать minimal machine-readable manifest с synthetic example и licensing/privacy boundary.
-- **Acceptance / artifacts:** `docs/baseline/bloodborne.md` + schema/format покрывают build/content/update/config state без proprietary payload.
+- **Evidence / decision:** Schema v1 разделяет descriptive labels от exact executable/metadata/resolved-content/modification digests, сохраняет explicit partial identity и задаёт fail-closed three-way comparison (`same` / `different` / `indeterminate`). Evidence: `synthetic`; реальный Bloodborne target не использовался.
+- **Acceptance / artifacts:** [`docs/baseline/bloodborne.md`](./docs/baseline/bloodborne.md) + [JSON Schema](./schemas/bloodborne-target-manifest.schema.json) + [synthetic example](./docs/baseline/examples/bloodborne-target-manifest.synthetic.json) покрывают build/content/update/config state, hashing/comparison semantics и licensing/privacy boundary без proprietary payload.
+- **Validation:** Draft 2020-12 schema и synthetic example валидированы локально; это проверяет format/internal consistency, но не реальную target identity или runtime behavior.
 - **Scope:** Small
 
 ### BB-BL3 — Define host/run environment manifest and collector
