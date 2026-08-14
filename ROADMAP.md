@@ -32,11 +32,11 @@
 Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы между runs.
 
 ### BB-BL1 — Pin shadPS4 source baseline and integration model
-- **Status / priority / execution:** Open / Critical / CLOUD RESEARCH
+- **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
 - **Depends on:** None
 - **Question:** Какой exact upstream repo/commit является baseline и как future shadPS4 changes представлены reviewable способом без drift?
-- **Next experiment / information gain:** Исследовать upstream workflow; зафиксировать repo+commit, fetch/build provenance и patch/fork/reference model.
-- **Acceptance / artifacts:** `docs/baseline/shadps4.md` фиксирует exact baseline, update policy, build provenance и source-change workflow; никаких runtime claims.
+- **Result / evidence:** Static upstream inspection pinned the emulator core at `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`; source changes use exact-base fork/topic commits while this repository records immutable source/build provenance.
+- **Acceptance / artifacts:** Completed in `docs/baseline/shadps4.md`: exact baseline, fail-closed fetch verification, update policy, build provenance and source-change workflow; no runtime claims.
 - **Scope:** Medium
 
 ### BB-BL2 — Define Bloodborne target identity manifest
