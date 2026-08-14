@@ -52,7 +52,7 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Status / priority / execution:** Completed and verified / High / CLOUD
 - **Depends on:** None
 - **Question:** Как автоматически фиксировать host factors, влияющие на correctness/performance?
-- **Evidence / result:** `bb-host-environment/v1` schema и stdlib-only collector фиксируют allowlisted host/run fields, explicit unknown pointers и config fingerprint без путей/содержимого. Synthetic tests проверяют normalization, hardware-backed Windows CPU identity, bounded GPU inventory и privacy boundary; GitHub Actions run `31816722790` подтвердил 32-test suite, real collector smoke, producer validation и published-schema validation на Ubuntu, Windows и macOS для exact implementation commit `0380340827ac25ff879d9b8dd01ff10c495e31d0`.
+- **Evidence / result:** `bb-host-environment/v1` schema и stdlib-only collector фиксируют allowlisted host/run fields, explicit unknown pointers и config fingerprint без путей/содержимого. Synthetic tests проверяют normalization, hardware-backed Windows CPU identity, bounded GPU inventory, published-schema constraint enforcement и privacy boundary; GitHub Actions run `31828045316` подтвердил 33-test suite, real collector smoke, producer validation и published-schema validation на Ubuntu, Windows и macOS для exact validation commit `54cd211c6ea277555f68bee9414f3f2ee4667029`.
 - **Acceptance / artifacts:** `docs/baseline/host-environment.md`, `schemas/host-environment.schema.json`, `tools/collect_host_environment.py` и tests выдают stable manifest с explicit unknown fields и без sensitive user data.
 - **Scope:** Medium
 
