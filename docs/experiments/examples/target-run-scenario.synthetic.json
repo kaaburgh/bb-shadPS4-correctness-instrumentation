@@ -1,0 +1,26 @@
+{
+  "schema_id": "bb-target-scenario/v1",
+  "schema_version": 1,
+  "scenario_id": "bounded-launch-control",
+  "description": "Synthetic capability control; this is not Bloodborne runtime evidence.",
+  "timeout_seconds": 120,
+  "oracle": {
+    "kind": "file-sha256",
+    "path": "results/semantic-oracle.json",
+    "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "artifacts": [
+    {
+      "path": "results/summary.json",
+      "name": "summary",
+      "mode": "redacted-json",
+      "max_bytes": 65536
+    },
+    {
+      "path": "results/capture.trace",
+      "name": "capture-trace",
+      "mode": "metadata-only",
+      "max_bytes": 67108864
+    }
+  ]
+}

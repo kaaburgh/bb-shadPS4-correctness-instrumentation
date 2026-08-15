@@ -71,11 +71,13 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-ENV1 — Resolve target execution feasibility and handoff
-- **Status / priority / execution:** Blocked / Critical / CLOUD RESEARCH
+- **Status / priority / execution:** Completed and verified / Critical / GATED
 - **Depends on:** BB-BL1, BB-BL2, BB-BL3
 - **Question:** Может ли required Bloodborne target execution быть воспроизводимо выполнен в доступной cloud infrastructure; если нет, какой минимальный target-machine handoff объективно необходим?
-- **Next experiment / information gain:** Проверить feasibility запуска pinned shadPS4/required capture tooling в cloud-safe environment без proprietary target material; если target assets делают это невозможным, подготовить exact one-shot run contract, required inputs, artifact schema и automatic redaction/packing.
-- **Acceptance / artifacts:** `docs/experiments/target-execution-feasibility.md` фиксирует один конкретный route: cloud-executable, GATED target-machine experiment, либо `LOCAL ONLY` с documented blocker. Для target-machine route есть one-shot command/script contract и ожидаемый self-contained safe artifact. Неясное «нужен локальный запуск» не является completion.
+- **Evidence / result:** Static repository review established that the cloud checkout contains only a synthetic target identity and cannot safely execute the proprietary target. The selected concrete route is a `GATED` target-machine run; this is not a claim that the target is `LOCAL ONLY` or that runtime behavior was observed.
+- **Handoff / next experiment:** Execute one concrete scenario on a machine that owns the immutable target tree, pinned shadPS4 binary/configuration, and capture/input tooling using the bounded runner and semantic oracle from `docs/experiments/target-execution-feasibility.md`. Analyze only the resulting safe ZIP; keep opaque captures externalized.
+- **Acceptance / artifacts:** `docs/experiments/target-execution-feasibility.md` records the route, required inputs, isolation rules, oracle choices, unsupported claims, and operator procedure. `schemas/target-run.schema.json`, `tools/run_target_experiment.py`, the synthetic scenario, and tests define and validate the one-shot command contract, versioned run record, bounded termination, and automatic allowlist/redaction/packing boundary.
+- **Validation:** Synthetic runner tests establish strict input validation, process bounding, artifact redaction, and ZIP contents. They do not establish Bloodborne/shadPS4 runtime behavior; the first target execution remains gated.
 - **Scope:** Medium
 
 ### BB-BL4 — Select minimal reproducible scenario catalogue
