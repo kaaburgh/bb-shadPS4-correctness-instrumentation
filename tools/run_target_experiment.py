@@ -331,8 +331,9 @@ def _resolve_work_file(workdir: Path, relative_path: str) -> Path:
 
 def _resolve_declared_work_path(workdir: Path, relative_path: str, field: str) -> Path:
     """Resolve an output path without requiring it to exist yet."""
-    candidate = workdir.joinpath(*relative_path.split("/"))
     try:
+        workdir = workdir.resolve()
+        candidate = workdir.joinpath(*relative_path.split("/"))
         resolved = candidate.resolve(strict=False)
     except OSError as error:
         raise TargetRunError(f"{field} cannot be resolved safely") from error
