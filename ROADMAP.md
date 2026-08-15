@@ -237,9 +237,9 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 ### BB-INS2 — Instrument resource mapping/lifetime/access and sync/readbacks
 - **Status / priority / execution:** Blocked / High / CLOUD RESEARCH
 - **Depends on:** BB-INS1
-- **Question:** Где minimal source seams для guest-memory↔host-resource lifetime/access, CPU↔GPU transfers, waits/barriers/readbacks?
-- **Next experiment / information gain:** Source tracing + synthetic/unit event prototypes with stable resource correlation.
-- **Acceptance / artifacts:** Synthetic fixtures reconstruct create→access→destroy and sync/readback sequences; disabled-by-default diagnostic mode; `docs/instrumentation/resources-sync.md`.
+- **Question:** Где minimal source seams для guest-memory↔host-resource lifetime/access, CPU↔GPU transfers, waits/barriers/readbacks, включая прямые чтения/записи guest CPU в tracked GPU-backed guest-memory ranges, которые не проходят через explicit HLE transfer/readback API?
+- **Next experiment / information gain:** Source tracing + synthetic/unit event prototypes with stable resource correlation; exercise direct guest CPU read/write events both inside and outside explicit transfer/readback seams, preserve observed/unknown/unobserved/ambiguous coverage, and keep the observation mechanism open until seam evidence exists. Static analysis may supplement runtime evidence but is not the primary proof mechanism.
+- **Acceptance / artifacts:** Synthetic fixtures reconstruct create→access→destroy and sync/readback sequences and, for each tracked GPU-backed range, record whether and when guest CPU reads/writes occurred, correlate those events with resource identity/lifetime and GPU activity, and preserve coverage state. `GPU-only` is admissible only when direct CPU-access observation provides adequate coverage for the range and the relevant observer paths are independently checked by a bounded known-access control or structural seam-coverage oracle; absence of explicit transfer/readback calls alone is insufficient. The diagnostic mode remains disabled by default; `docs/instrumentation/resources-sync.md`.
 - **Scope:** Medium
 
 ### BB-INS3 — Instrument render/depth/shader/pipeline identity and timing
@@ -253,9 +253,9 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 ### BB-INS4 — Validate instrumentation coverage and overhead on target
 - **Status / priority / execution:** Blocked / Critical / GATED
 - **Depends on:** BB-ENV1, BB-BL4, BB-INS2, BB-INS3
-- **Question:** Достаточны ли events для reconstruction и каков measured overhead on representative scenarios?
-- **Next experiment / information gain:** Tracing off/on one-shot captures with bounded event volume using BB-ENV1 route.
-- **Acceptance / artifacts:** `docs/experiments/instrumentation-validation/` records correlation completeness, overhead distribution and missing probes; large raw captures externalized.
+- **Question:** Достаточны ли events для reconstruction, независимо подтверждена ли полнота direct guest CPU coverage, и каков measured overhead on representative scenarios?
+- **Next experiment / information gain:** Tracing off/on one-shot captures with bounded event volume using BB-ENV1 route, plus a bounded known-access control or structural seam-coverage oracle for every claimed direct-access path so missed probes are distinguishable from true no-access.
+- **Acceptance / artifacts:** `docs/experiments/instrumentation-validation/` records correlation completeness, overhead distribution, missing probes, and the independent coverage-oracle result/provenance; any uncovered observer path remains explicit and blocks negative `GPU-only` classification. Large raw captures are externalized.
 - **Scope:** Medium
 
 ---
@@ -297,17 +297,17 @@ Outcome: actual resource lifetime/access classes превращены в conditi
 ### BB-RES1 — Define resource classification and invariant extraction
 - **Status / priority / execution:** Blocked / Medium / CLOUD
 - **Depends on:** BB-INS2
-- **Question:** Как classify upload→GPU-only, transient, readback, aliasing, persistent and sync-heavy resources reproducibly?
-- **Next experiment / information gain:** Rule-based schema/classifier + synthetic traces including ambiguous cases.
-- **Acceptance / artifacts:** `docs/corpus/resources.md` + parser/tests classify fixtures and preserve unknown/ambiguous state; classification не объявляется semantic fact.
+- **Question:** Как classify upload→GPU-only, transient, readback, aliasing, persistent and sync-heavy resources reproducibly while retaining direct guest CPU access evidence for tracked GPU-backed ranges?
+- **Next experiment / information gain:** Rule-based schema/classifier + synthetic traces including direct guest CPU reads/writes, explicit transfer/readback calls, GPU activity, and unknown/unobserved/ambiguous coverage cases.
+- **Acceptance / artifacts:** `docs/corpus/resources.md` + parser/tests classify fixtures and preserve event timing/order, resource/lifetime/GPU correlation, and unknown/ambiguous coverage. A `GPU-only` classification requires adequate direct guest CPU read/write coverage for the tracked range, an independent known-access or structural seam-coverage check for the relevant observer paths, and an evidence-backed observed absence/condition; it is not inferred solely from missing explicit transfer/readback calls. Classification не объявляется semantic fact.
 - **Scope:** Medium
 
 ### BB-RES2 — Capture representative resource traces
 - **Status / priority / execution:** Blocked / Medium / GATED
 - **Depends on:** BB-ENV1, BB-COR7, BB-INS4, BB-RES1
 - **Question:** Какие lifetime/access patterns реально встречаются и насколько repeatable их classes?
-- **Next experiment / information gain:** Repeated bounded traces over scenario catalogue after correctness gate; the same bounded workflow may also emit shader/pipeline and timing artifacts without making their downstream analyses dependencies.
-- **Acceptance / artifacts:** `docs/experiments/resource-corpus/` records completeness/correlation and safe summaries tied to exact post-gate baseline; no resource contents unless separately justified. Resource evidence remains independently consumable when a co-captured shader or timing output is missing or invalid.
+- **Next experiment / information gain:** Repeated bounded traces over scenario catalogue after correctness gate; the same bounded workflow may also emit shader/pipeline and timing artifacts without making their downstream analyses dependencies, with the independent known-access or structural seam-coverage oracle checked before accepting negative classifications.
+- **Acceptance / artifacts:** `docs/experiments/resource-corpus/` records completeness/correlation, direct guest CPU read/write observations (or explicit unknown/unobserved/ambiguous coverage) for tracked GPU-backed ranges, and the independent coverage-oracle result/provenance for relevant observer paths. Safe summaries remain tied to the exact post-gate baseline, and resource evidence remains independently consumable when a co-captured shader or timing output is missing or invalid. If any relevant path is not independently covered, the range stays unknown/unobserved and no `GPU-only` label is accepted; no resource contents unless separately justified.
 - **Scope:** Medium
 
 ### BB-RES3 — Derive and validate candidate resource invariants
