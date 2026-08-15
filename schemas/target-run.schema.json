@@ -31,7 +31,10 @@
     "provenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["captured_at_utc", "producer"],
+      "required": [
+        "captured_at_utc",
+        "producer"
+      ],
       "properties": {
         "captured_at_utc": {
           "type": "string",
@@ -40,7 +43,10 @@
         "producer": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name", "version"],
+          "required": [
+            "name",
+            "version"
+          ],
           "properties": {
             "name": {
               "const": "bb-target-runner"
@@ -60,7 +66,11 @@
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["manifest_sha256", "manifest_size_bytes", "identity_state"],
+      "required": [
+        "manifest_sha256",
+        "manifest_size_bytes",
+        "identity_state"
+      ],
       "properties": {
         "manifest_sha256": {
           "$ref": "#/$defs/sha256"
@@ -69,7 +79,10 @@
           "$ref": "#/$defs/nonNegativeInteger"
         },
         "identity_state": {
-          "enum": ["complete", "partial"]
+          "enum": [
+            "complete",
+            "partial"
+          ]
         }
       }
     },
@@ -100,12 +113,22 @@
     "emulator": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "binary", "config_sha256", "graphics_backend"],
+      "required": [
+        "source",
+        "binary",
+        "config_sha256",
+        "graphics_backend"
+      ],
       "properties": {
         "source": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository", "commit", "tree", "patch_commits"],
+          "required": [
+            "repository",
+            "commit",
+            "tree",
+            "patch_commits"
+          ],
           "properties": {
             "repository": {
               "type": "string",
@@ -130,7 +153,10 @@
         "binary": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["sha256", "size_bytes"],
+          "required": [
+            "sha256",
+            "size_bytes"
+          ],
           "properties": {
             "sha256": {
               "$ref": "#/$defs/sha256"
@@ -189,7 +215,10 @@
           "maximum": 86400
         },
         "oracle_kind": {
-          "enum": ["process-exit", "file-sha256"]
+          "enum": [
+            "process-exit",
+            "file-sha256"
+          ]
         }
       }
     },
@@ -221,7 +250,10 @@
           "const": true
         },
         "process_tree_control": {
-          "enum": ["posix-process-group", "windows-job-object"]
+          "enum": [
+            "posix-process-group",
+            "windows-job-object"
+          ]
         }
       }
     },
@@ -249,12 +281,15 @@
           ]
         },
         "exit_code": {
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "elapsed_seconds": {
           "type": "number",
           "minimum": 0,
-          "maximum": 86400
+          "maximum": 86416
         },
         "stdout_bytes": {
           "$ref": "#/$defs/nonNegativeInteger"
@@ -284,16 +319,30 @@
       ],
       "properties": {
         "kind": {
-          "enum": ["process-exit", "file-sha256"]
+          "enum": [
+            "process-exit",
+            "file-sha256"
+          ]
         },
         "state": {
-          "enum": ["passed", "failed", "unknown", "not_evaluated"]
+          "enum": [
+            "passed",
+            "failed",
+            "unknown",
+            "not_evaluated"
+          ]
         },
         "expected_exit_code": {
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "observed_exit_code": {
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "expected_sha256": {
           "oneOf": [
@@ -316,7 +365,10 @@
           ]
         },
         "observed_size_bytes": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0
         }
       }
@@ -332,6 +384,8 @@
           "status",
           "source_sha256",
           "source_size_bytes",
+          "packaged_sha256",
+          "packaged_size_bytes",
           "packaged_path"
         ],
         "properties": {
@@ -339,7 +393,12 @@
             "$ref": "#/$defs/identifier"
           },
           "status": {
-            "enum": ["embedded_redacted_json", "externalized", "missing", "rejected"]
+            "enum": [
+              "embedded_redacted_json",
+              "externalized",
+              "missing",
+              "rejected"
+            ]
           },
           "source_sha256": {
             "oneOf": [
@@ -352,7 +411,10 @@
             ]
           },
           "source_size_bytes": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 0
           },
           "packaged_path": {
@@ -365,6 +427,23 @@
                 "type": "null"
               }
             ]
+          },
+          "packaged_sha256": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packaged_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
           }
         }
       }
@@ -372,10 +451,16 @@
     "packaging": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "warnings"],
+      "required": [
+        "state",
+        "warnings"
+      ],
       "properties": {
         "state": {
-          "enum": ["complete", "partial"]
+          "enum": [
+            "complete",
+            "partial"
+          ]
         },
         "warnings": {
           "type": "array",

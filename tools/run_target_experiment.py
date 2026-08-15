@@ -15,6 +15,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import re
 import signal
@@ -41,7 +42,7 @@ SCENARIO_SCHEMA_VERSION = 2
 COMMAND_SCHEMA_ID = "bb-target-command/v2"
 COMMAND_SCHEMA_VERSION = 2
 RUNNER_NAME = "bb-target-runner"
-RUNNER_VERSION = "1.2.0"
+RUNNER_VERSION = "1.3.0"
 PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
@@ -54,6 +55,9 @@ MAX_PROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
 MAX_ALLOWLIST_DEPTH = 16
 MAX_ALLOWLIST_PROPERTIES = 128
 MAX_ALLOWLIST_ARRAY_ITEMS = 4096
+MAX_TIMEOUT_SECONDS = 86400
+MAX_TEARDOWN_SECONDS = 16
+MAX_RECORDED_ELAPSED_SECONDS = MAX_TIMEOUT_SECONDS + MAX_TEARDOWN_SECONDS
 
 
 class TargetRunError(ValueError):
@@ -73,6 +77,13 @@ def _reject_constant(name: str) -> Any:
     raise TargetRunError(f"non-finite JSON constant is not valid JSON: {name}")
 
 
+def _parse_finite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise TargetRunError(f"non-finite JSON number is not valid JSON: {value}")
+    return parsed
+
+
 def loads_strict(text: str) -> Any:
     """Parse JSON without accepting duplicate members or non-finite values."""
     try:
@@ -80,6 +91,7 @@ def loads_strict(text: str) -> Any:
             text,
             object_pairs_hook=_strict_object,
             parse_constant=_reject_constant,
+            parse_float=_parse_finite_float,
         )
     except TargetRunError:
         raise
@@ -220,7 +232,7 @@ def validate_scenario(scenario: Mapping[str, Any]) -> None:
     if re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", scenario_id) is None:
         raise TargetRunError("scenario.scenario_id is not a stable identifier")
     _require_string(scenario["description"], "scenario.description", maximum=512)
-    _require_integer(scenario["timeout_seconds"], "scenario.timeout_seconds", minimum=1, maximum=86400)
+    _require_integer(scenario["timeout_seconds"], "scenario.timeout_seconds", minimum=1, maximum=MAX_TIMEOUT_SECONDS)
 
     oracle = scenario["oracle"]
     if not isinstance(oracle, Mapping) or oracle.get("kind") not in {"process-exit", "file-sha256"}:
@@ -290,6 +302,8 @@ def validate_command(command: Mapping[str, Any]) -> None:
         minimum=0,
         maximum=len(argv) - 1,
     )
+    if emulator_index != 0:
+        raise TargetRunError("command.emulator_binary_index must be 0 so argv[0] is the verified emulator")
     target_index = _require_integer(
         command["target_path_index"],
         "command.target_path_index",
@@ -670,6 +684,38 @@ def _redact_json(value: Any, *, key: str | None = None) -> Any:
     return value
 
 
+_SAFE_TARGET_STRING_SETTINGS: dict[str, re.Pattern[str]] = {
+    "game.language": re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"),
+    "target.network_mode": re.compile(r"^(?:offline|online)$"),
+}
+
+
+def _validate_target_manifest_safe_for_package(manifest: Mapping[str, Any]) -> None:
+    """Fail closed when a BB-BL2 manifest contains operator-private string settings."""
+    settings = manifest["configuration"]["settings"]
+    for key, setting in settings.items():
+        value = setting["value"]
+        if not isinstance(value, str):
+            continue
+        allowed = _SAFE_TARGET_STRING_SETTINGS.get(key)
+        if allowed is None or allowed.fullmatch(value) is None or _redact_string(value) != value:
+            raise TargetRunError(
+                f"target manifest string setting {key!r} is not approved for safe packaging"
+            )
+
+    def reject_private_paths(value: Any, field: str) -> None:
+        if isinstance(value, Mapping):
+            for child_key, child in value.items():
+                reject_private_paths(child, f"{field}/{child_key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                reject_private_paths(child, f"{field}/{index}")
+        elif isinstance(value, str) and _redact_string(value) != value:
+            raise TargetRunError(f"target manifest contains a private path at {field}")
+
+    reject_private_paths(manifest, "target-manifest")
+
+
 def _validate_json_allowlist(schema: Any, field: str, *, depth: int = 0) -> None:
     """Validate the restricted per-artifact JSON schema used for embedding."""
     if depth > MAX_ALLOWLIST_DEPTH or not isinstance(schema, Mapping):
@@ -750,6 +796,8 @@ def _project_allowlisted_json(value: Any, schema: Mapping[str, Any], field: str 
     if schema_type == "number":
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TargetRunError(f"{field} is not an allowed number")
+        if isinstance(value, float) and not math.isfinite(value):
+            raise TargetRunError(f"{field} is not a finite JSON number")
         return value
     if schema_type == "boolean":
         if not isinstance(value, bool):
@@ -796,6 +844,8 @@ def _collect_artifacts(
                     "status": "missing" if code == "artifact-missing" else "rejected",
                     "source_sha256": None,
                     "source_size_bytes": None,
+                    "packaged_sha256": None,
+                    "packaged_size_bytes": None,
                     "packaged_path": None,
                 }
             )
@@ -808,6 +858,8 @@ def _collect_artifacts(
                     "status": "externalized",
                     "source_sha256": source_sha256,
                     "source_size_bytes": source_size,
+                    "packaged_sha256": None,
+                    "packaged_size_bytes": None,
                     "packaged_path": None,
                 }
             )
@@ -827,6 +879,8 @@ def _collect_artifacts(
                     "status": "rejected",
                     "source_sha256": source_sha256,
                     "source_size_bytes": source_size,
+                    "packaged_sha256": None,
+                    "packaged_size_bytes": None,
                     "packaged_path": None,
                 }
             )
@@ -840,6 +894,8 @@ def _collect_artifacts(
                 "status": "embedded_redacted_json",
                 "source_sha256": source_sha256,
                 "source_size_bytes": source_size,
+                "packaged_sha256": _sha256_bytes(redacted),
+                "packaged_size_bytes": len(redacted),
                 "packaged_path": packaged_path,
             }
         )
@@ -985,6 +1041,113 @@ class _WindowsJob:
             self._kernel32.CloseHandle(handle)
 
 
+
+class _LinuxSubreaper:
+    """Temporarily adopt orphaned target descendants so session changes cannot escape teardown."""
+
+    PR_SET_CHILD_SUBREAPER = 36
+    PR_GET_CHILD_SUBREAPER = 37
+
+    def __init__(self) -> None:
+        if not sys.platform.startswith("linux"):
+            raise TargetRunError("Linux subreaper containment is only available on Linux")
+        import ctypes
+
+        self._ctypes = ctypes
+        self._libc = ctypes.CDLL(None, use_errno=True)
+        self._libc.prctl.argtypes = [
+            ctypes.c_int,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+        ]
+        self._libc.prctl.restype = ctypes.c_int
+        current = ctypes.c_int()
+        if self._libc.prctl(
+            self.PR_GET_CHILD_SUBREAPER, ctypes.addressof(current), 0, 0, 0
+        ) != 0:
+            code = ctypes.get_errno()
+            raise OSError(code, "PR_GET_CHILD_SUBREAPER failed")
+        self._restore = current.value == 0
+        if self._restore and self._libc.prctl(self.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+            code = ctypes.get_errno()
+            raise OSError(code, "PR_SET_CHILD_SUBREAPER failed")
+
+    def close(self) -> None:
+        if self._restore:
+            self._libc.prctl(self.PR_SET_CHILD_SUBREAPER, 0, 0, 0, 0)
+            self._restore = False
+
+
+def _linux_direct_child_pids() -> set[int]:
+    children: set[int] = set()
+    proc = Path("/proc")
+    try:
+        entries = list(proc.iterdir())
+    except OSError as error:
+        raise TargetRunError("unable to enumerate /proc for target containment") from error
+    parent_pid = os.getpid()
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        try:
+            text = (entry / "stat").read_text(encoding="utf-8")
+            end = text.rfind(")")
+            if end < 0:
+                continue
+            fields = text[end + 2 :].split()
+            if len(fields) >= 2 and int(fields[1]) == parent_pid:
+                children.add(int(entry.name))
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError, OSError):
+            continue
+    return children
+
+
+def _reap_linux_child(pid: int) -> None:
+    try:
+        os.waitpid(pid, os.WNOHANG)
+    except (ChildProcessError, ProcessLookupError, OSError):
+        pass
+
+
+def _terminate_linux_adopted_children(baseline_children: set[int]) -> None:
+    def live_children() -> set[int]:
+        return _linux_direct_child_pids() - baseline_children
+
+    deadline = time.monotonic() + 2
+    while True:
+        current = live_children()
+        if not current:
+            return
+        for pid in current:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        for pid in current:
+            _reap_linux_child(pid)
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.01)
+
+    deadline = time.monotonic() + 2
+    while True:
+        current = live_children()
+        if not current:
+            return
+        for pid in current:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        for pid in current:
+            _reap_linux_child(pid)
+        if time.monotonic() >= deadline:
+            raise TargetRunError("detached target descendants survived bounded Linux teardown")
+        time.sleep(0.01)
+
+
 def _process_group_exists(process_group_id: int) -> bool:
     try:
         os.killpg(process_group_id, 0)
@@ -1068,17 +1231,33 @@ def _drain_process_output(stream: Any, result: list[Any]) -> None:
     result[:] = [observed, truncated]
 
 
-def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -> dict[str, Any]:
+def _execute_command(
+    argv: Sequence[str],
+    workdir: Path,
+    timeout_seconds: int,
+    *,
+    require_detached_containment: bool = False,
+) -> dict[str, Any]:
     started = time.monotonic()
     process: subprocess.Popen[Any] | None = None
     process_group_id: int | None = None
     windows_job: _WindowsJob | None = None
+    linux_subreaper: _LinuxSubreaper | None = None
+    linux_baseline_children: set[int] = set()
     launch_failed = False
     timed_out = False
     stdout_count = [0, False]
     stderr_count = [0, False]
     output_threads: list[threading.Thread] = []
     try:
+        if (
+            require_detached_containment
+            and os.name == "posix"
+            and not sys.platform.startswith("linux")
+        ):
+            raise TargetRunError(
+                "bounded target execution on POSIX requires Linux subreaper containment"
+            )
         if os.name not in {"posix", "nt"}:
             raise TargetRunError(f"unsupported process-tree control platform: {os.name}")
         kwargs: dict[str, Any] = {
@@ -1090,6 +1269,12 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
             "close_fds": True,
         }
         if os.name == "posix":
+            if require_detached_containment:
+                try:
+                    linux_subreaper = _LinuxSubreaper()
+                    linux_baseline_children = _linux_direct_child_pids()
+                except OSError as error:
+                    raise TargetRunError("unable to establish Linux subreaper containment") from error
             kwargs["start_new_session"] = True
         else:
             windows_job = _WindowsJob()
@@ -1131,6 +1316,8 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
                 process_group_id=process_group_id,
                 windows_job=windows_job,
             )
+            if linux_subreaper is not None:
+                _terminate_linux_adopted_children(linux_baseline_children)
     finally:
         elapsed = round(max(0.0, time.monotonic() - started), 3)
         for thread in output_threads:
@@ -1144,6 +1331,8 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
                         pass
         if windows_job is not None:
             windows_job.close()
+        if linux_subreaper is not None:
+            linux_subreaper.close()
     return {
         "exit_code": None if process is None else process.returncode,
         "launch_failed": launch_failed,
@@ -1301,6 +1490,7 @@ def run_experiment(
         raise TargetRunError("output artifact must be outside target_root and working_directory")
 
     target_raw, target_manifest = _load_target_manifest(target_manifest_path)
+    _validate_target_manifest_safe_for_package(target_manifest)
     scenario_raw, scenario = _load_json_file(
         scenario_path, maximum=MAX_INPUT_BYTES, label="scenario"
     )
@@ -1319,7 +1509,7 @@ def run_experiment(
     _bind_command_target(command, workdir_resolved, app_root, target_eboot)
 
     binary_resolved = emulator_binary_path.resolve()
-    command_binary = Path(command["argv"][command["emulator_binary_index"]])
+    command_binary = Path(command["argv"][0])
     if not command_binary.is_absolute():
         command_binary = workdir_resolved / command_binary
     if command_binary.resolve() != binary_resolved:
@@ -1347,6 +1537,7 @@ def run_experiment(
         command["argv"],
         workdir_resolved,
         scenario["timeout_seconds"],
+        require_detached_containment=True,
     )
     oracle = _evaluate_oracle(scenario, workdir_resolved, execution)
     artifacts, embedded, packaging_warnings = _collect_artifacts(scenario, workdir_resolved)

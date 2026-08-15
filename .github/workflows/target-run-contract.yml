@@ -18,7 +18,11 @@ jobs:
       - name: Install schema validator
         run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
       - name: Run target-run contract tests
-        run: python -m unittest tests.test_run_target_experiment -v
+        run: >-
+          python -m unittest
+          tests.test_run_target_experiment
+          tests.test_run_target_experiment_hardening
+          -v
       - name: Validate published target-run schema and synthetic scenario
         run: >-
           python -c "import json; from jsonschema import Draft202012Validator, FormatChecker; from tools.run_target_experiment import validate_scenario; schema=json.load(open('schemas/target-run.schema.json', encoding='utf-8')); Draft202012Validator.check_schema(schema); validate_scenario(json.load(open('docs/experiments/examples/target-run-scenario.synthetic.json', encoding='utf-8')))"

@@ -36,10 +36,12 @@ command:
   independently and keep the verified source view immutable;
 - a versioned scenario file with a bounded timeout, an explicit oracle, and a
   declared safe-artifact allowlist;
-- a versioned argv-only command file. Command schema v2 names both the emulator
-  binary argument and a target-path argument; the latter must resolve exactly
-  to the verified `app/` view or its `eboot.bin`. Shell strings, environment
-  overrides, and command-file contents are not accepted as execution shortcuts;
+- a versioned argv-only command file. Command schema v2 requires
+  `emulator_binary_index: 0`, so the verified shadPS4 executable is the program
+  actually passed to `exec`, not a wrapper argument. `target_path_index` must
+  resolve exactly to the verified `app/` view or its `eboot.bin`. Shell strings,
+  wrapper launchers, environment overrides, and command-file contents are not
+  accepted as execution shortcuts;
 - the exact shadPS4 executable and its expected SHA-256, plus the upstream
   repository, source commit, source tree, and ordered local patch commits. The
   runner fails closed unless the source repository, commit, and tree match the
@@ -52,9 +54,12 @@ command:
   serialized.
 
 The command is run with `shell=False`, stdin closed, a bounded timeout, and
-temporary stdout/stderr sinks. Timeout termination is process-group aware on
-POSIX and process aware on Windows. The raw process output is never copied to
-the result artifact.
+temporary stdout/stderr sinks. Windows uses a kill-on-close Job Object. Linux
+uses a new process group plus `PR_SET_CHILD_SUBREAPER`, then reaps/kills adopted
+descendants after group teardown; this also contains children that call
+`setsid()` or start a new session. Other POSIX hosts are rejected for target
+execution because a process group alone is not a sufficient containment
+guarantee. The raw process output is never copied to the result artifact.
 
 The published run manifest schema is
 [`schemas/target-run.schema.json`](../../schemas/target-run.schema.json), with
@@ -62,7 +67,11 @@ identity `bb-target-run` version 2. A produced ZIP has these fixed entries:
 
 - `run-manifest.json` — route, all baseline digests, termination state, oracle
   result, artifact status, and redaction policy;
-- `target-manifest.json` — the validated payload-free BB-BL2 manifest;
+- `target-manifest.json` — the validated payload-free BB-BL2 manifest, only
+  after a second transfer-safety check. String-valued target settings are
+  fail-closed to project-owned safe semantics (`game.language` and
+  `target.network_mode` in v2); unapproved string settings or private path-like
+  values reject the handoff instead of being copied;
 - `host-environment.json` — the BB-BL3 manifest collected immediately before
   launch;
 - `scenario.json` — an allowlisted projection of the validated scenario; the
@@ -72,7 +81,9 @@ identity `bb-target-run` version 2. A produced ZIP has these fixed entries:
   an explicit per-artifact schema/field allowlist projection followed by
   recursive sensitive-key/path redaction. Unknown fields or schema/type
   mismatches reject that artifact; heuristic redaction is only a secondary
-  defense.
+  defense. `run-manifest.json` records both the pre-redaction source digest/size
+  and the exact packaged redacted digest/size so detached consumers can bind the
+  analyzed bytes independently of the ZIP container.
 
 The executable, target root, command file, emulator configuration, raw
 stdout/stderr, and opaque capture payloads are not packaged. Declared opaque
@@ -107,25 +118,28 @@ and every declared artifact path in the working directory. A `process-exit`
 oracle has no path to preflight. This makes file evidence attributable to the
 current execution rather than a stale file left by an earlier run.
 
-The runner records the observed exit code, elapsed time, bounded stdout/stderr
-byte counts (capped at 16 MiB with an explicit truncation flag), oracle state
+The runner records the observed exit code, elapsed time (scenario timeout plus
+a bounded teardown margin), bounded stdout/stderr byte counts (capped at 16 MiB
+with an explicit truncation flag), oracle state
 (`passed`, `failed`, `unknown`, or `not_evaluated`), and a bounded termination
 state. A timeout, launch failure, non-zero exit, missing oracle, or oracle
 mismatch remains visible and makes the command unsuccessful.
 
-The launcher is isolated in a new POSIX process group or a Windows Job Object
-with kill-on-close semantics. The group/job is torn down even when a launcher
-parent exits before its emulator child, so inherited output pipes and
-descendants cannot outlive the bounded run.
+The directly executed emulator is isolated in a Windows Job Object or, on
+Linux, a new process group under a temporary child-subreaper. The group/job is
+torn down and Linux-adopted descendants are reaped even if they create a new
+session, so inherited output pipes and detached children cannot outlive the
+bounded run.
 
 ## One-shot operator procedure
 
 On the target machine, prepare an isolated writable working directory beside,
 not inside, the immutable target tree. Create a validated BB-BL2 manifest and a
-scenario file. Create a command file with the exact argv that launches the pinned
-emulator/capture tooling; the command file must identify the emulator binary
-with `emulator_binary_index` and the verified standalone app-root/eboot argument
-with `target_path_index`.
+scenario file. Create a command file whose `argv[0]` is the exact pinned
+shadPS4 executable; `emulator_binary_index` must therefore be `0`. The verified
+standalone app-root/eboot argument is named by `target_path_index`. Wrapper
+launchers are intentionally unsupported because they would break executable
+provenance and POSIX containment guarantees.
 
 The invocation is:
 
@@ -181,9 +195,11 @@ changing the feasibility decision by assumption.
 ## Validation in this PR
 
 The runner has standard-library contract tests for strict JSON, path
-containment, argv-only execution, exact BB-BL2 target-root matching,
-command-to-target binding, allowlist-first redaction, stale-output rejection,
-descendant termination, and failure-closed validation. A
+containment, direct-emulator argv binding, exact BB-BL2 target-root matching,
+command-to-target binding, target-manifest transfer safety, finite JSON-number
+parsing, allowlist-first redaction, packaged-payload digests, stale-output
+rejection, detached-session descendant termination, and failure-closed
+validation. A
 synthetic control also launches the local Python interpreter, verifies a file
 oracle, and checks that the ZIP excludes command/config/process-output data.
 Those tests establish runner capability and artifact-boundary behavior only;
