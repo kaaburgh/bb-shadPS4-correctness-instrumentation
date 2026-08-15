@@ -12,6 +12,9 @@
 - Investigation заканчивается знанием, decision или negative result; patch не обязателен.
 - Implementation не открывается до established semantic seam/compatibility boundary.
 - Title-visible symptom ≠ title-specific cause. Build/synthetic checks ≠ Bloodborne target validation.
+- Если evidence устанавливает generic PS4/shadPS4 semantic correctness defect, default path — minimal generic, upstreamable shadPS4 correction; фактический merge в upstream не является обязательным acceptance criterion, потому что он зависит от решения upstream maintainers.
+- Title/resource/shader-ID hardcoding не считается заменой generic correctness fix только потому, что такой workaround проще реализовать.
+- Bloodborne-specific correctness workaround допустим только если evidence показывает, что generic solution impractical/disproportionate или поведение действительно title-specific; такой tradeoff нужно явно зафиксировать и направить к последующей specialization boundary, а не считать generic correctness completion.
 - Evidence classes: `static`, `runtime`, `synthetic`, `reported`, `assumed`.
 - Execution: **CLOUD**, **CLOUD RESEARCH**, **GATED**, **LOCAL ONLY**. `LOCAL ONLY` допустим только после documented feasibility result.
 - Каждый **GATED** target-run item должен прямо зависеть от **BB-ENV1**. Он не стартует, пока feasibility item не зафиксировал конкретный execution route и handoff.
@@ -157,7 +160,9 @@ Outcome: каждый актуальный symptom class воспроизвод�
 
 # Milestone 2 — Correctness fixes upstream-first
 
-Outcome: priority defects исправляются только после установленного semantic seam; false premises сохраняются как negative results; profiling открывается отдельным correctness gate.
+Outcome: priority defects исправляются только после установленного semantic seam, при этом generic PS4/shadPS4 defects получают предпочтительно generic upstreamable correction; false premises сохраняются как negative results; profiling открывается отдельным correctness gate.
+
+**Shared acceptance policy:** Для каждого correction path evidence сначала определяет ownership boundary. Установленный generic defect должен вести к generic, reviewable и upstreamable shadPS4 fix; upstream merge не требуется для completion этого roadmap, поскольку решение находится у maintainers. Hardcoded title/resource/shader IDs не закрывают generic correctness requirement. Title-specific workaround остаётся допустимым только при documented evidence о genuine title-specific behavior либо impractical/disproportionate generic solution; в этом случае PR фиксирует evidence и tradeoff, применяет explicit guard/validated scope и передаёт решение к `BB-SPEC1`, а не выдаёт его за generic correctness fix.
 
 ### BB-FIX1 — Establish resource-lifetime semantic seam
 - **Status / priority / execution:** Blocked / Critical / CLOUD RESEARCH
@@ -170,9 +175,9 @@ Outcome: priority defects исправляются только после ус�
 ### BB-FIX2 — Resolve resource-lifetime correction and target validation
 - **Status / priority / execution:** Blocked / Critical / GATED
 - **Depends on:** BB-ENV1, BB-FIX1
-- **Question:** Если BB-FIX1 установил generic defect — реализовать minimal correction и проверить target behavior; если premise rejected — закрыть correction path без speculative patch.
+- **Question:** Если BB-FIX1 установил generic defect — реализовать minimal generic correction и проверить target behavior; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — проверить guarded workaround с documented tradeoff; если premise rejected — закрыть correction path без speculative patch.
 - **Next experiment / information gain:** Synthetic regression first; target validation only for established behavior change, using BB-ENV1 route.
-- **Acceptance / artifacts:** Valid outcomes: (a) tests + objective target evidence подтверждают correction без new lifetime/VRAM regression и upstreamability documented; либо (b) item marked Superseded/Not applicable с ссылкой на negative seam evidence. Любое изменение source/config baseline явно invalidates/reopens affected BB-BL6/BB-INS4/BB-SHD2/BB-RES2/BB-PERF2 evidence.
+- **Acceptance / artifacts:** Valid outcomes: (a) tests + objective target evidence подтверждают generic correction без new lifetime/VRAM regression и upstreamability documented; (b) tests + objective target evidence подтверждают guarded title-specific workaround, а item фиксирует evidence genuine title-specific behavior либо why generic solution impractical/disproportionate, explicit guard/validated scope, tradeoff и handoff к `BB-SPEC1`; либо (c) item marked Superseded/Not applicable с ссылкой на negative seam evidence. Любое изменение source/config baseline явно invalidates/reopens affected BB-BL6/BB-INS4/BB-SHD2/BB-RES2/BB-PERF2 evidence.
 - **Scope:** Medium
 
 ### BB-FIX3 — Establish synchronization/readback semantic seam
@@ -186,9 +191,9 @@ Outcome: priority defects исправляются только после ус�
 ### BB-FIX4 — Resolve synchronization/readback correction and target validation
 - **Status / priority / execution:** Blocked / Critical / GATED
 - **Depends on:** BB-ENV1, BB-FIX3
-- **Question:** Если established generic correction существует — реализовать и проверить ordering/data visibility; иначе закрыть path evidence-backed negative result.
+- **Question:** Если established generic correction существует — реализовать и проверить ordering/data visibility; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — проверить guarded workaround с documented tradeoff; иначе закрыть path evidence-backed negative result.
 - **Next experiment / information gain:** Synthetic regression + target event/correctness capture only after seam established.
-- **Acceptance / artifacts:** Valid outcomes: corrected+validated без unexplained hazards/waits/correctness-for-performance trade, либо Superseded/Not applicable по evidence. Baseline-changing correction reopens affected downstream capture items.
+- **Acceptance / artifacts:** Valid outcomes: (a) generic correction implemented and validated без unexplained hazards/waits/correctness-for-performance trade; (b) synthetic regression + target event/correctness evidence validates a guarded title-specific workaround with documented rationale, tradeoff, explicit guard/validated scope и handoff к `BB-SPEC1`; либо (c) Superseded/Not applicable по evidence. Baseline-changing correction reopens affected downstream capture items.
 - **Scope:** Medium
 
 ### BB-FIX5 — Establish graphics/shader semantic seam
@@ -202,9 +207,9 @@ Outcome: priority defects исправляются только после ус�
 ### BB-FIX6 — Resolve graphics/shader correction and target validation
 - **Status / priority / execution:** Blocked / High / GATED
 - **Depends on:** BB-ENV1, BB-FIX5
-- **Question:** Если established generic graphics/shader defect существует — исправить его и объективно проверить; иначе закрыть correction path без title-specific workaround.
+- **Question:** Если established generic graphics/shader defect существует — исправить его и объективно проверить; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — объективно проверить guarded title-specific workaround; иначе закрыть correction path evidence-backed negative result.
 - **Next experiment / information gain:** Synthetic state/translation regression + objective target capture only after seam established.
-- **Acceptance / artifacts:** Valid outcomes: tests + target pixel/state/event evidence prove correction with relevant formats/layouts/barriers/variants considered, либо Superseded/Not applicable по negative evidence. Baseline-changing correction reopens affected downstream capture items.
+- **Acceptance / artifacts:** Valid outcomes: (a) tests + target pixel/state/event evidence prove generic correction with relevant formats/layouts/barriers/variants considered and upstreamability documented; (b) tests + target pixel/state/event evidence validate a guarded title-specific workaround, with evidence-backed rationale, explicit guard/validated scope, tradeoff, no title/resource/shader-ID hardcoding и handoff к `BB-SPEC1`; либо (c) Superseded/Not applicable по negative evidence. Baseline-changing correction reopens affected downstream capture items.
 - **Scope:** Medium
 
 ### BB-COR7 — Decide whether correctness is sufficient for profiling
