@@ -328,7 +328,9 @@ class RunTests(unittest.TestCase):
                 runner._verify_target_root(target_root.resolve(), mismatched_manifest)
 
             wrong_command = copy.deepcopy(command)
-            wrong_command["argv"][wrong_command["target_path_index"]] = str(root / "other-target")
+            other_target = root / "other-target"
+            other_target.mkdir()
+            wrong_command["argv"][wrong_command["target_path_index"]] = str(other_target)
             app_root, eboot = runner._verify_target_root(target_root.resolve(), target_manifest)
             with self.assertRaisesRegex(runner.TargetRunError, "does not identify the verified target"):
                 runner._bind_command_target(wrong_command, workdir.resolve(), app_root, eboot)

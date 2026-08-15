@@ -575,25 +575,25 @@ def _bind_command_target(
     app_root: Path,
     eboot: Path,
 ) -> str:
-    """Require the declared target argv element to be the verified app root or eboot."""
+    """Require the declared target argv element to resolve to the verified app root or eboot."""
     argument = Path(command["argv"][command["target_path_index"]])
     candidate = argument if argument.is_absolute() else workdir / argument
-    candidate_absolute = Path(os.path.abspath(candidate))
-    expected = {
-        os.path.normcase(str(app_root)): "app-root",
-        os.path.normcase(str(eboot)): "eboot",
-    }
-    kind = expected.get(os.path.normcase(str(candidate_absolute)))
-    if kind is None:
-        raise TargetRunError(
-            "command target_path_index does not identify the verified target app root or eboot"
-        )
     try:
-        info = candidate_absolute.lstat()
+        info = candidate.lstat()
+        candidate_resolved = candidate.resolve(strict=True)
     except OSError as error:
         raise TargetRunError("command target path is not accessible") from error
     if _is_reparse_or_symlink(info):
         raise TargetRunError("command target path must not be a link or reparse point")
+    expected = {
+        os.path.normcase(str(app_root)): "app-root",
+        os.path.normcase(str(eboot)): "eboot",
+    }
+    kind = expected.get(os.path.normcase(str(candidate_resolved)))
+    if kind is None:
+        raise TargetRunError(
+            "command target_path_index does not identify the verified target app root or eboot"
+        )
     return kind
 
 
