@@ -23,6 +23,53 @@ else:
     HAS_JSONSCHEMA = True
 
 
+def _write_bound_target_fixture(root: Path) -> tuple[Path, Path]:
+    target_root = root / "target-root"
+    payloads = {
+        "app/eboot.bin": b"synthetic-eboot",
+        "app/sce_sys/param.sfo": b"synthetic-param-sfo",
+        "app/data/control.bin": b"synthetic-content",
+    }
+    for relative, payload in payloads.items():
+        path = target_root.joinpath(*relative.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+
+    manifest = json.loads(TARGET_EXAMPLE.read_text(encoding="utf-8"))
+    manifest["build"]["eboot"]["sha256"] = hashlib.sha256(payloads["app/eboot.bin"]).hexdigest()
+    manifest["build"]["eboot"]["size_bytes"] = len(payloads["app/eboot.bin"])
+    manifest["build"]["param_sfo"]["sha256"] = hashlib.sha256(
+        payloads["app/sce_sys/param.sfo"]
+    ).hexdigest()
+    manifest["build"]["param_sfo"]["size_bytes"] = len(
+        payloads["app/sce_sys/param.sfo"]
+    )
+    records = []
+    total_bytes = 0
+    for canonical_path, payload in payloads.items():
+        digest = hashlib.sha256(payload).hexdigest()
+        total_bytes += len(payload)
+        records.append(
+            (
+                canonical_path.encode("utf-8"),
+                canonical_path.encode("utf-8")
+                + b"\x00"
+                + str(len(payload)).encode("ascii")
+                + b"\x00"
+                + digest.encode("ascii")
+                + b"\n",
+            )
+        )
+    records.sort(key=lambda item: item[0])
+    tree = manifest["content"]["resolved_tree"]
+    tree["sha256"] = hashlib.sha256(b"".join(record for _path, record in records)).hexdigest()
+    tree["file_count"] = len(records)
+    tree["total_bytes"] = total_bytes
+    manifest_path = root / "target-manifest.json"
+    manifest_path.write_bytes(runner._json_bytes(manifest))
+    return target_root, manifest_path
+
+
 class ContractTests(unittest.TestCase):
     def test_strict_json_rejects_duplicate_members(self):
         with self.assertRaisesRegex(runner.TargetRunError, "duplicate JSON member"):
@@ -48,9 +95,10 @@ class ContractTests(unittest.TestCase):
     def test_command_contract_has_no_shell_or_environment_escape_hatch(self):
         command = {
             "schema_id": runner.COMMAND_SCHEMA_ID,
-            "schema_version": 1,
-            "argv": ["emulator"],
+            "schema_version": runner.COMMAND_SCHEMA_VERSION,
+            "argv": ["emulator", "target"],
             "emulator_binary_index": 0,
+            "target_path_index": 1,
             "shell": True,
         }
         with self.assertRaisesRegex(runner.TargetRunError, "unexpected fields"):
@@ -201,9 +249,8 @@ class RunTests(unittest.TestCase):
     def test_run_creates_bounded_safe_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            target_root = root / "target-root"
+            target_root, target_manifest_path = _write_bound_target_fixture(root)
             workdir = root / "isolated-work"
-            target_root.mkdir()
             workdir.mkdir()
             output = root / "artifacts" / "run-synthetic.zip"
             config = root / "emulator-config.toml"
@@ -256,7 +303,7 @@ class RunTests(unittest.TestCase):
             binary_sha256 = hashlib.sha256(binary.read_bytes()).hexdigest()
             command = {
                 "schema_id": runner.COMMAND_SCHEMA_ID,
-                "schema_version": 1,
+                "schema_version": runner.COMMAND_SCHEMA_VERSION,
                 "argv": [
                     str(binary),
                     "-c",
@@ -266,14 +313,28 @@ class RunTests(unittest.TestCase):
                         "(p/'oracle.bin').write_bytes(b'oracle-ok'); "
                         "(p/'summary.json').write_text(json.dumps({'checkpoint':r'C:\\Users\\alice\\capture.json', 'ok':True}), encoding='utf-8')"
                     ),
+                    str(target_root / "app"),
                 ],
                 "emulator_binary_index": 0,
+                "target_path_index": 3,
             }
             command_path = root / "command.json"
             command_path.write_bytes(runner._json_bytes(command))
 
+            target_manifest = json.loads(target_manifest_path.read_text(encoding="utf-8"))
+            mismatched_manifest = copy.deepcopy(target_manifest)
+            mismatched_manifest["build"]["eboot"]["sha256"] = "0" * 64
+            with self.assertRaisesRegex(runner.TargetRunError, "eboot.bin does not match"):
+                runner._verify_target_root(target_root.resolve(), mismatched_manifest)
+
+            wrong_command = copy.deepcopy(command)
+            wrong_command["argv"][wrong_command["target_path_index"]] = str(root / "other-target")
+            app_root, eboot = runner._verify_target_root(target_root.resolve(), target_manifest)
+            with self.assertRaisesRegex(runner.TargetRunError, "does not identify the verified target"):
+                runner._bind_command_target(wrong_command, workdir.resolve(), app_root, eboot)
+
             manifest = runner.run_experiment(
-                target_manifest_path=TARGET_EXAMPLE,
+                target_manifest_path=target_manifest_path,
                 scenario_path=scenario_path,
                 command_path=command_path,
                 emulator_binary_path=binary,

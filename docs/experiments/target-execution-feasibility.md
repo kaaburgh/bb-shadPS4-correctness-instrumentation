@@ -27,14 +27,19 @@ one-shot runner. It requires all of the following before it starts the target
 command:
 
 - a BB-BL2 payload-free target identity manifest, validated with the existing
-  strict validator. The runner validates the manifest document and its
-  completeness state; it does not pretend to derive that identity from an
-  arbitrary proprietary tree. The operator must produce the manifest with the
-  BB-BL2 collection procedure and keep the source tree immutable;
+  strict validator. Before launch the runner recomputes the manifest's exact
+  `build.eboot`, `build.param_sfo`, and `content.resolved_tree` identities from
+  the canonical `target_root/app/` plus declared `target_root/dlc/<content-id>/`
+  views and fails closed on any mismatch. This verifies the prepared content
+  view; it does not pretend to derive target-visible settings or modification
+  metadata from arbitrary files. The operator must produce those BB-BL2 fields
+  independently and keep the verified source view immutable;
 - a versioned scenario file with a bounded timeout, an explicit oracle, and a
   declared safe-artifact allowlist;
-- a versioned argv-only command file. Shell strings, environment overrides, and
-  command-file contents are not accepted as execution shortcuts;
+- a versioned argv-only command file. Command schema v2 names both the emulator
+  binary argument and a target-path argument; the latter must resolve exactly
+  to the verified `app/` view or its `eboot.bin`. Shell strings, environment
+  overrides, and command-file contents are not accepted as execution shortcuts;
 - the exact shadPS4 executable and its expected SHA-256, plus the upstream
   repository, source commit, source tree, and ordered local patch commits. The
   runner fails closed unless the source repository, commit, and tree match the
@@ -80,7 +85,10 @@ own scratch output from being placed inside that tree.
 
 The checked-in synthetic example is
 [`target-run-scenario.synthetic.json`](./examples/target-run-scenario.synthetic.json).
-Scenario inputs use `bb-target-scenario/v2`. Every `redacted-json` artifact
+Command inputs use `bb-target-command/v2`; `target_path_index` prevents an
+operator command that launches another installation from being attributed to the
+validated manifest. Scenario inputs use `bb-target-scenario/v2`. Every
+`redacted-json` artifact
 must declare a bounded object/array/scalar allowlist with
 `additionalProperties: false`; the runner rejects unknown fields instead of
 guessing whether an unrecognized key is safe to transfer. The run manifest
@@ -111,9 +119,10 @@ descendants cannot outlive the bounded run.
 
 On the target machine, prepare an isolated writable working directory beside,
 not inside, the immutable target tree. Create a validated BB-BL2 manifest and a
-scenario file. Create a command file with the exact argv that launches the
-pinned emulator/capture tooling; the command file must identify the emulator
-binary with `emulator_binary_index`.
+scenario file. Create a command file with the exact argv that launches the pinned
+emulator/capture tooling; the command file must identify the emulator binary
+with `emulator_binary_index` and the verified standalone app-root/eboot argument
+with `target_path_index`.
 
 The invocation is:
 
@@ -169,8 +178,9 @@ changing the feasibility decision by assumption.
 ## Validation in this PR
 
 The runner has standard-library contract tests for strict JSON, path
-containment, argv-only execution, allowlist-first redaction, stale-output
-rejection, descendant termination, and failure-closed validation. A
+containment, argv-only execution, exact BB-BL2 target-root matching,
+command-to-target binding, allowlist-first redaction, stale-output rejection,
+descendant termination, and failure-closed validation. A
 synthetic control also launches the local Python interpreter, verifies a file
 oracle, and checks that the ZIP excludes command/config/process-output data.
 Those tests establish runner capability and artifact-boundary behavior only;

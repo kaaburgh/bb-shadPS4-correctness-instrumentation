@@ -24,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import zipfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -37,9 +38,10 @@ RUN_SCHEMA_ID = "bb-target-run"
 RUN_SCHEMA_VERSION = 2
 SCENARIO_SCHEMA_ID = "bb-target-scenario/v2"
 SCENARIO_SCHEMA_VERSION = 2
-COMMAND_SCHEMA_ID = "bb-target-command/v1"
+COMMAND_SCHEMA_ID = "bb-target-command/v2"
+COMMAND_SCHEMA_VERSION = 2
 RUNNER_NAME = "bb-target-runner"
-RUNNER_VERSION = "1.1.0"
+RUNNER_VERSION = "1.2.0"
 PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
@@ -260,21 +262,42 @@ def validate_scenario(scenario: Mapping[str, Any]) -> None:
 
 
 def validate_command(command: Mapping[str, Any]) -> None:
-    """Validate an argv-only command file; shell/environment injection is not supported."""
-    _require_exact_keys(command, {"schema_id", "schema_version", "argv", "emulator_binary_index"}, "command")
-    if command["schema_id"] != COMMAND_SCHEMA_ID or command["schema_version"] != 1:
+    """Validate an argv-only command whose emulator and target are explicit arguments."""
+    _require_exact_keys(
+        command,
+        {
+            "schema_id",
+            "schema_version",
+            "argv",
+            "emulator_binary_index",
+            "target_path_index",
+        },
+        "command",
+    )
+    if (
+        command["schema_id"] != COMMAND_SCHEMA_ID
+        or command["schema_version"] != COMMAND_SCHEMA_VERSION
+    ):
         raise TargetRunError("unsupported target command schema")
     argv = command["argv"]
     if not isinstance(argv, list) or not 1 <= len(argv) <= 128:
         raise TargetRunError("command.argv must contain 1-128 arguments")
     for index, argument in enumerate(argv):
         _require_string(argument, f"command.argv[{index}]", maximum=4096)
-    _require_integer(
+    emulator_index = _require_integer(
         command["emulator_binary_index"],
         "command.emulator_binary_index",
         minimum=0,
         maximum=len(argv) - 1,
     )
+    target_index = _require_integer(
+        command["target_path_index"],
+        "command.target_path_index",
+        minimum=0,
+        maximum=len(argv) - 1,
+    )
+    if target_index == emulator_index:
+        raise TargetRunError("command target_path_index must differ from emulator_binary_index")
 
 
 def _load_json_file(path: Path, *, maximum: int, label: str) -> tuple[bytes, Any]:
@@ -313,6 +336,265 @@ def _is_under(path: Path, parent: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_reparse_or_symlink(info: os.stat_result) -> bool:
+    return stat.S_ISLNK(info.st_mode) or bool(getattr(info, "st_reparse_tag", 0))
+
+
+def _resolve_target_directory(target_root: Path, path: Path, field: str) -> Path:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise TargetRunError(f"{field} is not accessible") from error
+    if _is_reparse_or_symlink(info) or not stat.S_ISDIR(info.st_mode):
+        raise TargetRunError(f"{field} must be a real directory without links or reparse points")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise TargetRunError(f"{field} cannot be resolved safely") from error
+    if not _is_under(resolved, target_root):
+        raise TargetRunError(f"{field} escapes target_root")
+    return resolved
+
+
+def _resolve_target_file(target_root: Path, path: Path, field: str) -> Path:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise TargetRunError(f"{field} is not accessible") from error
+    if _is_reparse_or_symlink(info) or not stat.S_ISREG(info.st_mode):
+        raise TargetRunError(f"{field} must be a regular file without links or reparse points")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        raise TargetRunError(f"{field} cannot be resolved safely") from error
+    if not _is_under(resolved, target_root):
+        raise TargetRunError(f"{field} escapes target_root")
+    return resolved
+
+
+def _verify_target_artifact(
+    target_root: Path,
+    path: Path,
+    expected: Mapping[str, Any],
+    field: str,
+) -> tuple[str, int]:
+    resolved = _resolve_target_file(target_root, path, field)
+    observed_sha256, observed_size = _sha256_file(resolved, label=field)
+    expected_sha256 = f"sha256:{expected['sha256']}"
+    if observed_sha256 != expected_sha256 or observed_size != expected["size_bytes"]:
+        raise TargetRunError(
+            f"{field} does not match the BB-BL2 manifest "
+            f"(actual_sha256={observed_sha256}, actual_size={observed_size})"
+        )
+    return observed_sha256, observed_size
+
+
+def _target_namespace_records(
+    target_root: Path,
+    namespace_root: Path,
+    namespace: str,
+    seen_paths: set[bytes],
+    *,
+    expected_file_count: int,
+    expected_total_bytes: int,
+) -> tuple[list[tuple[bytes, bytes]], int]:
+    records: list[tuple[bytes, bytes]] = []
+    total_bytes = 0
+    pending: list[tuple[Path, tuple[str, ...]]] = [(namespace_root, ())]
+    while pending:
+        directory, parent_parts = pending.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError as error:
+            raise TargetRunError(f"unable to enumerate target namespace {namespace}") from error
+        for entry in entries:
+            entry_path = Path(entry.path)
+            try:
+                info = entry.stat(follow_symlinks=False)
+            except OSError as error:
+                raise TargetRunError(f"unable to inspect target namespace {namespace}") from error
+            if _is_reparse_or_symlink(info):
+                raise TargetRunError(
+                    f"target namespace {namespace} contains a link or reparse point"
+                )
+
+            raw_relative = "/".join((*parent_parts, entry.name))
+            normalized_relative = unicodedata.normalize("NFC", raw_relative)
+            normalized_parts = normalized_relative.split("/")
+            if (
+                not normalized_relative
+                or normalized_relative.startswith("/")
+                or any(part in {"", ".", ".."} for part in normalized_parts)
+            ):
+                raise TargetRunError(f"target namespace {namespace} contains an unsafe path")
+            try:
+                canonical_path = f"{namespace}/{normalized_relative}".encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise TargetRunError(
+                    f"target namespace {namespace} contains a non-UTF-8 path"
+                ) from error
+            if canonical_path in seen_paths:
+                raise TargetRunError("target tree contains duplicate NFC-normalized paths")
+            seen_paths.add(canonical_path)
+
+            if stat.S_ISDIR(info.st_mode):
+                resolved = _resolve_target_directory(
+                    target_root,
+                    entry_path,
+                    f"target namespace directory {namespace}/{normalized_relative}",
+                )
+                pending.append((resolved, (*parent_parts, entry.name)))
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                raise TargetRunError(
+                    f"target namespace {namespace} contains an unsupported entry type"
+                )
+
+            resolved = _resolve_target_file(
+                target_root,
+                entry_path,
+                f"target namespace file {namespace}/{normalized_relative}",
+            )
+            observed_sha256, size = _sha256_file(resolved, label="target tree file")
+            total_bytes += size
+            if len(records) + 1 > expected_file_count or total_bytes > expected_total_bytes:
+                raise TargetRunError("target resolved tree exceeds the BB-BL2 manifest bounds")
+            digest_hex = observed_sha256.removeprefix("sha256:")
+            record = (
+                canonical_path
+                + b"\x00"
+                + str(size).encode("ascii")
+                + b"\x00"
+                + digest_hex.encode("ascii")
+                + b"\n"
+            )
+            records.append((canonical_path, record))
+    return records, total_bytes
+
+
+def _declared_dlc_roots(
+    target_root: Path, target_manifest: Mapping[str, Any]
+) -> list[tuple[str, Path]]:
+    declared_ids = set(target_manifest["content"]["dlc"])
+    dlc_root_path = target_root / "dlc"
+    try:
+        dlc_info = dlc_root_path.lstat()
+    except FileNotFoundError:
+        if declared_ids:
+            raise TargetRunError("target_root/dlc is missing for declared BB-BL2 DLC content")
+        return []
+    except OSError as error:
+        raise TargetRunError("unable to inspect target_root/dlc") from error
+    if _is_reparse_or_symlink(dlc_info) or not stat.S_ISDIR(dlc_info.st_mode):
+        raise TargetRunError("target_root/dlc must be a real directory without links")
+    dlc_root = _resolve_target_directory(target_root, dlc_root_path, "target_root/dlc")
+    try:
+        entries = list(os.scandir(dlc_root))
+    except OSError as error:
+        raise TargetRunError("unable to enumerate target_root/dlc") from error
+    actual_ids = {entry.name for entry in entries}
+    if actual_ids != declared_ids:
+        raise TargetRunError("target_root/dlc does not match the BB-BL2 declared DLC set")
+    roots: list[tuple[str, Path]] = []
+    for entry in entries:
+        roots.append(
+            (
+                f"dlc/{entry.name}",
+                _resolve_target_directory(
+                    target_root,
+                    Path(entry.path),
+                    f"target_root/dlc/{entry.name}",
+                ),
+            )
+        )
+    return sorted(roots, key=lambda item: item[0].encode("utf-8"))
+
+
+def _verify_target_root(
+    target_root: Path, target_manifest: Mapping[str, Any]
+) -> tuple[Path, Path]:
+    """Bind BB-BL2 file/tree identities to the exact target view used by the run."""
+    app_root = _resolve_target_directory(target_root, target_root / "app", "target_root/app")
+    eboot = _resolve_target_file(target_root, app_root / "eboot.bin", "target_root/app/eboot.bin")
+    param_sfo = _resolve_target_file(
+        target_root,
+        app_root / "sce_sys" / "param.sfo",
+        "target_root/app/sce_sys/param.sfo",
+    )
+    _verify_target_artifact(
+        target_root,
+        eboot,
+        target_manifest["build"]["eboot"],
+        "target_root/app/eboot.bin",
+    )
+    _verify_target_artifact(
+        target_root,
+        param_sfo,
+        target_manifest["build"]["param_sfo"],
+        "target_root/app/sce_sys/param.sfo",
+    )
+
+    expected_tree = target_manifest["content"]["resolved_tree"]
+    if expected_tree["algorithm"] != "sha256-tree-v1":
+        raise TargetRunError("unsupported BB-BL2 resolved-tree algorithm")
+    namespaces = [("app", app_root), *_declared_dlc_roots(target_root, target_manifest)]
+    seen_paths: set[bytes] = set()
+    records: list[tuple[bytes, bytes]] = []
+    total_bytes = 0
+    for namespace, namespace_root in namespaces:
+        namespace_records, namespace_bytes = _target_namespace_records(
+            target_root,
+            namespace_root,
+            namespace,
+            seen_paths,
+            expected_file_count=expected_tree["file_count"] - len(records),
+            expected_total_bytes=expected_tree["total_bytes"] - total_bytes,
+        )
+        records.extend(namespace_records)
+        total_bytes += namespace_bytes
+    records.sort(key=lambda item: item[0])
+    digest = hashlib.sha256(b"".join(record for _path, record in records)).hexdigest()
+    if (
+        len(records) != expected_tree["file_count"]
+        or total_bytes != expected_tree["total_bytes"]
+        or digest != expected_tree["sha256"]
+    ):
+        raise TargetRunError(
+            "target resolved tree does not match the BB-BL2 manifest "
+            f"(actual_sha256=sha256:{digest}, actual_files={len(records)}, "
+            f"actual_bytes={total_bytes})"
+        )
+    return app_root, eboot
+
+
+def _bind_command_target(
+    command: Mapping[str, Any],
+    workdir: Path,
+    app_root: Path,
+    eboot: Path,
+) -> str:
+    """Require the declared target argv element to be the verified app root or eboot."""
+    argument = Path(command["argv"][command["target_path_index"]])
+    candidate = argument if argument.is_absolute() else workdir / argument
+    candidate_absolute = Path(os.path.abspath(candidate))
+    expected = {
+        os.path.normcase(str(app_root)): "app-root",
+        os.path.normcase(str(eboot)): "eboot",
+    }
+    kind = expected.get(os.path.normcase(str(candidate_absolute)))
+    if kind is None:
+        raise TargetRunError(
+            "command target_path_index does not identify the verified target app root or eboot"
+        )
+    try:
+        info = candidate_absolute.lstat()
+    except OSError as error:
+        raise TargetRunError("command target path is not accessible") from error
+    if _is_reparse_or_symlink(info):
+        raise TargetRunError("command target path must not be a link or reparse point")
+    return kind
 
 
 def _resolve_work_file(workdir: Path, relative_path: str) -> Path:
@@ -1030,6 +1312,9 @@ def run_experiment(
         raise TargetRunError("command must be a JSON object")
     validate_command(command)
     _preflight_declared_outputs(scenario, workdir_resolved)
+
+    app_root, target_eboot = _verify_target_root(target_root_resolved, target_manifest)
+    _bind_command_target(command, workdir_resolved, app_root, target_eboot)
 
     binary_resolved = emulator_binary_path.resolve()
     command_binary = Path(command["argv"][command["emulator_binary_index"]])
