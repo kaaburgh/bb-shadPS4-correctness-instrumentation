@@ -65,7 +65,9 @@ identity `bb-target-run` version 2. A produced ZIP has these fixed entries:
 - `target-manifest.json` — the validated payload-free BB-BL2 manifest;
 - `host-environment.json` — the BB-BL3 manifest collected immediately before
   launch;
-- `scenario.json` — the validated scenario input;
+- `scenario.json` — an allowlisted projection of the validated scenario; the
+  free-form operator description is replaced with a fixed redaction marker while
+  the raw scenario digest and size remain in `run-manifest.json` for provenance;
 - `artifacts/*.redacted.json` — only explicitly declared JSON artifacts after
   an explicit per-artifact schema/field allowlist projection followed by
   recursive sensitive-key/path redaction. Unknown fields or schema/type
@@ -100,9 +102,10 @@ correctness or a title-visible state. A target correctness run should use a
 `file-sha256` oracle whose producer is the relevant capture or checkpoint
 tooling and whose expected digest is independently established.
 
-Before launch, the runner rejects any pre-existing oracle or declared artifact
-path in the working directory. This makes a `file-sha256` oracle attributable
-to the current execution rather than a stale file left by an earlier run.
+Before launch, the runner rejects any pre-existing `file-sha256` oracle path
+and every declared artifact path in the working directory. A `process-exit`
+oracle has no path to preflight. This makes file evidence attributable to the
+current execution rather than a stale file left by an earlier run.
 
 The runner records the observed exit code, elapsed time, bounded stdout/stderr
 byte counts (capped at 16 MiB with an explicit truncation flag), oracle state

@@ -243,6 +243,11 @@ class ContractTests(unittest.TestCase):
             with self.assertRaisesRegex(runner.TargetRunError, "must not exist before execution"):
                 runner._preflight_declared_outputs(scenario, workdir)
 
+            process_exit = copy.deepcopy(scenario)
+            process_exit["oracle"] = {"kind": "process-exit", "expected_exit_code": 0}
+            runner.validate_scenario(process_exit)
+            runner._preflight_declared_outputs(process_exit, workdir)
+
 
 @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema is not installed")
 class RunTests(unittest.TestCase):
@@ -262,7 +267,7 @@ class RunTests(unittest.TestCase):
                 "schema_id": runner.SCENARIO_SCHEMA_ID,
                 "schema_version": runner.SCENARIO_SCHEMA_VERSION,
                 "scenario_id": "synthetic-smoke",
-                "description": "Synthetic runner capability control; not target evidence.",
+                "description": "Operator alice /home/alice/private token=top-secret; synthetic only.",
                 "timeout_seconds": 30,
                 "oracle": {
                     "kind": "file-sha256",
@@ -381,6 +386,21 @@ class RunTests(unittest.TestCase):
                 self.assertNotIn("private-token", redacted)
                 self.assertNotIn("alice", redacted)
                 self.assertNotIn("C:\\", redacted)
+
+                packaged_scenario_raw = archive.read("scenario.json")
+                packaged_scenario_text = packaged_scenario_raw.decode("utf-8")
+                packaged_scenario = runner.loads_strict(packaged_scenario_text)
+                self.assertEqual(
+                    packaged_scenario["description"],
+                    "<redacted-operator-description>",
+                )
+                self.assertNotIn("alice", packaged_scenario_text)
+                self.assertNotIn("top-secret", packaged_scenario_text)
+                self.assertEqual(
+                    manifest["scenario"]["input_sha256"],
+                    runner._sha256_bytes(scenario_path.read_bytes()),
+                )
+                self.assertNotEqual(packaged_scenario_raw, scenario_path.read_bytes())
 
                 packaged_manifest = runner.loads_strict(
                     archive.read("run-manifest.json").decode("utf-8")

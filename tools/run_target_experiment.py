@@ -625,8 +625,10 @@ def _resolve_declared_work_path(workdir: Path, relative_path: str, field: str) -
 
 
 def _preflight_declared_outputs(scenario: Mapping[str, Any], workdir: Path) -> None:
-    """Reject stale oracle/artifact paths before the target command starts."""
-    declared = [(scenario["oracle"]["path"], "scenario.oracle.path")]
+    """Reject stale file-oracle/artifact paths before the target command starts."""
+    declared: list[tuple[str, str]] = []
+    if scenario["oracle"]["kind"] == "file-sha256":
+        declared.append((scenario["oracle"]["path"], "scenario.oracle.path"))
     declared.extend(
         (artifact["path"], f"scenario.artifacts[{index}].path")
         for index, artifact in enumerate(scenario["artifacts"])
@@ -1419,11 +1421,22 @@ def run_experiment(
     }
     validate_run_manifest(run_manifest)
 
+    safe_scenario = {
+        "schema_id": scenario["schema_id"],
+        "schema_version": scenario["schema_version"],
+        "scenario_id": scenario["scenario_id"],
+        "description": "<redacted-operator-description>",
+        "timeout_seconds": scenario["timeout_seconds"],
+        "oracle": scenario["oracle"],
+        "artifacts": scenario["artifacts"],
+    }
+    validate_scenario(safe_scenario)
+
     package_entries = {
         "run-manifest.json": _json_bytes(run_manifest),
         "target-manifest.json": target_raw,
         "host-environment.json": host_raw,
-        "scenario.json": scenario_raw,
+        "scenario.json": _json_bytes(safe_scenario),
     }
     package_entries.update(embedded)
     _write_zip_atomic(output_resolved, package_entries)
