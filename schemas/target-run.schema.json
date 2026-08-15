@@ -26,7 +26,7 @@
       "const": "bb-target-run"
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "provenance": {
       "type": "object",
@@ -200,7 +200,9 @@
         "working_directory_isolated",
         "target_root_separate",
         "command_argv_sha256",
-        "raw_process_output_captured"
+        "raw_process_output_captured",
+        "declared_outputs_preflighted",
+        "process_tree_control"
       ],
       "properties": {
         "working_directory_isolated": {
@@ -214,6 +216,12 @@
         },
         "raw_process_output_captured": {
           "const": true
+        },
+        "declared_outputs_preflighted": {
+          "const": true
+        },
+        "process_tree_control": {
+          "enum": ["posix-process-group", "windows-job-object"]
         }
       }
     },
@@ -392,7 +400,7 @@
       ],
       "properties": {
         "policy": {
-          "const": "allowlist-v1"
+          "const": "allowlist-v2"
         },
         "raw_process_output": {
           "const": "excluded"

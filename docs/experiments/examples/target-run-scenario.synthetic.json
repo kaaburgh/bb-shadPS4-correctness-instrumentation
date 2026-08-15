@@ -1,6 +1,6 @@
 {
-  "schema_id": "bb-target-scenario/v1",
-  "schema_version": 1,
+  "schema_id": "bb-target-scenario/v2",
+  "schema_version": 2,
   "scenario_id": "bounded-launch-control",
   "description": "Synthetic capability control; this is not Bloodborne runtime evidence.",
   "timeout_seconds": 120,
@@ -14,7 +14,21 @@
       "path": "results/summary.json",
       "name": "summary",
       "mode": "redacted-json",
-      "max_bytes": 65536
+      "max_bytes": 65536,
+      "allowlist": {
+        "type": "object",
+        "properties": {
+          "checkpoint": {
+            "type": "string",
+            "max_length": 128
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": ["checkpoint", "ok"],
+        "additionalProperties": false
+      }
     },
     {
       "path": "results/capture.trace",

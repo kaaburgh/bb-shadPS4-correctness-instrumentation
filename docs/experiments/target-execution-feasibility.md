@@ -53,7 +53,7 @@ the result artifact.
 
 The published run manifest schema is
 [`schemas/target-run.schema.json`](../../schemas/target-run.schema.json), with
-identity `bb-target-run` version 1. A produced ZIP has these fixed entries:
+identity `bb-target-run` version 2. A produced ZIP has these fixed entries:
 
 - `run-manifest.json` — route, all baseline digests, termination state, oracle
   result, artifact status, and redaction policy;
@@ -62,7 +62,10 @@ identity `bb-target-run` version 1. A produced ZIP has these fixed entries:
   launch;
 - `scenario.json` — the validated scenario input;
 - `artifacts/*.redacted.json` — only explicitly declared JSON artifacts after
-  recursive sensitive-key/path redaction.
+  an explicit per-artifact schema/field allowlist projection followed by
+  recursive sensitive-key/path redaction. Unknown fields or schema/type
+  mismatches reject that artifact; heuristic redaction is only a secondary
+  defense.
 
 The executable, target root, command file, emulator configuration, raw
 stdout/stderr, and opaque capture payloads are not packaged. Declared opaque
@@ -77,6 +80,11 @@ own scratch output from being placed inside that tree.
 
 The checked-in synthetic example is
 [`target-run-scenario.synthetic.json`](./examples/target-run-scenario.synthetic.json).
+Scenario inputs use `bb-target-scenario/v2`. Every `redacted-json` artifact
+must declare a bounded object/array/scalar allowlist with
+`additionalProperties: false`; the runner rejects unknown fields instead of
+guessing whether an unrecognized key is safe to transfer. The run manifest
+labels this privacy boundary `allowlist-v2`.
 Its file oracle illustrates the required distinction between a process being
 alive and a semantic checkpoint being observed. A `process-exit` oracle is
 supported for a launcher/capability control only; it proves termination, not
@@ -84,11 +92,20 @@ correctness or a title-visible state. A target correctness run should use a
 `file-sha256` oracle whose producer is the relevant capture or checkpoint
 tooling and whose expected digest is independently established.
 
+Before launch, the runner rejects any pre-existing oracle or declared artifact
+path in the working directory. This makes a `file-sha256` oracle attributable
+to the current execution rather than a stale file left by an earlier run.
+
 The runner records the observed exit code, elapsed time, bounded stdout/stderr
 byte counts (capped at 16 MiB with an explicit truncation flag), oracle state
 (`passed`, `failed`, `unknown`, or `not_evaluated`), and a bounded termination
 state. A timeout, launch failure, non-zero exit, missing oracle, or oracle
 mismatch remains visible and makes the command unsuccessful.
+
+The launcher is isolated in a new POSIX process group or a Windows Job Object
+with kill-on-close semantics. The group/job is torn down even when a launcher
+parent exits before its emulator child, so inherited output pipes and
+descendants cannot outlive the bounded run.
 
 ## One-shot operator procedure
 
@@ -152,7 +169,8 @@ changing the feasibility decision by assumption.
 ## Validation in this PR
 
 The runner has standard-library contract tests for strict JSON, path
-containment, argv-only execution, redaction, and failure-closed validation. A
+containment, argv-only execution, allowlist-first redaction, stale-output
+rejection, descendant termination, and failure-closed validation. A
 synthetic control also launches the local Python interpreter, verifies a file
 oracle, and checks that the ZIP excludes command/config/process-output data.
 Those tests establish runner capability and artifact-boundary behavior only;

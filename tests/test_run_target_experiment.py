@@ -1,8 +1,10 @@
 import copy
 import hashlib
 import json
+import os
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -29,7 +31,7 @@ class ContractTests(unittest.TestCase):
     def test_scenario_rejects_absolute_or_parent_paths(self):
         scenario = {
             "schema_id": runner.SCENARIO_SCHEMA_ID,
-            "schema_version": 1,
+            "schema_version": runner.SCENARIO_SCHEMA_VERSION,
             "scenario_id": "synthetic",
             "description": "synthetic contract",
             "timeout_seconds": 10,
@@ -67,6 +69,55 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(redacted["safe_sha256"], value["safe_sha256"])
         self.assertNotIn("alice", json.dumps(redacted))
 
+    def test_embedded_json_rejects_fields_outside_explicit_allowlist(self):
+        allowlist = {
+            "type": "object",
+            "properties": {"ok": {"type": "boolean"}},
+            "required": ["ok"],
+            "additionalProperties": False,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "summary.json"
+            artifact.write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "session": "credential-like-value",
+                        "mount": "/mnt/private-target/secret",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(runner.TargetRunError, "outside the artifact allowlist"):
+                runner._redact_json_artifact(
+                    artifact,
+                    maximum=4096,
+                    allowlist=allowlist,
+                )
+
+    def test_redacted_json_requires_an_allowlist(self):
+        scenario = {
+            "schema_id": runner.SCENARIO_SCHEMA_ID,
+            "schema_version": 2,
+            "scenario_id": "synthetic",
+            "description": "synthetic contract",
+            "timeout_seconds": 10,
+            "oracle": {
+                "kind": "process-exit",
+                "expected_exit_code": 0,
+            },
+            "artifacts": [
+                {
+                    "path": "results/summary.json",
+                    "name": "summary",
+                    "mode": "redacted-json",
+                    "max_bytes": 4096,
+                }
+            ],
+        }
+        with self.assertRaisesRegex(runner.TargetRunError, "unexpected fields"):
+            runner.validate_scenario(scenario)
+
     def test_process_output_and_runtime_are_bounded(self):
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
@@ -90,6 +141,60 @@ class ContractTests(unittest.TestCase):
             self.assertTrue(timed_out["timed_out"])
             self.assertLess(timed_out["elapsed_seconds"], 5)
 
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group regression")
+    def test_parent_exit_does_not_leave_descendant_or_inherited_pipe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            parent_code = (
+                "from pathlib import Path; import subprocess, sys; "
+                "child = subprocess.Popen([sys.executable, '-c', sys.argv[1]]); "
+                "Path('child.pid').write_text(str(child.pid), encoding='ascii')"
+            )
+            child_code = "import time; time.sleep(30)"
+            execution = runner._execute_command(
+                [sys.executable, "-c", parent_code, child_code],
+                workdir,
+                10,
+            )
+            child_pid = int((workdir / "child.pid").read_text(encoding="ascii"))
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                try:
+                    os.kill(child_pid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.02)
+            else:
+                try:
+                    os.kill(child_pid, 9)
+                except ProcessLookupError:
+                    pass
+                self.fail("launcher descendant outlived the bounded process group")
+            self.assertEqual(execution["process_tree_control"], "posix-process-group")
+            self.assertLess(execution["elapsed_seconds"], 5)
+
+    def test_preexisting_declared_output_is_rejected(self):
+        scenario = {
+            "schema_id": runner.SCENARIO_SCHEMA_ID,
+            "schema_version": 2,
+            "scenario_id": "synthetic",
+            "description": "synthetic contract",
+            "timeout_seconds": 10,
+            "oracle": {
+                "kind": "file-sha256",
+                "path": "results/oracle.bin",
+                "sha256": "sha256:" + "a" * 64,
+            },
+            "artifacts": [],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            (workdir / "results").mkdir()
+            (workdir / "results" / "oracle.bin").write_bytes(b"stale")
+            runner.validate_scenario(scenario)
+            with self.assertRaisesRegex(runner.TargetRunError, "must not exist before execution"):
+                runner._preflight_declared_outputs(scenario, workdir)
+
 
 @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema is not installed")
 class RunTests(unittest.TestCase):
@@ -108,7 +213,7 @@ class RunTests(unittest.TestCase):
             oracle_sha256 = "sha256:" + hashlib.sha256(oracle_bytes).hexdigest()
             scenario = {
                 "schema_id": runner.SCENARIO_SCHEMA_ID,
-                "schema_version": 1,
+                "schema_version": runner.SCENARIO_SCHEMA_VERSION,
                 "scenario_id": "synthetic-smoke",
                 "description": "Synthetic runner capability control; not target evidence.",
                 "timeout_seconds": 30,
@@ -123,6 +228,18 @@ class RunTests(unittest.TestCase):
                         "name": "summary",
                         "mode": "redacted-json",
                         "max_bytes": 4096,
+                        "allowlist": {
+                            "type": "object",
+                            "properties": {
+                                "checkpoint": {
+                                    "type": "string",
+                                    "max_length": 128,
+                                },
+                                "ok": {"type": "boolean"},
+                            },
+                            "required": ["checkpoint", "ok"],
+                            "additionalProperties": False,
+                        },
                     },
                     {
                         "path": "results/oracle.bin",
@@ -147,7 +264,7 @@ class RunTests(unittest.TestCase):
                         "from pathlib import Path; import json; "
                         "p=Path('results'); p.mkdir(); "
                         "(p/'oracle.bin').write_bytes(b'oracle-ok'); "
-                        "(p/'summary.json').write_text(json.dumps({'token':'private-token', 'path':r'C:\\Users\\alice\\capture.json', 'ok':True}), encoding='utf-8')"
+                        "(p/'summary.json').write_text(json.dumps({'checkpoint':r'C:\\Users\\alice\\capture.json', 'ok':True}), encoding='utf-8')"
                     ),
                 ],
                 "emulator_binary_index": 0,
@@ -176,6 +293,11 @@ class RunTests(unittest.TestCase):
             self.assertEqual(manifest["oracle"]["state"], "passed")
             self.assertEqual(manifest["packaging"]["state"], "complete")
             self.assertEqual(manifest["redaction"]["raw_process_output"], "excluded")
+            self.assertTrue(manifest["execution"]["declared_outputs_preflighted"])
+            self.assertEqual(
+                manifest["execution"]["process_tree_control"],
+                "posix-process-group" if os.name == "posix" else "windows-job-object",
+            )
             self.assertTrue(output.is_file())
 
             with zipfile.ZipFile(output) as archive:

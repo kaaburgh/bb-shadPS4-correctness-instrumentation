@@ -34,11 +34,12 @@ from tools import collect_host_environment
 
 RUN_SCHEMA_PATH = Path(__file__).parents[1] / "schemas" / "target-run.schema.json"
 RUN_SCHEMA_ID = "bb-target-run"
-RUN_SCHEMA_VERSION = 1
-SCENARIO_SCHEMA_ID = "bb-target-scenario/v1"
+RUN_SCHEMA_VERSION = 2
+SCENARIO_SCHEMA_ID = "bb-target-scenario/v2"
+SCENARIO_SCHEMA_VERSION = 2
 COMMAND_SCHEMA_ID = "bb-target-command/v1"
 RUNNER_NAME = "bb-target-runner"
-RUNNER_VERSION = "1.0.0"
+RUNNER_VERSION = "1.1.0"
 PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
@@ -48,6 +49,9 @@ MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 MAX_REDACTED_JSON_BYTES = 1024 * 1024
 MAX_ORACLE_BYTES = 16 * 1024 * 1024
 MAX_PROCESS_OUTPUT_BYTES = 16 * 1024 * 1024
+MAX_ALLOWLIST_DEPTH = 16
+MAX_ALLOWLIST_PROPERTIES = 128
+MAX_ALLOWLIST_ARRAY_ITEMS = 4096
 
 
 class TargetRunError(ValueError):
@@ -208,7 +212,7 @@ def validate_scenario(scenario: Mapping[str, Any]) -> None:
         {"schema_id", "schema_version", "scenario_id", "description", "timeout_seconds", "oracle", "artifacts"},
         "scenario",
     )
-    if scenario["schema_id"] != SCENARIO_SCHEMA_ID or scenario["schema_version"] != 1:
+    if scenario["schema_id"] != SCENARIO_SCHEMA_ID or scenario["schema_version"] != SCENARIO_SCHEMA_VERSION:
         raise TargetRunError("unsupported target scenario schema")
     scenario_id = _require_string(scenario["scenario_id"], "scenario.scenario_id", maximum=64)
     if re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", scenario_id) is None:
@@ -233,7 +237,14 @@ def validate_scenario(scenario: Mapping[str, Any]) -> None:
     names: set[str] = set()
     for index, artifact in enumerate(artifacts):
         field = f"scenario.artifacts[{index}]"
-        _require_exact_keys(artifact, {"path", "name", "mode", "max_bytes"}, field)
+        if not isinstance(artifact, Mapping):
+            raise TargetRunError(f"{field} must be an object")
+        base_keys = {"path", "name", "mode", "max_bytes"}
+        if artifact.get("mode") == "redacted-json":
+            _require_exact_keys(artifact, base_keys | {"allowlist"}, field)
+            _validate_json_allowlist(artifact["allowlist"], f"{field}.allowlist")
+        else:
+            _require_exact_keys(artifact, base_keys, field)
         _safe_relative_path(artifact["path"], f"{field}.path")
         name = _require_string(artifact["name"], f"{field}.name", maximum=64)
         if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name) is None:
@@ -318,6 +329,36 @@ def _resolve_work_file(workdir: Path, relative_path: str) -> Path:
     return resolved
 
 
+def _resolve_declared_work_path(workdir: Path, relative_path: str, field: str) -> Path:
+    """Resolve an output path without requiring it to exist yet."""
+    candidate = workdir.joinpath(*relative_path.split("/"))
+    try:
+        resolved = candidate.resolve(strict=False)
+    except OSError as error:
+        raise TargetRunError(f"{field} cannot be resolved safely") from error
+    if not _is_under(resolved, workdir):
+        raise TargetRunError(f"{field} escapes the isolated working directory")
+    return candidate
+
+
+def _preflight_declared_outputs(scenario: Mapping[str, Any], workdir: Path) -> None:
+    """Reject stale oracle/artifact paths before the target command starts."""
+    declared = [(scenario["oracle"]["path"], "scenario.oracle.path")]
+    declared.extend(
+        (artifact["path"], f"scenario.artifacts[{index}].path")
+        for index, artifact in enumerate(scenario["artifacts"])
+    )
+    for relative_path, field in declared:
+        candidate = _resolve_declared_work_path(workdir, relative_path, field)
+        try:
+            candidate.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            raise TargetRunError(f"unable to inspect {field}") from error
+        raise TargetRunError(f"{field} must not exist before execution")
+
+
 _SENSITIVE_KEY = re.compile(
     r"(?:password|passphrase|secret|token|credential|api[_-]?key|authorization|cookie|user(name)?|home|cwd|path|file(name)?|working[_-]?directory|target[_-]?root|command|argv|environment|hostname|serial|uuid|mac|ip)",
     re.IGNORECASE,
@@ -344,13 +385,105 @@ def _redact_json(value: Any, *, key: str | None = None) -> Any:
     return value
 
 
-def _redact_json_artifact(path: Path, *, maximum: int) -> bytes:
+def _validate_json_allowlist(schema: Any, field: str, *, depth: int = 0) -> None:
+    """Validate the restricted per-artifact JSON schema used for embedding."""
+    if depth > MAX_ALLOWLIST_DEPTH or not isinstance(schema, Mapping):
+        raise TargetRunError(f"{field} is not a supported JSON allowlist schema")
+    schema_type = schema.get("type")
+    if schema_type == "object":
+        _require_exact_keys(
+            schema,
+            {"type", "properties", "required", "additionalProperties"},
+            field,
+        )
+        if schema["additionalProperties"] is not False:
+            raise TargetRunError(f"{field}.additionalProperties must be false")
+        properties = schema["properties"]
+        if not isinstance(properties, Mapping) or len(properties) > MAX_ALLOWLIST_PROPERTIES:
+            raise TargetRunError(f"{field}.properties is too large or invalid")
+        required = schema["required"]
+        if not isinstance(required, list) or len(required) > len(properties):
+            raise TargetRunError(f"{field}.required is invalid")
+        required_names: set[str] = set()
+        for index, name in enumerate(required):
+            name = _require_string(name, f"{field}.required[{index}]", maximum=64)
+            if name in required_names or name not in properties:
+                raise TargetRunError(f"{field}.required contains an unknown or duplicate field")
+            required_names.add(name)
+        for name, child in properties.items():
+            if not isinstance(name, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name) is None:
+                raise TargetRunError(f"{field}.properties contains an unsafe field name")
+            _validate_json_allowlist(child, f"{field}.properties.{name}", depth=depth + 1)
+        return
+    if schema_type == "array":
+        _require_exact_keys(schema, {"type", "items", "max_items"}, field)
+        _require_integer(schema["max_items"], f"{field}.max_items", minimum=0, maximum=MAX_ALLOWLIST_ARRAY_ITEMS)
+        _validate_json_allowlist(schema["items"], f"{field}.items", depth=depth + 1)
+        return
+    if schema_type == "string":
+        _require_exact_keys(schema, {"type", "max_length"}, field)
+        _require_integer(schema["max_length"], f"{field}.max_length", minimum=0, maximum=4096)
+        return
+    if schema_type in {"integer", "number", "boolean", "null"}:
+        _require_exact_keys(schema, {"type"}, field)
+        return
+    raise TargetRunError(f"{field}.type is unsupported")
+
+
+def _project_allowlisted_json(value: Any, schema: Mapping[str, Any], field: str = "$") -> Any:
+    """Project JSON through an explicit schema; unknown fields fail closed."""
+    schema_type = schema["type"]
+    if schema_type == "object":
+        if not isinstance(value, Mapping):
+            raise TargetRunError(f"{field} is not an object allowed by the artifact schema")
+        properties = schema["properties"]
+        unknown = sorted(set(value) - set(properties))
+        if unknown:
+            raise TargetRunError(f"{field} contains fields outside the artifact allowlist")
+        missing = [name for name in schema["required"] if name not in value]
+        if missing:
+            raise TargetRunError(f"{field} is missing required allowlisted fields")
+        return {
+            name: _project_allowlisted_json(value[name], properties[name], f"{field}.{name}")
+            for name in value
+        }
+    if schema_type == "array":
+        if not isinstance(value, list) or len(value) > schema["max_items"]:
+            raise TargetRunError(f"{field} is not an allowed bounded array")
+        return [
+            _project_allowlisted_json(item, schema["items"], f"{field}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    if schema_type == "string":
+        if not isinstance(value, str) or len(value) > schema["max_length"]:
+            raise TargetRunError(f"{field} is not an allowed bounded string")
+        return value
+    if schema_type == "integer":
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TargetRunError(f"{field} is not an allowed integer")
+        return value
+    if schema_type == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TargetRunError(f"{field} is not an allowed number")
+        return value
+    if schema_type == "boolean":
+        if not isinstance(value, bool):
+            raise TargetRunError(f"{field} is not an allowed boolean")
+        return value
+    if value is not None:
+        raise TargetRunError(f"{field} is not null as required by the artifact schema")
+    return None
+
+
+def _redact_json_artifact(path: Path, *, maximum: int, allowlist: Mapping[str, Any]) -> bytes:
+    _validate_json_allowlist(allowlist, "artifact.allowlist")
     raw = _read_bytes(path, maximum=maximum, label="JSON artifact")
     try:
         value = loads_strict(raw.decode("utf-8"))
     except (UnicodeDecodeError, TargetRunError) as error:
         raise TargetRunError("JSON artifact is not strict UTF-8 JSON") from error
-    return _json_bytes(_redact_json(value))
+    projected = _project_allowlisted_json(value, allowlist)
+    return _json_bytes(_redact_json(projected))
 
 
 def _collect_artifacts(
@@ -396,7 +529,11 @@ def _collect_artifacts(
             continue
 
         try:
-            redacted = _redact_json_artifact(path, maximum=artifact["max_bytes"])
+            redacted = _redact_json_artifact(
+                path,
+                maximum=artifact["max_bytes"],
+                allowlist=artifact["allowlist"],
+            )
         except TargetRunError:
             warnings.append("artifact-redaction-failed")
             entries.append(
@@ -424,28 +561,168 @@ def _collect_artifacts(
     return entries, embedded, sorted(set(warnings))
 
 
-def _terminate_process(process: subprocess.Popen[Any]) -> None:
-    if os.name == "posix":
-        try:
-            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-        except (OSError, ProcessLookupError):
-            pass
+class _WindowsJob:
+    """Kill-on-close Job Object that contains the launcher and its descendants."""
+
+    CREATE_SUSPENDED = 0x00000004
+    JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
+
+    def __init__(self) -> None:
+        if os.name != "nt":
+            raise TargetRunError("Windows Job Objects are only available on Windows")
+        import ctypes
+        from ctypes import wintypes
+
+        self._ctypes = ctypes
+        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        class BasicLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class ExtendedLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", BasicLimitInformation),
+                ("IoInfo", IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        kernel32 = self._kernel32
+        kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.SetInformationJobObject.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        kernel32.SetInformationJobObject.restype = wintypes.BOOL
+        kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+        kernel32.ResumeThread.argtypes = [wintypes.HANDLE]
+        kernel32.ResumeThread.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        self._handle = kernel32.CreateJobObjectW(None, None)
+        if not self._handle:
+            raise self._last_error("CreateJobObjectW failed")
+        info = ExtendedLimitInformation()
+        info.BasicLimitInformation.LimitFlags = self.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(
+            self._handle,
+            self.JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+            ctypes.byref(info),
+            ctypes.sizeof(info),
+        ):
+            self.close()
+            raise self._last_error("SetInformationJobObject failed")
+
+    def _last_error(self, message: str) -> OSError:
+        code = self._ctypes.get_last_error()
+        return OSError(code, f"{message} (WinError {code})")
+
+    def assign_and_resume(self, process: subprocess.Popen[Any]) -> None:
+        if not self._kernel32.AssignProcessToJobObject(self._handle, process._handle):
+            raise self._last_error("AssignProcessToJobObject failed")
+        if self._kernel32.ResumeThread(process._thread_handle) == 0xFFFFFFFF:
+            raise self._last_error("ResumeThread failed")
+
+    def close(self) -> None:
+        handle = self._handle
+        self._handle = None
+        if handle:
+            self._kernel32.CloseHandle(handle)
+
+
+def _process_group_exists(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _wait_for_process_group_exit(process_group_id: int, timeout_seconds: float) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while _process_group_exists(process_group_id) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return not _process_group_exists(process_group_id)
+
+
+def _terminate_process(
+    process: subprocess.Popen[Any],
+    *,
+    process_group_id: int | None = None,
+    windows_job: _WindowsJob | None = None,
+) -> None:
+    """Stop the process and any launcher descendants, including after parent exit."""
+    if windows_job is not None:
+        windows_job.close()
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             try:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                process.kill()
+                process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return
+
+    if os.name == "posix" and process_group_id is not None:
+        if _process_group_exists(process_group_id):
+            try:
+                os.killpg(process_group_id, signal.SIGTERM)
             except (OSError, ProcessLookupError):
                 pass
-    else:
         try:
-            process.terminate()
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        if not _wait_for_process_group_exit(process_group_id, 2):
+            try:
+                os.killpg(process_group_id, signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                pass
+            _wait_for_process_group_exit(process_group_id, 2)
+        return
+
+    try:
+        process.terminate()
+        process.wait(timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        try:
+            process.kill()
             process.wait(timeout=2)
         except (OSError, subprocess.TimeoutExpired):
-            try:
-                process.kill()
-            except OSError:
-                pass
+            pass
 
 
 def _drain_process_output(stream: Any, result: list[Any]) -> None:
@@ -467,12 +744,16 @@ def _drain_process_output(stream: Any, result: list[Any]) -> None:
 def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -> dict[str, Any]:
     started = time.monotonic()
     process: subprocess.Popen[Any] | None = None
+    process_group_id: int | None = None
+    windows_job: _WindowsJob | None = None
     launch_failed = False
     timed_out = False
     stdout_count = [0, False]
     stderr_count = [0, False]
     output_threads: list[threading.Thread] = []
     try:
+        if os.name not in {"posix", "nt"}:
+            raise TargetRunError(f"unsupported process-tree control platform: {os.name}")
         kwargs: dict[str, Any] = {
             "cwd": workdir,
             "stdin": subprocess.DEVNULL,
@@ -484,12 +765,24 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
         if os.name == "posix":
             kwargs["start_new_session"] = True
         else:
-            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            windows_job = _WindowsJob()
+            kwargs["creationflags"] = (
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                | _WindowsJob.CREATE_SUSPENDED
+            )
         try:
             process = subprocess.Popen(list(argv), **kwargs)
         except OSError:
             launch_failed = True
         if process is not None:
+            if os.name == "posix":
+                process_group_id = process.pid
+            elif windows_job is not None:
+                try:
+                    windows_job.assign_and_resume(process)
+                except OSError as error:
+                    _terminate_process(process, windows_job=windows_job)
+                    raise TargetRunError("unable to contain target process in a Windows Job Object") from error
             for stream, count in (
                 (process.stdout, stdout_count),
                 (process.stderr, stderr_count),
@@ -506,11 +799,11 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
                 process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 timed_out = True
-                _terminate_process(process)
-                try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    pass
+            _terminate_process(
+                process,
+                process_group_id=process_group_id,
+                windows_job=windows_job,
+            )
     finally:
         elapsed = round(max(0.0, time.monotonic() - started), 3)
         for thread in output_threads:
@@ -518,7 +811,12 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
         if process is not None:
             for stream in (process.stdout, process.stderr):
                 if stream is not None:
-                    stream.close()
+                    try:
+                        stream.close()
+                    except (OSError, ValueError):
+                        pass
+        if windows_job is not None:
+            windows_job.close()
     return {
         "exit_code": None if process is None else process.returncode,
         "launch_failed": launch_failed,
@@ -528,6 +826,7 @@ def _execute_command(argv: Sequence[str], workdir: Path, timeout_seconds: int) -
         "stderr_bytes": stderr_count[0],
         "stdout_truncated": stdout_count[1],
         "stderr_truncated": stderr_count[1],
+        "process_tree_control": "posix-process-group" if os.name == "posix" else "windows-job-object",
     }
 
 
@@ -687,6 +986,7 @@ def run_experiment(
     if not isinstance(command, Mapping):
         raise TargetRunError("command must be a JSON object")
     validate_command(command)
+    _preflight_declared_outputs(scenario, workdir_resolved)
 
     binary_resolved = emulator_binary_path.resolve()
     command_binary = Path(command["argv"][command["emulator_binary_index"]])
@@ -763,6 +1063,8 @@ def run_experiment(
             "target_root_separate": True,
             "command_argv_sha256": _sha256_bytes(command_raw),
             "raw_process_output_captured": True,
+            "declared_outputs_preflighted": True,
+            "process_tree_control": execution["process_tree_control"],
         },
         "termination": {
             "state": _termination_state(execution, oracle),
@@ -780,7 +1082,7 @@ def run_experiment(
             "warnings": packaging_warnings,
         },
         "redaction": {
-            "policy": "allowlist-v1",
+            "policy": "allowlist-v2",
             "raw_process_output": "excluded",
             "target_paths": "excluded",
             "command_file": "excluded",
