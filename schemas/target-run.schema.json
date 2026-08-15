@@ -26,7 +26,7 @@
       "const": "bb-target-run"
     },
     "schema_version": {
-      "const": 2
+      "const": 3
     },
     "provenance": {
       "type": "object",
@@ -69,6 +69,8 @@
       "required": [
         "manifest_sha256",
         "manifest_size_bytes",
+        "packaged_manifest_sha256",
+        "packaged_manifest_size_bytes",
         "identity_state"
       ],
       "properties": {
@@ -83,6 +85,12 @@
             "complete",
             "partial"
           ]
+        },
+        "packaged_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "packaged_manifest_size_bytes": {
+          "$ref": "#/$defs/positiveInteger"
         }
       }
     },
@@ -167,14 +175,7 @@
           }
         },
         "config_sha256": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/sha256"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": "null"
         },
         "graphics_backend": {
           "oneOf": [
@@ -196,6 +197,8 @@
         "id",
         "input_sha256",
         "input_size_bytes",
+        "packaged_sha256",
+        "packaged_size_bytes",
         "timeout_seconds",
         "oracle_kind"
       ],
@@ -219,6 +222,12 @@
             "process-exit",
             "file-sha256"
           ]
+        },
+        "packaged_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "packaged_size_bytes": {
+          "$ref": "#/$defs/positiveInteger"
         }
       }
     },
@@ -485,7 +494,7 @@
       ],
       "properties": {
         "policy": {
-          "const": "allowlist-v2"
+          "const": "allowlist-v3"
         },
         "raw_process_output": {
           "const": "excluded"

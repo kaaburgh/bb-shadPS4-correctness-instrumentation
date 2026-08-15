@@ -146,7 +146,7 @@ class ContractTests(unittest.TestCase):
     def test_redacted_json_requires_an_allowlist(self):
         scenario = {
             "schema_id": runner.SCENARIO_SCHEMA_ID,
-            "schema_version": 2,
+            "schema_version": runner.SCENARIO_SCHEMA_VERSION,
             "scenario_id": "synthetic",
             "description": "synthetic contract",
             "timeout_seconds": 10,
@@ -224,7 +224,7 @@ class ContractTests(unittest.TestCase):
     def test_preexisting_declared_output_is_rejected(self):
         scenario = {
             "schema_id": runner.SCENARIO_SCHEMA_ID,
-            "schema_version": 2,
+            "schema_version": runner.SCENARIO_SCHEMA_VERSION,
             "scenario_id": "synthetic",
             "description": "synthetic contract",
             "timeout_seconds": 10,
@@ -262,9 +262,6 @@ class RunTests(unittest.TestCase):
             workdir = root / "isolated-work"
             workdir.mkdir()
             output = root / "artifacts" / "run-synthetic.zip"
-            config = root / "emulator-config.toml"
-            config.write_text("private-config-value = true\n", encoding="utf-8")
-
             oracle_bytes = b"oracle-ok"
             oracle_sha256 = "sha256:" + hashlib.sha256(oracle_bytes).hexdigest()
             scenario = {
@@ -289,7 +286,7 @@ class RunTests(unittest.TestCase):
                             "properties": {
                                 "checkpoint": {
                                     "type": "string",
-                                    "max_length": 128,
+                                    "enum": ["synthetic-checkpoint"],
                                 },
                                 "ok": {"type": "boolean"},
                             },
@@ -320,7 +317,7 @@ class RunTests(unittest.TestCase):
                         "from pathlib import Path; import json; "
                         "p=Path('results'); p.mkdir(); "
                         "(p/'oracle.bin').write_bytes(b'oracle-ok'); "
-                        "(p/'summary.json').write_text(json.dumps({'checkpoint':r'C:\\Users\\alice\\capture.json', 'ok':True}), encoding='utf-8')"
+                        "(p/'summary.json').write_text(json.dumps({'checkpoint':'synthetic-checkpoint', 'ok':True}), encoding='utf-8')"
                     ),
                     str(target_root / "app"),
                 ],
@@ -358,7 +355,7 @@ class RunTests(unittest.TestCase):
                 working_directory=workdir,
                 output_path=output,
                 graphics_backend="synthetic",
-                emulator_config_path=config,
+                emulator_config_path=None,
             )
 
             self.assertEqual(manifest["termination"]["state"], "completed")
@@ -366,6 +363,7 @@ class RunTests(unittest.TestCase):
             self.assertEqual(manifest["packaging"]["state"], "complete")
             self.assertEqual(manifest["redaction"]["raw_process_output"], "excluded")
             self.assertTrue(manifest["execution"]["declared_outputs_preflighted"])
+            self.assertIsNone(manifest["emulator"]["config_sha256"])
             self.assertEqual(
                 manifest["execution"]["process_tree_control"],
                 "posix-process-group" if os.name == "posix" else "windows-job-object",
@@ -381,15 +379,26 @@ class RunTests(unittest.TestCase):
                         "target-manifest.json",
                         "host-environment.json",
                         "scenario.json",
-                        "artifacts/summary.redacted.json",
+                        "artifacts/artifact-00.redacted.json",
                     },
                 )
                 self.assertNotIn("command.json", names)
-                self.assertNotIn("emulator-config.toml", names)
-                redacted = archive.read("artifacts/summary.redacted.json").decode("utf-8")
+                redacted = archive.read("artifacts/artifact-00.redacted.json").decode("utf-8")
                 self.assertNotIn("private-token", redacted)
                 self.assertNotIn("alice", redacted)
                 self.assertNotIn("C:\\", redacted)
+
+                packaged_target_raw = archive.read("target-manifest.json")
+                self.assertEqual(
+                    manifest["target"]["packaged_manifest_sha256"],
+                    runner._sha256_bytes(packaged_target_raw),
+                )
+                self.assertEqual(
+                    manifest["target"]["packaged_manifest_size_bytes"],
+                    len(packaged_target_raw),
+                )
+                self.assertNotEqual(packaged_target_raw, target_manifest_path.read_bytes())
+                self.assertNotIn("SYNTHETIC-BLOODBORNE-BASE", packaged_target_raw.decode("utf-8"))
 
                 packaged_scenario_raw = archive.read("scenario.json")
                 packaged_scenario_text = packaged_scenario_raw.decode("utf-8")
@@ -404,7 +413,18 @@ class RunTests(unittest.TestCase):
                     manifest["scenario"]["input_sha256"],
                     runner._sha256_bytes(scenario_path.read_bytes()),
                 )
+                self.assertEqual(
+                    manifest["scenario"]["packaged_sha256"],
+                    runner._sha256_bytes(packaged_scenario_raw),
+                )
+                self.assertEqual(
+                    manifest["scenario"]["packaged_size_bytes"],
+                    len(packaged_scenario_raw),
+                )
                 self.assertNotEqual(packaged_scenario_raw, scenario_path.read_bytes())
+                self.assertNotEqual(packaged_scenario["scenario_id"], scenario["scenario_id"])
+                self.assertEqual(packaged_scenario["artifacts"][0]["name"], "artifact-00")
+                self.assertEqual(packaged_scenario["artifacts"][0]["path"], "redacted/artifact-00")
 
                 packaged_manifest = runner.loads_strict(
                     archive.read("run-manifest.json").decode("utf-8")

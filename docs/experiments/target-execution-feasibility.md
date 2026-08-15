@@ -49,9 +49,12 @@ command:
 - an explicit target root and a separate real working directory. The runner
   refuses equal or nested trees so the operator's source target is not used as
   writable scratch space;
-- an optional exact emulator-config file and explicit graphics-backend label.
-  The config is fingerprinted by BB-BL3; its path and contents are never
-  serialized.
+- an explicit graphics-backend label when known. The pinned shadPS4 CLI at
+  `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` exposes config-mode flags but no
+  explicit config-file path, then loads settings through `EmulatorSettingsImpl::Load()`.
+  Therefore this runner rejects `--emulator-config` instead of hashing an arbitrary
+  file and falsely attributing it to the executed emulator; `config_sha256` is `null`
+  until an independently attested binding exists.
 
 The command is run with `shell=False`, stdin closed, a bounded timeout, and
 temporary stdout/stderr sinks. Windows uses a kill-on-close Job Object. Linux
@@ -63,20 +66,24 @@ guarantee. The raw process output is never copied to the result artifact.
 
 The published run manifest schema is
 [`schemas/target-run.schema.json`](../../schemas/target-run.schema.json), with
-identity `bb-target-run` version 2. A produced ZIP has these fixed entries:
+identity `bb-target-run` version 3. A produced ZIP has these fixed entries:
 
 - `run-manifest.json` — route, all baseline digests, termination state, oracle
   result, artifact status, and redaction policy;
-- `target-manifest.json` — the validated payload-free BB-BL2 manifest, only
-  after a second transfer-safety check. String-valued target settings are
-  fail-closed to project-owned safe semantics (`game.language` and
-  `target.network_mode` in v2); unapproved string settings or private path-like
-  values reject the handoff instead of being copied;
+- `target-manifest.json` — a schema-valid safe projection of the validated BB-BL2
+  input. Exact material identities (title ID, eboot/param/tree hashes, approved
+  target settings, registered modification IDs/order and artifact identities) are
+  preserved, while unrestricted descriptive producer/build/content/mod-version
+  strings are replaced with fixed/null values and partial unknown pointers are
+  conservatively collapsed to safe top-level roots. The run record retains the raw
+  input hash/size and separately records the packaged projection hash/size;
 - `host-environment.json` — the BB-BL3 manifest collected immediately before
   launch;
-- `scenario.json` — an allowlisted projection of the validated scenario; the
-  free-form operator description is replaced with a fixed redaction marker while
-  the raw scenario digest and size remain in `run-manifest.json` for provenance;
+- `scenario.json` — a safe projection of the validated scenario. The operator
+  description, scenario ID, oracle/artifact paths and artifact names are replaced by
+  deterministic safe values; string-valued embedded JSON fields are limited to
+  repository-registered enum literals. The run record retains raw input hash/size
+  and separately records the packaged scenario hash/size;
 - `artifacts/*.redacted.json` — only explicitly declared JSON artifacts after
   an explicit per-artifact schema/field allowlist projection followed by
   recursive sensitive-key/path redaction. Unknown fields or schema/type
@@ -100,12 +107,13 @@ The checked-in synthetic example is
 [`target-run-scenario.synthetic.json`](./examples/target-run-scenario.synthetic.json).
 Command inputs use `bb-target-command/v2`; `target_path_index` prevents an
 operator command that launches another installation from being attributed to the
-validated manifest. Scenario inputs use `bb-target-scenario/v2`. Every
+validated manifest. Scenario inputs use `bb-target-scenario/v3`. Every
 `redacted-json` artifact
-must declare a bounded object/array/scalar allowlist with
+must declare a bounded object/array/scalar allowlist; string leaves use only
+repository-registered enum literals, not arbitrary operator strings. The allowlist with
 `additionalProperties: false`; the runner rejects unknown fields instead of
 guessing whether an unrecognized key is safe to transfer. The run manifest
-labels this privacy boundary `allowlist-v2`.
+labels this privacy boundary `allowlist-v3`.
 Its file oracle illustrates the required distinction between a process being
 alive and a semantic checkpoint being observed. A `process-exit` oracle is
 supported for a launcher/capability control only; it proves termination, not
@@ -156,15 +164,14 @@ python tools/run_target_experiment.py run \
   --target-root <immutable-target-tree> \
   --working-directory <isolated-writable-directory> \
   --backend vulkan \
-  --emulator-config <private-config-file> \
   --output <safe-output-directory>/run-<scenario-id>.zip
 ```
 
 The command file and target/config paths are operator-local inputs and are not
 committed or copied into the ZIP. If the emulator source has local patches,
-repeat `--patch-commit` in application order. If a backend or config is not
-known, omit it; the resulting BB-BL3 unknown fields remain explicit rather than
-being replaced with a guessed value.
+repeat `--patch-commit` in application order. If a backend is not known, omit it. Do not pass `--emulator-config`: on the pinned
+shadPS4 baseline an arbitrary config-file path cannot be bound to the settings actually
+consumed, so the runner rejects it and keeps BB-BL3 config identity explicit as unknown.
 
 After the run, validate the detached record independently:
 
@@ -197,7 +204,9 @@ changing the feasibility decision by assumption.
 The runner has standard-library contract tests for strict JSON, path
 containment, direct-emulator argv binding, exact BB-BL2 target-root matching,
 command-to-target binding, target-manifest transfer safety, finite JSON-number
-parsing, allowlist-first redaction, packaged-payload digests, stale-output
+parsing, enum-only embedded strings, safe target/scenario projections and their
+packaged digests, pre-launch patch-list/config provenance checks, allowlist-first
+redaction, packaged-payload digests, stale-output
 rejection, detached-session descendant termination, and failure-closed
 validation. A
 synthetic control also launches the local Python interpreter, verifies a file

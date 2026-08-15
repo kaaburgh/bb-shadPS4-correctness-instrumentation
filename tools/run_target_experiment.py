@@ -36,13 +36,13 @@ from tools import collect_host_environment
 
 RUN_SCHEMA_PATH = Path(__file__).parents[1] / "schemas" / "target-run.schema.json"
 RUN_SCHEMA_ID = "bb-target-run"
-RUN_SCHEMA_VERSION = 2
-SCENARIO_SCHEMA_ID = "bb-target-scenario/v2"
-SCENARIO_SCHEMA_VERSION = 2
+RUN_SCHEMA_VERSION = 3
+SCENARIO_SCHEMA_ID = "bb-target-scenario/v3"
+SCENARIO_SCHEMA_VERSION = 3
 COMMAND_SCHEMA_ID = "bb-target-command/v2"
 COMMAND_SCHEMA_VERSION = 2
 RUNNER_NAME = "bb-target-runner"
-RUNNER_VERSION = "1.3.0"
+RUNNER_VERSION = "1.4.0"
 PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
@@ -58,6 +58,7 @@ MAX_ALLOWLIST_ARRAY_ITEMS = 4096
 MAX_TIMEOUT_SECONDS = 86400
 MAX_TEARDOWN_SECONDS = 16
 MAX_RECORDED_ELAPSED_SECONDS = MAX_TIMEOUT_SECONDS + MAX_TEARDOWN_SECONDS
+MAX_SAFE_STRING_ENUM_VALUES = 64
 
 
 class TargetRunError(ValueError):
@@ -196,6 +197,23 @@ def _require_git_sha(value: Any, field: str) -> str:
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
         raise TargetRunError(f"{field} must be a 40-character lowercase git SHA")
     return value
+
+
+def _normalize_patch_commits(values: Sequence[str]) -> list[str]:
+    if len(values) > 64:
+        raise TargetRunError("patch_commits must contain at most 64 entries")
+    normalized = [_require_git_sha(value, "patch_commit") for value in values]
+    if len(set(normalized)) != len(normalized):
+        raise TargetRunError("patch_commits must not contain duplicate commits")
+    return normalized
+
+
+def _require_attestable_emulator_config(path: Path | None) -> None:
+    if path is not None:
+        raise TargetRunError(
+            "the pinned shadPS4 CLI does not accept an explicit config-file path; "
+            "emulator config consumption cannot be attested, so --emulator-config is unsupported"
+        )
 
 
 def _safe_relative_path(value: Any, field: str) -> str:
@@ -688,32 +706,172 @@ _SAFE_TARGET_STRING_SETTINGS: dict[str, re.Pattern[str]] = {
     "game.language": re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"),
     "target.network_mode": re.compile(r"^(?:offline|online)$"),
 }
+_SAFE_TARGET_MODIFICATION_IDS = frozenset({"synthetic-frame-pacing-fixture"})
+_SAFE_ARTIFACT_FIELD_NAMES = frozenset({"checkpoint", "ok"})
+_SAFE_ARTIFACT_STRING_LITERALS = frozenset(
+    {
+        "synthetic-checkpoint",
+        "passed",
+        "failed",
+        "unknown",
+        "not_evaluated",
+        "completed",
+        "timed_out",
+        "launch_failed",
+        "exit_nonzero",
+        "oracle_failed",
+        "oracle_unknown",
+    }
+)
 
 
-def _validate_target_manifest_safe_for_package(manifest: Mapping[str, Any]) -> None:
-    """Fail closed when a BB-BL2 manifest contains operator-private string settings."""
-    settings = manifest["configuration"]["settings"]
-    for key, setting in settings.items():
-        value = setting["value"]
-        if not isinstance(value, str):
-            continue
+def _copy_exact_artifact(artifact: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "sha256": artifact["sha256"],
+        "size_bytes": artifact["size_bytes"],
+        "evidence_class": artifact["evidence_class"],
+    }
+
+
+def _package_target_manifest(manifest: Mapping[str, Any]) -> bytes:
+    """Build a schema-valid transfer projection without copying free-form target strings."""
+    packaged_settings: dict[str, Any] = {}
+    for key, setting in manifest["configuration"]["settings"].items():
         allowed = _SAFE_TARGET_STRING_SETTINGS.get(key)
-        if allowed is None or allowed.fullmatch(value) is None or _redact_string(value) != value:
+        if allowed is None:
+            raise TargetRunError(f"target manifest setting {key!r} is not approved for safe packaging")
+        value = setting["value"]
+        if not isinstance(value, str) or allowed.fullmatch(value) is None:
+            raise TargetRunError(f"target manifest setting {key!r} has an unsafe value")
+        packaged_settings[key] = {
+            "value": value,
+            "evidence_class": setting["evidence_class"],
+        }
+
+    packaged_modifications: dict[str, Any] = {}
+    for identifier, modification in manifest["configuration"]["active_modifications"].items():
+        if identifier not in _SAFE_TARGET_MODIFICATION_IDS:
             raise TargetRunError(
-                f"target manifest string setting {key!r} is not approved for safe packaging"
+                f"target modification {identifier!r} is not a registered safe project identifier"
             )
+        packaged_modifications[identifier] = {
+            "kind": modification["kind"],
+            "version": None,
+            "artifact": _copy_exact_artifact(modification["artifact"]),
+        }
 
-    def reject_private_paths(value: Any, field: str) -> None:
-        if isinstance(value, Mapping):
-            for child_key, child in value.items():
-                reject_private_paths(child, f"{field}/{child_key}")
-        elif isinstance(value, list):
-            for index, child in enumerate(value):
-                reject_private_paths(child, f"{field}/{index}")
-        elif isinstance(value, str) and _redact_string(value) != value:
-            raise TargetRunError(f"target manifest contains a private path at {field}")
+    order = list(manifest["configuration"]["modification_order"]["value"])
+    if any(identifier not in _SAFE_TARGET_MODIFICATION_IDS for identifier in order):
+        raise TargetRunError("target modification_order contains an unregistered identifier")
 
-    reject_private_paths(manifest, "target-manifest")
+    completeness = manifest["identity_completeness"]
+    if completeness["state"] == "complete":
+        safe_completeness = {"state": "complete", "unknown_fields": []}
+    else:
+        roots = sorted(
+            {
+                "/" + pointer.split("/", 2)[1]
+                for pointer in completeness["unknown_fields"]
+            }
+        )
+        safe_completeness = {"state": "partial", "unknown_fields": roots}
+
+    update = manifest["content"]["update"]
+    if update["state"] == "installed":
+        safe_update: dict[str, Any] = {
+            "state": "installed",
+            "component": {
+                "content_id": None,
+                "version": None,
+                "source_package": None,
+            },
+        }
+    else:
+        safe_update = {"state": update["state"]}
+
+    packaged = {
+        "manifest_kind": manifest["manifest_kind"],
+        "schema_version": manifest["schema_version"],
+        "provenance": {
+            "evidence_classes": list(manifest["provenance"]["evidence_classes"]),
+            "collected_at": manifest["provenance"]["collected_at"],
+            "producer": {
+                "name": "bb-target-manifest-safe-projection",
+                "version": "1.0.0",
+            },
+        },
+        "identity_completeness": safe_completeness,
+        "target": {
+            "name": manifest["target"]["name"],
+            "title_id": dict(manifest["target"]["title_id"]),
+            "distribution_region": manifest["target"]["distribution_region"],
+        },
+        "build": {
+            "app_version": None,
+            "master_version": None,
+            "eboot": _copy_exact_artifact(manifest["build"]["eboot"]),
+            "param_sfo": _copy_exact_artifact(manifest["build"]["param_sfo"]),
+        },
+        "content": {
+            "base": {"content_id": None, "version": None, "source_package": None},
+            "update": safe_update,
+            "dlc": {},
+            "resolved_tree": dict(manifest["content"]["resolved_tree"]),
+        },
+        "configuration": {
+            "settings": packaged_settings,
+            "active_modifications": packaged_modifications,
+            "modification_order": {
+                "value": order,
+                "evidence_class": manifest["configuration"]["modification_order"]["evidence_class"],
+            },
+        },
+    }
+    try:
+        bloodborne_target_manifest.validate_manifest(packaged)
+    except Exception as error:
+        raise TargetRunError(f"safe target-manifest projection is invalid: {error}") from error
+    return _json_bytes(packaged)
+
+
+def _safe_scenario_for_package(
+    scenario: Mapping[str, Any], raw_input_sha256: str
+) -> dict[str, Any]:
+    safe_id = f"scenario-{raw_input_sha256.removeprefix('sha256:')[:16]}"
+    oracle = scenario["oracle"]
+    if oracle["kind"] == "file-sha256":
+        safe_oracle: dict[str, Any] = {
+            "kind": "file-sha256",
+            "path": "redacted/oracle.bin",
+            "sha256": oracle["sha256"],
+        }
+    else:
+        safe_oracle = {
+            "kind": "process-exit",
+            "expected_exit_code": oracle["expected_exit_code"],
+        }
+    safe_artifacts = []
+    for index, artifact in enumerate(scenario["artifacts"]):
+        safe_artifact: dict[str, Any] = {
+            "path": f"redacted/artifact-{index:02d}",
+            "name": f"artifact-{index:02d}",
+            "mode": artifact["mode"],
+            "max_bytes": artifact["max_bytes"],
+        }
+        if artifact["mode"] == "redacted-json":
+            safe_artifact["allowlist"] = artifact["allowlist"]
+        safe_artifacts.append(safe_artifact)
+    packaged = {
+        "schema_id": scenario["schema_id"],
+        "schema_version": scenario["schema_version"],
+        "scenario_id": safe_id,
+        "description": "<redacted-operator-description>",
+        "timeout_seconds": scenario["timeout_seconds"],
+        "oracle": safe_oracle,
+        "artifacts": safe_artifacts,
+    }
+    validate_scenario(packaged)
+    return packaged
 
 
 def _validate_json_allowlist(schema: Any, field: str, *, depth: int = 0) -> None:
@@ -742,8 +900,12 @@ def _validate_json_allowlist(schema: Any, field: str, *, depth: int = 0) -> None
                 raise TargetRunError(f"{field}.required contains an unknown or duplicate field")
             required_names.add(name)
         for name, child in properties.items():
-            if not isinstance(name, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name) is None:
-                raise TargetRunError(f"{field}.properties contains an unsafe field name")
+            if (
+                not isinstance(name, str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name) is None
+                or name not in _SAFE_ARTIFACT_FIELD_NAMES
+            ):
+                raise TargetRunError(f"{field}.properties contains a field name not approved for safe transfer")
             _validate_json_allowlist(child, f"{field}.properties.{name}", depth=depth + 1)
         return
     if schema_type == "array":
@@ -752,8 +914,16 @@ def _validate_json_allowlist(schema: Any, field: str, *, depth: int = 0) -> None
         _validate_json_allowlist(schema["items"], f"{field}.items", depth=depth + 1)
         return
     if schema_type == "string":
-        _require_exact_keys(schema, {"type", "max_length"}, field)
-        _require_integer(schema["max_length"], f"{field}.max_length", minimum=0, maximum=4096)
+        _require_exact_keys(schema, {"type", "enum"}, field)
+        values = schema["enum"]
+        if not isinstance(values, list) or not 1 <= len(values) <= MAX_SAFE_STRING_ENUM_VALUES:
+            raise TargetRunError(f"{field}.enum must contain 1-{MAX_SAFE_STRING_ENUM_VALUES} safe literals")
+        seen: set[str] = set()
+        for index, value in enumerate(values):
+            value = _require_string(value, f"{field}.enum[{index}]", maximum=128)
+            if value in seen or value not in _SAFE_ARTIFACT_STRING_LITERALS:
+                raise TargetRunError(f"{field}.enum contains an unapproved or duplicate string literal")
+            seen.add(value)
         return
     if schema_type in {"integer", "number", "boolean", "null"}:
         _require_exact_keys(schema, {"type"}, field)
@@ -786,8 +956,8 @@ def _project_allowlisted_json(value: Any, schema: Mapping[str, Any], field: str 
             for index, item in enumerate(value)
         ]
     if schema_type == "string":
-        if not isinstance(value, str) or len(value) > schema["max_length"]:
-            raise TargetRunError(f"{field} is not an allowed bounded string")
+        if not isinstance(value, str) or value not in schema["enum"]:
+            raise TargetRunError(f"{field} is not an allowed enumerated string")
         return value
     if schema_type == "integer":
         if isinstance(value, bool) or not isinstance(value, int):
@@ -825,8 +995,8 @@ def _collect_artifacts(
     entries: list[dict[str, Any]] = []
     embedded: dict[str, bytes] = {}
     warnings: list[str] = []
-    for artifact in scenario["artifacts"]:
-        name = artifact["name"]
+    for index, artifact in enumerate(scenario["artifacts"]):
+        name = f"artifact-{index:02d}"
         try:
             path = _resolve_work_file(workdir, artifact["path"])
             source_sha256, source_size = _sha256_file(
@@ -1471,7 +1641,8 @@ def run_experiment(
     _require_string(source_repository, "source_repository", maximum=256)
     _require_git_sha(source_commit, "source_commit")
     _require_git_sha(source_tree, "source_tree")
-    normalized_patches = [_require_git_sha(value, "patch_commit") for value in patch_commits]
+    _require_attestable_emulator_config(emulator_config_path)
+    normalized_patches = _normalize_patch_commits(patch_commits)
     if (
         source_repository != PINNED_SOURCE_REPOSITORY
         or source_commit != PINNED_SOURCE_COMMIT
@@ -1490,13 +1661,16 @@ def run_experiment(
         raise TargetRunError("output artifact must be outside target_root and working_directory")
 
     target_raw, target_manifest = _load_target_manifest(target_manifest_path)
-    _validate_target_manifest_safe_for_package(target_manifest)
+    safe_target_raw = _package_target_manifest(target_manifest)
     scenario_raw, scenario = _load_json_file(
         scenario_path, maximum=MAX_INPUT_BYTES, label="scenario"
     )
     if not isinstance(scenario, Mapping):
         raise TargetRunError("scenario must be a JSON object")
     validate_scenario(scenario)
+    scenario_input_sha256 = _sha256_bytes(scenario_raw)
+    safe_scenario = _safe_scenario_for_package(scenario, scenario_input_sha256)
+    safe_scenario_raw = _json_bytes(safe_scenario)
     command_raw, command = _load_json_file(
         command_path, maximum=MAX_COMMAND_BYTES, label="command file"
     )
@@ -1526,7 +1700,7 @@ def run_experiment(
     try:
         host_manifest = collect_host_environment.collect_manifest(
             graphics_backend=graphics_backend,
-            emulator_config_path=emulator_config_path,
+            emulator_config_path=None,
         )
     except Exception as error:
         raise TargetRunError(f"host environment collection failed: {error}") from error
@@ -1553,6 +1727,8 @@ def run_experiment(
         "target": {
             "manifest_sha256": _sha256_bytes(target_raw),
             "manifest_size_bytes": len(target_raw),
+            "packaged_manifest_sha256": _sha256_bytes(safe_target_raw),
+            "packaged_manifest_size_bytes": len(safe_target_raw),
             "identity_state": target_manifest["identity_completeness"]["state"],
         },
         "host_environment": {
@@ -1573,9 +1749,11 @@ def run_experiment(
             "graphics_backend": host_manifest["run"]["graphics_backend"],
         },
         "scenario": {
-            "id": scenario["scenario_id"],
-            "input_sha256": _sha256_bytes(scenario_raw),
+            "id": safe_scenario["scenario_id"],
+            "input_sha256": scenario_input_sha256,
             "input_size_bytes": len(scenario_raw),
+            "packaged_sha256": _sha256_bytes(safe_scenario_raw),
+            "packaged_size_bytes": len(safe_scenario_raw),
             "timeout_seconds": scenario["timeout_seconds"],
             "oracle_kind": scenario["oracle"]["kind"],
         },
@@ -1603,7 +1781,7 @@ def run_experiment(
             "warnings": packaging_warnings,
         },
         "redaction": {
-            "policy": "allowlist-v2",
+            "policy": "allowlist-v3",
             "raw_process_output": "excluded",
             "target_paths": "excluded",
             "command_file": "excluded",
@@ -1612,22 +1790,11 @@ def run_experiment(
     }
     validate_run_manifest(run_manifest)
 
-    safe_scenario = {
-        "schema_id": scenario["schema_id"],
-        "schema_version": scenario["schema_version"],
-        "scenario_id": scenario["scenario_id"],
-        "description": "<redacted-operator-description>",
-        "timeout_seconds": scenario["timeout_seconds"],
-        "oracle": scenario["oracle"],
-        "artifacts": scenario["artifacts"],
-    }
-    validate_scenario(safe_scenario)
-
     package_entries = {
         "run-manifest.json": _json_bytes(run_manifest),
-        "target-manifest.json": target_raw,
+        "target-manifest.json": safe_target_raw,
         "host-environment.json": host_raw,
-        "scenario.json": _json_bytes(safe_scenario),
+        "scenario.json": safe_scenario_raw,
     }
     package_entries.update(embedded)
     _write_zip_atomic(output_resolved, package_entries)
