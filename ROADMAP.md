@@ -18,8 +18,17 @@
 - Gated run должен быть one-shot и выдавать safe self-contained artifact; proprietary executables/assets/private dumps не коммитить.
 - Runtime claims фиксируют shadPS4 repo+exact commit+patches, Bloodborne build/content/update/config, host OS/CPU/GPU/driver/backend/config, scenario и tool version.
 - Correctness evidence precedes optimization profiling/specialization. До completed **BB-COR7** разрешены reproducibility baseline и bounded diagnostic measurements, необходимые для correctness/instrumentation (например **BB-BL6** и **BB-INS4**); optimization-ranking datasets и post-correctness corpora (**BB-SHD2**, **BB-RES2**, **BB-PERF2**) до gate не собираются.
-- Изменение shadPS4 source/target/config baseline correctness-fix'ом инвалидирует затронутые downstream baseline/corpus/performance evidence. Такой PR обязан явно reopen/reconcile нужные capture items вместо сравнения stale datasets.
+- Изменение shadPS4 source/target/config baseline correctness-fix'ом инвалидирует затронутые downstream baseline/corpus/performance evidence. Такой PR обязан явно reopen/reconcile нужные capture items вместо сравнения stale datasets; shared provenance не делает unaffected artifact classes stale автоматически.
 - Опровергнутые hypotheses и superseded directions сохраняются.
+
+## Post-correctness capture and analysis contract
+
+После hard gates **BB-COR7** и **BB-INS4** items **BB-SHD2**, **BB-RES2** и **BB-PERF2** являются независимыми data-collection items, а не последовательными стадиями одного pipeline. Один bounded target run/workflow **может** выпустить любой набор safe artifacts — shader/pipeline corpus, resource trace и performance timings — если у них совпадают exact source/target/host baselines, scenario/config identity, instrumentation build/configuration и run provenance. Это optional co-capture: roadmap не требует объединять runs, но и не должен структурно требовать отдельный run для каждого artifact class.
+
+- Каждый artifact class валидируется и сохраняется независимо; отсутствие, неполнота или invalidation одного output не блокирует collection/analysis другого.
+- **BB-SHD3**, **BB-RES3** и **BB-PERF3** остаются независимыми evidence-driven consumers своих соответствующих datasets. В частности, **BB-PERF2** не ждёт shader/resource analysis, а **BB-PERF3** не получает разрешение на ranking из одного только факта co-capture.
+- Co-capture запрещён для performance attribution, если instrumentation materially меняет overhead или semantics относительно attribution-safe режима. В таком случае timing artifact не принимается как **BB-PERF2** evidence и должен быть recaptured отдельно; shader/resource artifacts можно сохранить только если их собственные provenance и validity criteria выполнены.
+- Любое изменение correctness/source/target/config baseline или instrumentation, затрагивающее shared provenance, reopen'ит соответствующие datasets. Нельзя повторно использовать stale timing/corpus только потому, что они были получены в одном run; unaffected artifact classes остаются действительными при сохранении их provenance и acceptance evidence.
 
 The **CLOUD**, **CLOUD RESEARCH**, **GATED** and **LOCAL ONLY** distinctions, together with the feasibility and one-shot handoff machinery, are agent-execution scaffolding. They separate autonomous work from target-machine work and preserve safe, reproducible handoffs; they are not architectural assumptions about shadPS4, Bloodborne, or the eventual specialization design. Technical milestone ordering must not be inferred solely from execution location. If execution capabilities change, this machinery may be simplified without changing the research goals.
 
@@ -262,8 +271,8 @@ Outcome: actual shader/pipeline workload, variants, cache behavior и prewarming
 - **Status / priority / execution:** Blocked / Medium / GATED
 - **Depends on:** BB-ENV1, BB-COR7, BB-INS4, BB-SHD1
 - **Question:** Какой shader/pipeline set реально используется selected scenarios и насколько он стабилен between runs?
-- **Next experiment / information gain:** Repeated bounded corpus captures across scenario catalogue after correctness gate.
-- **Acceptance / artifacts:** `docs/experiments/shader-corpus/` + safe deduplicated index, run coverage and stability summary tied to exact post-gate baseline.
+- **Next experiment / information gain:** Repeated bounded corpus captures across scenario catalogue after correctness gate; capture workflow may emit shader, resource and timing artifacts together when the shared provenance contract is satisfied.
+- **Acceptance / artifacts:** `docs/experiments/shader-corpus/` + safe deduplicated index, run coverage and stability summary tied to exact post-gate baseline. Shader evidence remains independently consumable when a co-captured resource or timing output is missing or invalid.
 - **Scope:** Medium
 
 ### BB-SHD3 — Analyze variants/cache and prewarming feasibility
@@ -292,8 +301,8 @@ Outcome: actual resource lifetime/access classes превращены в conditi
 - **Status / priority / execution:** Blocked / Medium / GATED
 - **Depends on:** BB-ENV1, BB-COR7, BB-INS4, BB-RES1
 - **Question:** Какие lifetime/access patterns реально встречаются и насколько repeatable их classes?
-- **Next experiment / information gain:** Repeated bounded traces over scenario catalogue after correctness gate.
-- **Acceptance / artifacts:** `docs/experiments/resource-corpus/` records completeness/correlation and safe summaries tied to exact post-gate baseline; no resource contents unless separately justified.
+- **Next experiment / information gain:** Repeated bounded traces over scenario catalogue after correctness gate; the same bounded workflow may also emit shader/pipeline and timing artifacts without making their downstream analyses dependencies.
+- **Acceptance / artifacts:** `docs/experiments/resource-corpus/` records completeness/correlation and safe summaries tied to exact post-gate baseline; no resource contents unless separately justified. Resource evidence remains independently consumable when a co-captured shader or timing output is missing or invalid.
 - **Scope:** Medium
 
 ### BB-RES3 — Derive and validate candidate resource invariants
@@ -320,10 +329,10 @@ Outcome: cost attribution rank-ит 3–5 real opportunities с explicit uncerta
 
 ### BB-PERF2 — Collect representative performance timing dataset
 - **Status / priority / execution:** Blocked / High / GATED
-- **Depends on:** BB-ENV1, BB-COR7, BB-PERF1, BB-INS4, BB-SHD3, BB-RES3
+- **Depends on:** BB-ENV1, BB-COR7, BB-PERF1, BB-INS4
 - **Question:** Каковы repeated timing distributions across selected scenarios/warm-cold states на correctness-approved exact baseline?
-- **Next experiment / information gain:** Prepared repeated target captures using BB-PERF1 accounting inputs and BB-ENV1 execution route.
-- **Acceptance / artifacts:** `docs/experiments/performance-datasets/` contains safe derived datasets with exact post-BB-COR7 provenance, variance, instrumentation overhead and missing/unattributed data. Если baseline changed after COR7/corpus capture, stale dependencies are recaptured before completion.
+- **Next experiment / information gain:** Prepared repeated target captures using BB-PERF1 accounting inputs and BB-ENV1 execution route; timing may be co-captured with BB-SHD2/BB-RES2, but does not wait for BB-SHD3/BB-RES3.
+- **Acceptance / artifacts:** `docs/experiments/performance-datasets/` contains safe derived datasets with exact post-BB-COR7 provenance, variance, instrumentation overhead and missing/unattributed data. Co-captured timings are accepted only when instrumentation remains attribution-safe; otherwise they are recaptured separately. If baseline or relevant instrumentation changed after COR7/corpus capture, stale dependencies are recaptured before completion.
 - **Scope:** Medium
 
 ### BB-PERF3 — Build ranked bottleneck map
