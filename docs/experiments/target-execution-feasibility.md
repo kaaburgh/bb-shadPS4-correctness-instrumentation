@@ -42,10 +42,12 @@ command:
   resolve exactly to the verified `app/` view or its `eboot.bin`. Shell strings,
   wrapper launchers, environment overrides, and command-file contents are not
   accepted as execution shortcuts;
-- the exact shadPS4 executable and its expected SHA-256, plus the upstream
-  repository, source commit, source tree, and ordered local patch commits. The
-  runner fails closed unless the source repository, commit, and tree match the
-  pinned BB-BL1 baseline;
+- the exact shadPS4 executable and its expected SHA-256 plus the pinned upstream
+  repository, source commit, and source tree. This BB-ENV1 runner currently
+  accepts only the unpatched BB-BL1 baseline (`patch_commits: []`): arbitrary
+  commit IDs cannot prove that a patch exists, applies in order, or contributed
+  to the executable. Patched runs require a future independently verified
+  checkout/build-provenance input rather than assumed SHA labels;
 - an explicit target root and a separate real working directory. The runner
   refuses equal or nested trees so the operator's source target is not used as
   writable scratch space;
@@ -109,9 +111,9 @@ Command inputs use `bb-target-command/v2`; `target_path_index` prevents an
 operator command that launches another installation from being attributed to the
 validated manifest. Scenario inputs use `bb-target-scenario/v3`. Every
 `redacted-json` artifact
-must declare a bounded object/array/scalar allowlist; string leaves use only
-repository-registered enum literals, not arbitrary operator strings. The allowlist with
-`additionalProperties: false`; the runner rejects unknown fields instead of
+must declare a bounded object/array/scalar allowlist with `additionalProperties: false`;
+string leaves use only repository-registered enum literals, not arbitrary operator
+strings. The runner rejects unknown fields instead of
 guessing whether an unrecognized key is safe to transfer. The run manifest
 labels this privacy boundary `allowlist-v3`.
 Its file oracle illustrates the required distinction between a process being
@@ -134,10 +136,11 @@ state. A timeout, launch failure, non-zero exit, missing oracle, or oracle
 mismatch remains visible and makes the command unsuccessful.
 
 The directly executed emulator is isolated in a Windows Job Object or, on
-Linux, a new process group under a temporary child-subreaper. The group/job is
-torn down and Linux-adopted descendants are reaped even if they create a new
-session, so inherited output pipes and detached children cannot outlive the
-bounded run.
+Linux, a new process group under a temporary child-subreaper. Process/job/group
+termination and adopted-child reaping run from exception-safe cleanup, including
+when waiting is interrupted or output-thread startup fails; the original
+exception is preserved after teardown. Descendants therefore cannot outlive the
+runner merely by detaching or by interrupting the control path.
 
 ## One-shot operator procedure
 
@@ -168,8 +171,9 @@ python tools/run_target_experiment.py run \
 ```
 
 The command file and target/config paths are operator-local inputs and are not
-committed or copied into the ZIP. If the emulator source has local patches,
-repeat `--patch-commit` in application order. If a backend is not known, omit it. Do not pass `--emulator-config`: on the pinned
+committed or copied into the ZIP. Do not pass `--patch-commit`: this runner
+accepts only the exact unpatched pinned BB-BL1 source until patched build
+provenance can be verified independently. If a backend is not known, omit it. Do not pass `--emulator-config`: on the pinned
 shadPS4 baseline an arbitrary config-file path cannot be bound to the settings actually
 consumed, so the runner rejects it and keeps BB-BL3 config identity explicit as unknown.
 
@@ -205,7 +209,8 @@ The runner has standard-library contract tests for strict JSON, path
 containment, direct-emulator argv binding, exact BB-BL2 target-root matching,
 command-to-target binding, target-manifest transfer safety, finite JSON-number
 parsing, enum-only embedded strings, safe target/scenario projections and their
-packaged digests, pre-launch patch-list/config provenance checks, allowlist-first
+packaged digests, fail-closed unpatched-source/config provenance checks, exception-safe process
+cleanup, allowlist-first
 redaction, packaged-payload digests, stale-output
 rejection, detached-session descendant termination, and failure-closed
 validation. A

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from tools import run_target_experiment as runner
@@ -71,13 +72,13 @@ class HardeningRegressionTests(unittest.TestCase):
             runner._require_attestable_emulator_config(Path("private-config.toml"))
         runner._require_attestable_emulator_config(None)
 
-    def test_patch_list_is_validated_before_execution(self):
+    def test_patch_list_requires_independently_verified_build_provenance(self):
         sha = "a" * 40
-        with self.assertRaisesRegex(runner.TargetRunError, "duplicate"):
-            runner._normalize_patch_commits([sha, sha])
-        with self.assertRaisesRegex(runner.TargetRunError, "at most 64"):
-            runner._normalize_patch_commits([f"{index:040x}" for index in range(65)])
-        self.assertEqual(runner._normalize_patch_commits([sha]), [sha])
+        self.assertEqual(runner._normalize_patch_commits([]), [])
+        with self.assertRaisesRegex(runner.TargetRunError, "verified checkout/build provenance"):
+            runner._normalize_patch_commits([sha])
+        with self.assertRaisesRegex(runner.TargetRunError, "40-character"):
+            runner._normalize_patch_commits(["not-a-sha"])
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux subreaper regression")
     def test_strong_containment_reaps_detached_session_descendant(self):
@@ -109,6 +110,31 @@ class HardeningRegressionTests(unittest.TestCase):
                     pass
                 self.fail("detached descendant outlived strong containment")
             self.assertEqual(execution["process_tree_control"], "posix-process-group")
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux cleanup regression")
+    def test_interrupted_wait_still_terminates_posix_process_group(self):
+        original_wait = runner.subprocess.Popen.wait
+        interrupted_pids: list[int] = []
+
+        def interrupt_once(process, timeout=None):
+            if timeout == 10 and process.pid not in interrupted_pids:
+                interrupted_pids.append(process.pid)
+                raise KeyboardInterrupt()
+            return original_wait(process, timeout=timeout)
+
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory).resolve()
+            with mock.patch.object(runner.subprocess.Popen, "wait", interrupt_once):
+                with self.assertRaises(KeyboardInterrupt):
+                    runner._execute_command(
+                        [sys.executable, "-c", "import time; time.sleep(30)"],
+                        workdir,
+                        10,
+                        require_detached_containment=True,
+                    )
+            self.assertEqual(len(interrupted_pids), 1)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(interrupted_pids[0], 0)
 
     def test_redacted_artifact_records_packaged_payload_digest(self):
         scenario = {
@@ -149,6 +175,8 @@ class HardeningRegressionTests(unittest.TestCase):
         required = schema["properties"]["artifacts"]["items"]["required"]
         self.assertIn("packaged_sha256", required)
         self.assertIn("packaged_size_bytes", required)
+        patch_schema = schema["properties"]["emulator"]["properties"]["source"]["properties"]["patch_commits"]
+        self.assertEqual(patch_schema["maxItems"], 0)
 
 
 if __name__ == "__main__":

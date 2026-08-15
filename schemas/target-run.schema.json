@@ -150,7 +150,7 @@
             },
             "patch_commits": {
               "type": "array",
-              "maxItems": 64,
+              "maxItems": 0,
               "uniqueItems": true,
               "items": {
                 "$ref": "#/$defs/gitSha"

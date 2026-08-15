@@ -42,7 +42,7 @@ SCENARIO_SCHEMA_VERSION = 3
 COMMAND_SCHEMA_ID = "bb-target-command/v2"
 COMMAND_SCHEMA_VERSION = 2
 RUNNER_NAME = "bb-target-runner"
-RUNNER_VERSION = "1.4.0"
+RUNNER_VERSION = "1.5.0"
 PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
@@ -200,12 +200,15 @@ def _require_git_sha(value: Any, field: str) -> str:
 
 
 def _normalize_patch_commits(values: Sequence[str]) -> list[str]:
-    if len(values) > 64:
-        raise TargetRunError("patch_commits must contain at most 64 entries")
-    normalized = [_require_git_sha(value, "patch_commit") for value in values]
-    if len(set(normalized)) != len(normalized):
-        raise TargetRunError("patch_commits must not contain duplicate commits")
-    return normalized
+    """Accept only the exact unpatched BB-BL1 baseline until patch provenance is attested."""
+    if values:
+        for value in values:
+            _require_git_sha(value, "patch_commit")
+        raise TargetRunError(
+            "patch_commits require independently verified checkout/build provenance; "
+            "this runner currently accepts only the pinned unpatched BB-BL1 baseline"
+        )
+    return []
 
 
 def _require_attestable_emulator_config(path: Path | None) -> None:
@@ -1463,8 +1466,9 @@ def _execute_command(
                 try:
                     windows_job.assign_and_resume(process)
                 except OSError as error:
-                    _terminate_process(process, windows_job=windows_job)
-                    raise TargetRunError("unable to contain target process in a Windows Job Object") from error
+                    raise TargetRunError(
+                        "unable to contain target process in a Windows Job Object"
+                    ) from error
             for stream, count in (
                 (process.stdout, stdout_count),
                 (process.stderr, stderr_count),
@@ -1481,14 +1485,24 @@ def _execute_command(
                 process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 timed_out = True
-            _terminate_process(
-                process,
-                process_group_id=process_group_id,
-                windows_job=windows_job,
-            )
-            if linux_subreaper is not None:
-                _terminate_linux_adopted_children(linux_baseline_children)
     finally:
+        active_exception = sys.exc_info()[0] is not None
+        cleanup_error: BaseException | None = None
+        if process is not None:
+            try:
+                _terminate_process(
+                    process,
+                    process_group_id=process_group_id,
+                    windows_job=windows_job,
+                )
+            except BaseException as error:
+                cleanup_error = error
+        if linux_subreaper is not None:
+            try:
+                _terminate_linux_adopted_children(linux_baseline_children)
+            except BaseException as error:
+                if cleanup_error is None:
+                    cleanup_error = error
         elapsed = round(max(0.0, time.monotonic() - started), 3)
         for thread in output_threads:
             thread.join(timeout=2)
@@ -1503,6 +1517,8 @@ def _execute_command(
             windows_job.close()
         if linux_subreaper is not None:
             linux_subreaper.close()
+        if cleanup_error is not None and not active_exception:
+            raise cleanup_error
     return {
         "exit_code": None if process is None else process.returncode,
         "launch_failed": launch_failed,
