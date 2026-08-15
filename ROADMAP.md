@@ -21,6 +21,8 @@
 - Изменение shadPS4 source/target/config baseline correctness-fix'ом инвалидирует затронутые downstream baseline/corpus/performance evidence. Такой PR обязан явно reopen/reconcile нужные capture items вместо сравнения stale datasets.
 - Опровергнутые hypotheses и superseded directions сохраняются.
 
+The **CLOUD**, **CLOUD RESEARCH**, **GATED** and **LOCAL ONLY** distinctions, together with the feasibility and one-shot handoff machinery, are agent-execution scaffolding. They separate autonomous work from target-machine work and preserve safe, reproducible handoffs; they are not architectural assumptions about shadPS4, Bloodborne, or the eventual specialization design. Technical milestone ordering must not be inferred solely from execution location. If execution capabilities change, this machinery may be simplified without changing the research goals.
+
 ## Ready now
 
 Готовы к независимой работе baseline items со статусом `Open` и `Depends on: None`, если для item нет активного PR. После завершения всех трёх baseline items **BB-ENV1** определяет, где и как разрешены target runs. Остальные items имеют явные dependencies.
