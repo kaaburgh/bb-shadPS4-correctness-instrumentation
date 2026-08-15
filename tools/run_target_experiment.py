@@ -611,6 +611,17 @@ class _WindowsJob:
                 ("PeakJobMemoryUsed", ctypes.c_size_t),
             ]
 
+        class ThreadEntry32(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wintypes.DWORD),
+                ("cntUsage", wintypes.DWORD),
+                ("th32ThreadID", wintypes.DWORD),
+                ("th32OwnerProcessID", wintypes.DWORD),
+                ("tpBasePri", ctypes.c_long),
+                ("tpDeltaPri", ctypes.c_long),
+                ("dwFlags", wintypes.DWORD),
+            ]
+
         kernel32 = self._kernel32
         kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
         kernel32.CreateJobObjectW.restype = wintypes.HANDLE
@@ -625,9 +636,18 @@ class _WindowsJob:
         kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
         kernel32.ResumeThread.argtypes = [wintypes.HANDLE]
         kernel32.ResumeThread.restype = wintypes.DWORD
+        kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        kernel32.Thread32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(ThreadEntry32)]
+        kernel32.Thread32First.restype = wintypes.BOOL
+        kernel32.Thread32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(ThreadEntry32)]
+        kernel32.Thread32Next.restype = wintypes.BOOL
+        kernel32.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenThread.restype = wintypes.HANDLE
         kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         kernel32.CloseHandle.restype = wintypes.BOOL
 
+        self._thread_entry32 = ThreadEntry32
         self._handle = kernel32.CreateJobObjectW(None, None)
         if not self._handle:
             raise self._last_error("CreateJobObjectW failed")
@@ -649,8 +669,30 @@ class _WindowsJob:
     def assign_and_resume(self, process: subprocess.Popen[Any]) -> None:
         if not self._kernel32.AssignProcessToJobObject(self._handle, process._handle):
             raise self._last_error("AssignProcessToJobObject failed")
-        if self._kernel32.ResumeThread(process._thread_handle) == 0xFFFFFFFF:
-            raise self._last_error("ResumeThread failed")
+        snapshot = self._kernel32.CreateToolhelp32Snapshot(0x00000004, 0)
+        if not snapshot:
+            raise self._last_error("CreateToolhelp32Snapshot failed")
+        try:
+            entry = self._thread_entry32()
+            entry.dwSize = self._ctypes.sizeof(entry)
+            if not self._kernel32.Thread32First(snapshot, self._ctypes.byref(entry)):
+                raise self._last_error("Thread32First failed")
+            while True:
+                if entry.th32OwnerProcessID == process.pid:
+                    thread = self._kernel32.OpenThread(0x0002, False, entry.th32ThreadID)
+                    if not thread:
+                        raise self._last_error("OpenThread failed")
+                    try:
+                        if self._kernel32.ResumeThread(thread) == 0xFFFFFFFF:
+                            raise self._last_error("ResumeThread failed")
+                    finally:
+                        self._kernel32.CloseHandle(thread)
+                    return
+                if not self._kernel32.Thread32Next(snapshot, self._ctypes.byref(entry)):
+                    break
+            raise OSError("primary thread was not found for suspended process")
+        finally:
+            self._kernel32.CloseHandle(snapshot)
 
     def close(self) -> None:
         handle = self._handle
