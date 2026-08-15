@@ -251,6 +251,10 @@ class ContractTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema is not installed")
 class RunTests(unittest.TestCase):
+    @unittest.skipUnless(
+        os.name == "nt" or sys.platform.startswith("linux"),
+        "strong target containment requires Windows or Linux",
+    )
     def test_run_creates_bounded_safe_artifact(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

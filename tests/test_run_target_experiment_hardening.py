@@ -89,7 +89,7 @@ class HardeningRegressionTests(unittest.TestCase):
             ]
         }
         with tempfile.TemporaryDirectory() as directory:
-            workdir = Path(directory)
+            workdir = Path(directory).resolve()
             (workdir / "summary.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
             entries, embedded, warnings = runner._collect_artifacts(scenario, workdir)
             self.assertEqual(warnings, [])
