@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 import time
 import zipfile
@@ -15,9 +16,12 @@ from typing import Any, Sequence
 try:
     from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
     from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
+    from tools.run_target_experiment_v3 import TargetRunError, _package_target_manifest
 except ModuleNotFoundError:  # direct `python tools/capture_baseline.py`
-    from bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
-    from collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
+    from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
+    from tools.run_target_experiment_v3 import TargetRunError, _package_target_manifest
 
 SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
@@ -51,22 +55,19 @@ def _read_target(path: Path) -> tuple[dict[str, Any], bytes]:
     return target, payload
 
 
-def _target_projection(target: dict[str, Any], payload: bytes) -> dict[str, Any]:
+def _target_projection(target: dict[str, Any], source_payload: bytes, packaged_payload: bytes) -> dict[str, Any]:
     return {
-        "manifest_sha256": _sha256(payload),
+        "source_manifest_sha256": _sha256(source_payload),
+        "packaged_manifest_sha256": _sha256(packaged_payload),
         "manifest_kind": target["manifest_kind"],
         "schema_version": target["schema_version"],
-        "name": target["target"]["name"],
-        "title_id": target["target"]["title_id"],
-        "app_version": target["build"]["app_version"],
-        "resolved_tree": target["content"]["resolved_tree"],
-        "identity_completeness": target["identity_completeness"],
     }
 
 
 def build_capture(target_manifest: Path, *, backend: str | None = None, emulator_config: Path | None = None) -> tuple[dict[str, Any], bytes, bytes]:
     started = time.perf_counter_ns()
-    target, target_bytes = _read_target(target_manifest)
+    target, source_target_bytes = _read_target(target_manifest)
+    target_bytes = _package_target_manifest(target)
     host = collect_manifest(graphics_backend=backend, emulator_config_path=emulator_config)
     validate_host_manifest(host)
     host_bytes = _canonical_json(host)
@@ -74,12 +75,12 @@ def build_capture(target_manifest: Path, *, backend: str | None = None, emulator
     capture = {
         "format": FORMAT,
         "source": {"repository": SOURCE_REPOSITORY, "commit": SOURCE_COMMIT},
-        "target": _target_projection(target, target_bytes),
+        "target": _target_projection(target, source_target_bytes, target_bytes),
         "host": {"manifest_sha256": _sha256(host_bytes), "schema_id": host["schema_id"], "schema_version": host["schema_version"]},
         "telemetry": {name: {"state": "unavailable", "reason": UNAVAILABLE_REASON} for name in METRICS},
         "collection_overhead": {
             "packer_elapsed_ns": elapsed,
-            "scope": "target-manifest validation + host collection + canonical serialization; excludes target runtime",
+            "scope": "target-manifest validation + safe projection + host collection + canonical serialization; excludes target runtime",
         },
         "evidence": {
             "class": "synthetic" if "synthetic" in target["provenance"]["evidence_classes"] else "static",
@@ -124,13 +125,13 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None) -> int:
     args = _parse_args(argv)
     try:
         capture, target_bytes, host_bytes = build_capture(args.target_manifest, backend=args.backend, emulator_config=args.emulator_config)
         write_artifact(args.output, capture, target_bytes, host_bytes)
-    except (OSError, ValueError) as error:
-        print(f"error: {error}", file=__import__("sys").stderr)
+    except (OSError, ValueError, TargetRunError) as error:
+        print(f"error: {error}", file=sys.stderr)
         return 2
     return 0
 

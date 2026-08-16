@@ -45,9 +45,30 @@ class BaselineCaptureTests(unittest.TestCase):
             self.assertTrue(all(item["state"] == "unavailable" for item in capture["telemetry"].values()))
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(sorted(archive.namelist()), ["capture-manifest.json", "host-environment.json", "target-manifest.json"])
-                packaged = json.loads(archive.read("capture-manifest.json"))
-                self.assertEqual(packaged["target"]["manifest_sha256"], capture["target"]["manifest_sha256"])
+                packaged_capture = json.loads(archive.read("capture-manifest.json"))
+                packaged_target = archive.read("target-manifest.json")
+                self.assertEqual(
+                    packaged_capture["target"]["packaged_manifest_sha256"],
+                    capture_baseline._sha256(packaged_target),
+                )
+                projected = json.loads(packaged_target)
+                self.assertEqual(projected["target"]["name"], "Bloodborne")
+                self.assertIsNone(projected["build"]["app_version"])
+                self.assertIsNone(projected["content"]["base"]["content_id"])
         validate.assert_called_once()
+
+    @mock.patch("tools.capture_baseline.validate_host_manifest")
+    @mock.patch("tools.capture_baseline.collect_manifest")
+    def test_rejects_schema_valid_private_target_setting_instead_of_packaging_it(self, collect, validate):
+        collect.return_value = self._host()
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target.json"
+            document = json.loads(SYNTHETIC_TARGET.read_text(encoding="utf-8"))
+            document["configuration"]["settings"]["game.language"]["value"] = "/Users/alice/private"
+            target.write_text(json.dumps(document), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unsafe value"):
+                capture_baseline.build_capture(target)
+        validate.assert_not_called()
 
     def test_rejects_oversized_target_before_parsing(self):
         with tempfile.TemporaryDirectory() as directory:
