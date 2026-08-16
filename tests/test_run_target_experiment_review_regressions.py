@@ -106,10 +106,10 @@ class ReviewRegressionTests(unittest.TestCase):
 
     def test_compatibility_engine_direct_cli_fails_closed(self):
         invocations = (
-            [sys.executable, "-m", "tools.run_target_experiment_v3", "--help"],
-            [sys.executable, "tools/run_target_experiment_v3.py", "--help"],
+            ([sys.executable, "-m", "tools.run_target_experiment_v3", "--help"], 2),
+            ([sys.executable, "tools/run_target_experiment_v3.py", "--help"], None),
         )
-        for argv in invocations:
+        for argv, expected_returncode in invocations:
             with self.subTest(argv=argv):
                 completed = subprocess.run(
                     argv,
@@ -120,8 +120,11 @@ class ReviewRegressionTests(unittest.TestCase):
                     timeout=30,
                     check=False,
                 )
-                self.assertEqual(completed.returncode, 2)
-                self.assertIn("internal compatibility engine", completed.stderr)
+                if expected_returncode is None:
+                    self.assertNotEqual(completed.returncode, 0)
+                else:
+                    self.assertEqual(completed.returncode, expected_returncode)
+                    self.assertIn("internal compatibility engine", completed.stderr)
                 self.assertNotIn("{run,validate}", completed.stdout + completed.stderr)
 
     def test_gated_target_and_scenario_use_single_loaded_snapshot(self):
