@@ -126,9 +126,7 @@ class ReviewRegressionTests(unittest.TestCase):
                 observed["scenario_path"] = Path(kwargs["scenario_path"])
                 observed["target_raw"] = observed["target_path"].read_bytes()
                 observed["scenario_raw"] = observed["scenario_path"].read_bytes()
-                return {
-                    "execution": {"command_argv_sha256": "sha256:" + "0" * 64}
-                }
+                return {"execution": {"command_argv_sha256": "sha256:" + "0" * 64}}
 
             def keep_identity(_output, manifest, original):
                 observed["command_raw"] = original
@@ -159,7 +157,7 @@ class ReviewRegressionTests(unittest.TestCase):
             self.assertEqual(observed["command_raw"], command_raw)
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux descriptor execution regression")
-    def test_linux_executable_lease_survives_path_replacement(self):
+    def test_linux_executable_lease_survives_atomic_path_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "binary"
             original = b"verified-executable-bytes"
@@ -167,9 +165,12 @@ class ReviewRegressionTests(unittest.TestCase):
             digest = "sha256:" + hashlib.sha256(original).hexdigest()
             pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
             with runner._ExecutableLease(path, pinned, digest) as lease:
+                replacement = Path(directory) / "replacement"
+                replacement.write_bytes(b"replacement")
+                os.replace(replacement, path)
                 self.assertEqual(lease.pass_fds, (lease._fd,))
-                path.write_bytes(b"replacement")
                 self.assertEqual(Path(lease.execution_path).read_bytes(), original)
+                self.assertEqual(path.read_bytes(), b"replacement")
 
     @unittest.skipUnless(os.name == "nt", "Windows executable lease regression")
     def test_windows_executable_lease_blocks_path_replacement(self):
