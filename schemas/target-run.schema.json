@@ -1,0 +1,542 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kaaburgh/bb-shadPS4-correctness-instrumentation/main/schemas/target-run.schema.json",
+  "title": "Bloodborne/shadPS4 bounded target-run manifest",
+  "description": "Safe, payload-free record produced by the gated target-machine runner.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_kind",
+    "schema_version",
+    "provenance",
+    "route",
+    "target",
+    "host_environment",
+    "emulator",
+    "scenario",
+    "execution",
+    "termination",
+    "oracle",
+    "artifacts",
+    "packaging",
+    "redaction"
+  ],
+  "properties": {
+    "manifest_kind": {
+      "const": "bb-target-run"
+    },
+    "schema_version": {
+      "const": 3
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_at_utc",
+        "producer"
+      ],
+      "properties": {
+        "captured_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version"
+          ],
+          "properties": {
+            "name": {
+              "const": "bb-target-runner"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        }
+      }
+    },
+    "route": {
+      "const": "gated-target-machine"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256",
+        "manifest_size_bytes",
+        "packaged_manifest_sha256",
+        "packaged_manifest_size_bytes",
+        "identity_state"
+      ],
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_size_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "identity_state": {
+          "enum": [
+            "complete",
+            "partial"
+          ]
+        },
+        "packaged_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "packaged_manifest_size_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        }
+      }
+    },
+    "host_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_sha256",
+        "manifest_size_bytes",
+        "unknown_field_count",
+        "warning_count"
+      ],
+      "properties": {
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "manifest_size_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "unknown_field_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "warning_count": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        }
+      }
+    },
+    "emulator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "binary",
+        "config_sha256",
+        "graphics_backend"
+      ],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "commit",
+            "tree",
+            "patch_commits"
+          ],
+          "properties": {
+            "repository": {
+              "type": "string",
+              "pattern": "^https://[^\\s]{1,240}$"
+            },
+            "commit": {
+              "$ref": "#/$defs/gitSha"
+            },
+            "tree": {
+              "$ref": "#/$defs/gitSha"
+            },
+            "patch_commits": {
+              "type": "array",
+              "maxItems": 0,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/gitSha"
+              }
+            }
+          }
+        },
+        "binary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "size_bytes"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "size_bytes": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          }
+        },
+        "config_sha256": {
+          "type": "null"
+        },
+        "graphics_backend": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9_.+-]{0,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "input_sha256",
+        "input_size_bytes",
+        "packaged_sha256",
+        "packaged_size_bytes",
+        "timeout_seconds",
+        "oracle_kind"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "input_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "input_size_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "oracle_kind": {
+          "enum": [
+            "process-exit",
+            "file-sha256"
+          ]
+        },
+        "packaged_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "packaged_size_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "working_directory_isolated",
+        "target_root_separate",
+        "command_argv_sha256",
+        "raw_process_output_captured",
+        "declared_outputs_preflighted",
+        "process_tree_control"
+      ],
+      "properties": {
+        "working_directory_isolated": {
+          "const": true
+        },
+        "target_root_separate": {
+          "const": true
+        },
+        "command_argv_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "raw_process_output_captured": {
+          "const": true
+        },
+        "declared_outputs_preflighted": {
+          "const": true
+        },
+        "process_tree_control": {
+          "enum": [
+            "posix-process-group",
+            "windows-job-object"
+          ]
+        }
+      }
+    },
+    "termination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "exit_code",
+        "elapsed_seconds",
+        "stdout_bytes",
+        "stderr_bytes",
+        "stdout_truncated",
+        "stderr_truncated"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "completed",
+            "timed_out",
+            "launch_failed",
+            "exit_nonzero",
+            "oracle_failed",
+            "oracle_unknown"
+          ]
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "elapsed_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 86416
+        },
+        "stdout_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "stderr_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "stdout_truncated": {
+          "type": "boolean"
+        },
+        "stderr_truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "oracle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "state",
+        "expected_exit_code",
+        "observed_exit_code",
+        "expected_sha256",
+        "observed_sha256",
+        "observed_size_bytes"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "process-exit",
+            "file-sha256"
+          ]
+        },
+        "state": {
+          "enum": [
+            "passed",
+            "failed",
+            "unknown",
+            "not_evaluated"
+          ]
+        },
+        "expected_exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observed_exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "expected_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observed_size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status",
+          "source_sha256",
+          "source_size_bytes",
+          "packaged_sha256",
+          "packaged_size_bytes",
+          "packaged_path"
+        ],
+        "properties": {
+          "name": {
+            "$ref": "#/$defs/identifier"
+          },
+          "status": {
+            "enum": [
+              "embedded_redacted_json",
+              "externalized",
+              "missing",
+              "rejected"
+            ]
+          },
+          "source_sha256": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "packaged_path": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^artifacts/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.redacted\\.json$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packaged_sha256": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "packaged_size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "packaging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "warnings"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "complete",
+            "partial"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          }
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "raw_process_output",
+        "target_paths",
+        "command_file",
+        "warnings"
+      ],
+      "properties": {
+        "policy": {
+          "const": "allowlist-v3"
+        },
+        "raw_process_output": {
+          "const": "excluded"
+        },
+        "target_paths": {
+          "const": "excluded"
+        },
+        "command_file": {
+          "const": "excluded"
+        },
+        "warnings": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
