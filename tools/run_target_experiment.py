@@ -2,7 +2,7 @@
 """Hardened BB-ENV1 target-run entrypoint.
 
 The previous v3 implementation is retained as an internal compatibility library in
-``tools.run_target_experiment_v3``.  This entrypoint adds the evidence gates found
+``tools.run_target_experiment_v3``. This entrypoint adds the evidence gates found
 necessary by head-bound Codex review while preserving the published v3 run-record
 shape for detached consumers.
 """
@@ -11,15 +11,21 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
+import stat
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+# Support the documented direct invocation from the repository root:
+# ``python tools/run_target_experiment.py ...``.
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import run_target_experiment_v3 as _legacy
 
 
-# Re-export the established implementation surface so existing contract tests and
-# detached-record validation keep exercising the same implementation primitives.
 for _export_name in dir(_legacy):
     if not _export_name.startswith("__"):
         globals()[_export_name] = getattr(_legacy, _export_name)
@@ -27,13 +33,9 @@ for _export_name in dir(_legacy):
 _LEGACY_PACKAGE_TARGET_MANIFEST = _legacy._package_target_manifest
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 
-RUNNER_VERSION = "1.6.0"
+RUNNER_VERSION = "1.7.0"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
-# Independently observed upstream Build and Release run for the exact BB-BL1
-# commit/tree.  The archive digest is GitHub's artifact digest; binary digests
-# below were recomputed from the downloaded archives before this contract was
-# committed.  Non-synthetic target runs fail closed to these exact bytes.
 PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
 PINNED_BUILD_ARTIFACTS: dict[str, dict[str, Any]] = {
     "windows": {
@@ -99,13 +101,16 @@ def _require_non_synthetic_evidence_contract(
 
     if scenario["oracle"]["kind"] != "process-exit":
         raise TargetRunError(
-            "non-synthetic file-sha256 oracles require independently attested current-run producer "
-            "provenance; this BB-ENV1 handoff currently supports file oracles only for synthetic controls"
+            "non-synthetic file-sha256 oracles require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports file oracles only for synthetic controls"
+        )
+    if scenario["artifacts"]:
+        raise TargetRunError(
+            "non-synthetic declared artifacts require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports declared artifacts only for synthetic controls"
         )
 
     pinned = _pinned_build_for_host()
     actual_sha256, actual_size = _legacy._sha256_file(
-        emulator_binary_path.resolve(), label="emulator binary"
+        emulator_binary_path, label="staged emulator binary"
     )
     supplied_sha256 = f"sha256:{emulator_binary_sha256}"
     if (
@@ -129,9 +134,7 @@ def _package_target_manifest(manifest: Mapping[str, Any]) -> bytes:
         source_package = component["source_package"]
         packaged_dlc[safe_identifier] = {
             "version": None,
-            "source_package": (
-                None if source_package is None else _legacy._copy_exact_artifact(source_package)
-            ),
+            "source_package": None if source_package is None else _legacy._copy_exact_artifact(source_package),
         }
     packaged["content"]["dlc"] = packaged_dlc
     try:
@@ -139,6 +142,59 @@ def _package_target_manifest(manifest: Mapping[str, Any]) -> bytes:
     except Exception as error:
         raise TargetRunError(f"safe target-manifest projection is invalid: {error}") from error
     return _legacy._json_bytes(packaged)
+
+
+def _require_regular_unlinked_file(path: Path, label: str) -> os.stat_result:
+    try:
+        info = path.lstat()
+    except OSError as error:
+        raise TargetRunError(f"{label} is not accessible") from error
+    if _legacy._is_reparse_or_symlink(info) or not stat.S_ISREG(info.st_mode):
+        raise TargetRunError(f"{label} must be a regular file, not a link or reparse alias")
+    return info
+
+
+def _resolve_command_binary(
+    command: Mapping[str, Any],
+    working_directory: Path,
+    emulator_binary_path: Path,
+) -> Path:
+    """Bind the operator command to the exact source path before staging."""
+    candidate = Path(command["argv"][0])
+    if not candidate.is_absolute():
+        candidate = working_directory / candidate
+    _require_regular_unlinked_file(candidate, "command argv[0]")
+    _require_regular_unlinked_file(emulator_binary_path, "emulator binary")
+    try:
+        candidate_resolved = candidate.resolve(strict=True)
+        emulator_resolved = emulator_binary_path.resolve(strict=True)
+    except OSError as error:
+        raise TargetRunError("unable to resolve emulator command binding") from error
+    if candidate_resolved != emulator_resolved:
+        raise TargetRunError("command argv[0] does not identify emulator_binary")
+    return emulator_resolved
+
+
+def _stage_emulator_binary(
+    source: Path,
+    destination: Path,
+    source_info: os.stat_result,
+) -> Path:
+    """Copy the executable to a private path; only the staged bytes are verified/launched."""
+    try:
+        shutil.copyfile(source, destination, follow_symlinks=False)
+        os.chmod(destination, stat.S_IMODE(source_info.st_mode) | stat.S_IXUSR)
+    except OSError as error:
+        raise TargetRunError("unable to stage emulator binary for immutable execution") from error
+    _require_regular_unlinked_file(destination, "staged emulator binary")
+    return destination
+
+
+def _write_snapshot(path: Path, payload: bytes, label: str) -> None:
+    try:
+        path.write_bytes(payload)
+    except OSError as error:
+        raise TargetRunError(f"unable to stage {label} snapshot") from error
 
 
 def run_experiment(
@@ -158,45 +214,93 @@ def run_experiment(
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Apply BB-ENV1 evidence gates, then delegate bounded execution to the v3 engine."""
-    _target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
-    _scenario_raw, scenario = _legacy._load_json_file(
+    """Apply BB-ENV1 evidence gates, then delegate one immutable snapshot to the v3 engine."""
+    target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
+    scenario_raw, scenario = _legacy._load_json_file(
         scenario_path, maximum=_legacy.MAX_INPUT_BYTES, label="scenario"
     )
     if not isinstance(scenario, Mapping):
         raise TargetRunError("scenario must be a JSON object")
     _legacy.validate_scenario(scenario)
-    _require_non_synthetic_evidence_contract(
-        target_manifest,
-        scenario,
-        emulator_binary_path,
-        emulator_binary_sha256,
+
+    command_raw, command = _legacy._load_json_file(
+        command_path, maximum=_legacy.MAX_COMMAND_BYTES, label="command file"
     )
-    return _LEGACY_RUN_EXPERIMENT(
-        target_manifest_path=target_manifest_path,
-        scenario_path=scenario_path,
-        command_path=command_path,
-        emulator_binary_path=emulator_binary_path,
-        emulator_binary_sha256=emulator_binary_sha256,
-        source_repository=source_repository,
-        source_commit=source_commit,
-        source_tree=source_tree,
-        patch_commits=patch_commits,
-        target_root=target_root,
-        working_directory=working_directory,
-        output_path=output_path,
-        graphics_backend=graphics_backend,
-        emulator_config_path=emulator_config_path,
+    if not isinstance(command, Mapping):
+        raise TargetRunError("command must be a JSON object")
+    _legacy.validate_command(command)
+
+    synthetic_control = _is_explicit_synthetic_control(target_manifest)
+    working_directory_resolved = _legacy._resolve_directory(
+        working_directory, "working_directory"
     )
 
+    with tempfile.TemporaryDirectory(prefix="bb-target-run-snapshot-") as directory:
+        snapshot_root = Path(directory)
+        staged_target = snapshot_root / "target-manifest.json"
+        staged_scenario = snapshot_root / "scenario.json"
+        _write_snapshot(staged_target, target_raw, "target manifest")
+        _write_snapshot(staged_scenario, scenario_raw, "scenario")
 
-# The legacy engine resolves these names from its own module globals at runtime.
-# Override only the two hardened seams while retaining the reviewed containment,
-# packaging and schema implementation unchanged.
+        staged_command_path = snapshot_root / "command.json"
+        _write_snapshot(staged_command_path, command_raw, "command")
+        staged_emulator_path = emulator_binary_path
+
+        if not synthetic_control:
+            original_binary = _resolve_command_binary(
+                command,
+                working_directory_resolved,
+                emulator_binary_path,
+            )
+            source_info = _require_regular_unlinked_file(original_binary, "emulator binary")
+            pinned = _pinned_build_for_host()
+            staged_emulator_path = snapshot_root / str(pinned["binary_name"])
+            _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
+            _require_non_synthetic_evidence_contract(
+                target_manifest,
+                scenario,
+                staged_emulator_path,
+                emulator_binary_sha256,
+            )
+
+            staged_command = dict(command)
+            staged_argv = list(command["argv"])
+            staged_argv[0] = str(staged_emulator_path)
+            staged_command["argv"] = staged_argv
+            _write_snapshot(
+                staged_command_path,
+                _legacy._json_bytes(staged_command),
+                "command",
+            )
+        else:
+            _require_non_synthetic_evidence_contract(
+                target_manifest,
+                scenario,
+                emulator_binary_path,
+                emulator_binary_sha256,
+            )
+
+        return _LEGACY_RUN_EXPERIMENT(
+            target_manifest_path=staged_target,
+            scenario_path=staged_scenario,
+            command_path=staged_command_path,
+            emulator_binary_path=staged_emulator_path,
+            emulator_binary_sha256=emulator_binary_sha256,
+            source_repository=source_repository,
+            source_commit=source_commit,
+            source_tree=source_tree,
+            patch_commits=patch_commits,
+            target_root=target_root,
+            working_directory=working_directory,
+            output_path=output_path,
+            graphics_backend=graphics_backend,
+            emulator_config_path=emulator_config_path,
+        )
+
+
 _legacy._package_target_manifest = _package_target_manifest
 _legacy.run_experiment = run_experiment
 
-# Re-export the active overrides after the initial compatibility export.
 globals()["RUNNER_VERSION"] = RUNNER_VERSION
 globals()["_package_target_manifest"] = _package_target_manifest
 globals()["run_experiment"] = run_experiment
