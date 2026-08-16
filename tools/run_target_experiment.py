@@ -2,9 +2,8 @@
 """Hardened BB-ENV1 target-run entrypoint.
 
 The previous v3 implementation is retained as an internal compatibility library in
-``tools.run_target_experiment_v3``. This entrypoint adds the evidence gates found
-necessary by head-bound Codex review while preserving the published v3 run-record
-shape for detached consumers.
+``tools.run_target_experiment_v3``. This entrypoint adds evidence gates while
+preserving the published v3 run-record shape for detached consumers.
 """
 
 from __future__ import annotations
@@ -12,14 +11,17 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import signal
 import stat
+import subprocess
 import sys
 import tempfile
+import threading
+import time
+import zipfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-# Support the documented direct invocation from the repository root:
-# ``python tools/run_target_experiment.py ...``.
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -33,7 +35,7 @@ for _export_name in dir(_legacy):
 _LEGACY_PACKAGE_TARGET_MANIFEST = _legacy._package_target_manifest
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 
-RUNNER_VERSION = "1.7.0"
+RUNNER_VERSION = "1.8.0"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
 PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
@@ -72,7 +74,6 @@ def _collect_exact_evidence_classes(value: Any, result: set[str]) -> None:
 
 
 def _is_explicit_synthetic_control(target_manifest: Mapping[str, Any]) -> bool:
-    """Return true only when every declared evidence class is explicitly synthetic."""
     provenance_classes = set(target_manifest["provenance"]["evidence_classes"])
     exact_classes: set[str] = set()
     _collect_exact_evidence_classes(target_manifest, exact_classes)
@@ -95,10 +96,8 @@ def _require_non_synthetic_evidence_contract(
     emulator_binary_path: Path,
     emulator_binary_sha256: str,
 ) -> Mapping[str, Any] | None:
-    """Fail closed on provenance/oracle claims that synthetic controls do not establish."""
     if _is_explicit_synthetic_control(target_manifest):
         return None
-
     if scenario["oracle"]["kind"] != "process-exit":
         raise TargetRunError(
             "non-synthetic file-sha256 oracles require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports file oracles only for synthetic controls"
@@ -107,7 +106,6 @@ def _require_non_synthetic_evidence_contract(
         raise TargetRunError(
             "non-synthetic declared artifacts require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports declared artifacts only for synthetic controls"
         )
-
     pinned = _pinned_build_for_host()
     actual_sha256, actual_size = _legacy._sha256_file(
         emulator_binary_path, label="staged emulator binary"
@@ -126,7 +124,6 @@ def _require_non_synthetic_evidence_contract(
 
 
 def _package_target_manifest(manifest: Mapping[str, Any]) -> bytes:
-    """Preserve transfer-safe DLC identity instead of projecting every DLC set to empty."""
     packaged = _legacy.loads_strict(_LEGACY_PACKAGE_TARGET_MANIFEST(manifest).decode("utf-8"))
     packaged_dlc: dict[str, Any] = {}
     for identifier, component in sorted(manifest["content"]["dlc"].items()):
@@ -154,12 +151,7 @@ def _require_regular_unlinked_file(path: Path, label: str) -> os.stat_result:
     return info
 
 
-def _resolve_command_binary(
-    command: Mapping[str, Any],
-    working_directory: Path,
-    emulator_binary_path: Path,
-) -> Path:
-    """Bind the operator command to the exact source path before staging."""
+def _resolve_command_binary(command: Mapping[str, Any], working_directory: Path, emulator_binary_path: Path) -> Path:
     candidate = Path(command["argv"][0])
     if not candidate.is_absolute():
         candidate = working_directory / candidate
@@ -175,12 +167,7 @@ def _resolve_command_binary(
     return emulator_resolved
 
 
-def _stage_emulator_binary(
-    source: Path,
-    destination: Path,
-    source_info: os.stat_result,
-) -> Path:
-    """Copy the executable to a private path; only the staged bytes are verified/launched."""
+def _stage_emulator_binary(source: Path, destination: Path, source_info: os.stat_result) -> Path:
     try:
         shutil.copyfile(source, destination, follow_symlinks=False)
         os.chmod(destination, stat.S_IMODE(source_info.st_mode) | stat.S_IXUSR)
@@ -195,6 +182,221 @@ def _write_snapshot(path: Path, payload: bytes, label: str) -> None:
         path.write_bytes(payload)
     except OSError as error:
         raise TargetRunError(f"unable to stage {label} snapshot") from error
+
+
+def _sha256_fd(fd: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    size = 0
+    duplicate = os.dup(fd)
+    try:
+        os.lseek(duplicate, 0, os.SEEK_SET)
+        while True:
+            chunk = os.read(duplicate, 1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            digest.update(chunk)
+    finally:
+        os.close(duplicate)
+    return f"sha256:{digest.hexdigest()}", size
+
+
+class _ExecutableLease:
+    """Hold identity-stable executable bytes through the entire launch window."""
+
+    def __init__(self, path: Path, pinned: Mapping[str, Any], supplied_sha256: str) -> None:
+        self.path = path
+        self.pass_fds: tuple[int, ...] = ()
+        self.execution_path = path
+        self._fd: int | None = None
+        self._windows_handle: Any = None
+        if sys.platform.startswith("linux"):
+            self._fd = os.open(path, os.O_RDONLY)
+            actual_sha256, actual_size = _sha256_fd(self._fd)
+            self.execution_path = Path(f"/proc/self/fd/{self._fd}")
+            self.pass_fds = (self._fd,)
+        elif os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.CreateFileW.argtypes = [
+                wintypes.LPCWSTR,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.HANDLE,
+            ]
+            kernel32.CreateFileW.restype = wintypes.HANDLE
+            handle = kernel32.CreateFileW(
+                str(path),
+                0x80000000,
+                0x00000001,
+                None,
+                3,
+                0x00000080,
+                None,
+            )
+            invalid = wintypes.HANDLE(-1).value
+            if handle in (None, 0, invalid):
+                raise TargetRunError("unable to lock staged emulator binary against replacement")
+            self._windows_handle = (kernel32, handle)
+            actual_sha256, actual_size = _legacy._sha256_file(path, label="locked staged emulator binary")
+        else:
+            raise TargetRunError("immutable executable lease is unsupported on this host")
+
+        expected = pinned["binary_sha256"]
+        if actual_sha256 != expected or actual_size != pinned["binary_size_bytes"] or supplied_sha256 != expected:
+            self.close()
+            raise TargetRunError("staged executable lease does not match the pinned upstream build artifact")
+
+    def close(self) -> None:
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+        if self._windows_handle is not None:
+            kernel32, handle = self._windows_handle
+            kernel32.CloseHandle(handle)
+            self._windows_handle = None
+
+    def __enter__(self) -> "_ExecutableLease":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
+
+
+def _execute_command_with_pass_fds(
+    argv: Sequence[str],
+    workdir: Path,
+    timeout_seconds: int,
+    *,
+    require_detached_containment: bool = False,
+    pass_fds: Sequence[int] = (),
+) -> dict[str, Any]:
+    """v3 execution semantics plus inherited verified executable descriptors on Linux."""
+    started = time.monotonic()
+    process: subprocess.Popen[Any] | None = None
+    process_group_id: int | None = None
+    windows_job: Any = None
+    linux_subreaper: Any = None
+    linux_baseline_children: set[int] = set()
+    launch_failed = False
+    timed_out = False
+    stdout_count = [0, False]
+    stderr_count = [0, False]
+    output_threads: list[threading.Thread] = []
+    try:
+        if require_detached_containment and os.name == "posix" and not sys.platform.startswith("linux"):
+            raise TargetRunError("bounded target execution on POSIX requires Linux subreaper containment")
+        if os.name not in {"posix", "nt"}:
+            raise TargetRunError(f"unsupported process-tree control platform: {os.name}")
+        kwargs: dict[str, Any] = {
+            "cwd": workdir,
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "shell": False,
+            "close_fds": True,
+        }
+        if os.name == "posix":
+            kwargs["pass_fds"] = tuple(pass_fds)
+            if require_detached_containment:
+                try:
+                    linux_subreaper = _legacy._LinuxSubreaper()
+                    linux_baseline_children = _legacy._linux_direct_child_pids()
+                except OSError as error:
+                    raise TargetRunError("unable to establish Linux subreaper containment") from error
+            kwargs["start_new_session"] = True
+        else:
+            if pass_fds:
+                raise TargetRunError("descriptor-based executable launch is unsupported on Windows")
+            windows_job = _legacy._WindowsJob()
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | _legacy._WindowsJob.CREATE_SUSPENDED
+        try:
+            process = subprocess.Popen(list(argv), **kwargs)
+        except OSError:
+            launch_failed = True
+        if process is not None:
+            if os.name == "posix":
+                process_group_id = process.pid
+            elif windows_job is not None:
+                try:
+                    windows_job.assign_and_resume(process)
+                except OSError as error:
+                    raise TargetRunError("unable to contain target process in a Windows Job Object") from error
+            for stream, count in ((process.stdout, stdout_count), (process.stderr, stderr_count)):
+                if stream is not None:
+                    thread = threading.Thread(target=_legacy._drain_process_output, args=(stream, count), daemon=True)
+                    thread.start()
+                    output_threads.append(thread)
+            try:
+                process.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+    finally:
+        active_exception = sys.exc_info()[0] is not None
+        cleanup_error: BaseException | None = None
+        if process is not None:
+            try:
+                _legacy._terminate_process(process, process_group_id=process_group_id, windows_job=windows_job)
+            except BaseException as error:
+                cleanup_error = error
+        if linux_subreaper is not None:
+            try:
+                _legacy._terminate_linux_adopted_children(linux_baseline_children)
+            except BaseException as error:
+                if cleanup_error is None:
+                    cleanup_error = error
+        elapsed = round(max(0.0, time.monotonic() - started), 3)
+        for thread in output_threads:
+            thread.join(timeout=2)
+        if process is not None:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except (OSError, ValueError):
+                        pass
+        if windows_job is not None:
+            windows_job.close()
+        if linux_subreaper is not None:
+            linux_subreaper.close()
+        if cleanup_error is not None and not active_exception:
+            raise cleanup_error
+    return {
+        "exit_code": None if process is None else process.returncode,
+        "launch_failed": launch_failed,
+        "timed_out": timed_out,
+        "elapsed_seconds": elapsed,
+        "stdout_bytes": stdout_count[0],
+        "stderr_bytes": stderr_count[0],
+        "stdout_truncated": stdout_count[1],
+        "stderr_truncated": stderr_count[1],
+        "process_tree_control": "posix-process-group" if os.name == "posix" else "windows-job-object",
+    }
+
+
+def _restore_original_command_identity(
+    output_path: Path,
+    run_manifest: dict[str, Any],
+    original_command_raw: bytes,
+) -> dict[str, Any]:
+    """Bind the detached record to the stable operator command, not the staging pathname."""
+    run_manifest["execution"]["command_argv_sha256"] = _legacy._sha256_bytes(original_command_raw)
+    _legacy.validate_run_manifest(run_manifest)
+    if not output_path.exists():
+        return run_manifest
+    try:
+        with zipfile.ZipFile(output_path, "r") as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+    except (OSError, zipfile.BadZipFile) as error:
+        raise TargetRunError("unable to reopen run artifact for stable command identity") from error
+    entries["run-manifest.json"] = _legacy._json_bytes(run_manifest)
+    _legacy._write_zip_atomic(output_path, entries)
+    return run_manifest
 
 
 def run_experiment(
@@ -214,88 +416,93 @@ def run_experiment(
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Apply BB-ENV1 evidence gates, then delegate one immutable snapshot to the v3 engine."""
     target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
-    scenario_raw, scenario = _legacy._load_json_file(
-        scenario_path, maximum=_legacy.MAX_INPUT_BYTES, label="scenario"
-    )
+    scenario_raw, scenario = _legacy._load_json_file(scenario_path, maximum=_legacy.MAX_INPUT_BYTES, label="scenario")
     if not isinstance(scenario, Mapping):
         raise TargetRunError("scenario must be a JSON object")
     _legacy.validate_scenario(scenario)
-
-    command_raw, command = _legacy._load_json_file(
-        command_path, maximum=_legacy.MAX_COMMAND_BYTES, label="command file"
-    )
+    command_raw, command = _legacy._load_json_file(command_path, maximum=_legacy.MAX_COMMAND_BYTES, label="command file")
     if not isinstance(command, Mapping):
         raise TargetRunError("command must be a JSON object")
     _legacy.validate_command(command)
 
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
-    working_directory_resolved = _legacy._resolve_directory(
-        working_directory, "working_directory"
-    )
+    working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
 
     with tempfile.TemporaryDirectory(prefix="bb-target-run-snapshot-") as directory:
         snapshot_root = Path(directory)
         staged_target = snapshot_root / "target-manifest.json"
         staged_scenario = snapshot_root / "scenario.json"
+        staged_command_path = snapshot_root / "command.json"
         _write_snapshot(staged_target, target_raw, "target manifest")
         _write_snapshot(staged_scenario, scenario_raw, "scenario")
-
-        staged_command_path = snapshot_root / "command.json"
         _write_snapshot(staged_command_path, command_raw, "command")
+
         staged_emulator_path = emulator_binary_path
+        lease: _ExecutableLease | None = None
+        original_execute_command = _legacy._execute_command
+        try:
+            if not synthetic_control:
+                original_binary = _resolve_command_binary(command, working_directory_resolved, emulator_binary_path)
+                source_info = _require_regular_unlinked_file(original_binary, "emulator binary")
+                pinned = _pinned_build_for_host()
+                staged_emulator_path = snapshot_root / str(pinned["binary_name"])
+                _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
+                _require_non_synthetic_evidence_contract(
+                    target_manifest, scenario, staged_emulator_path, emulator_binary_sha256
+                )
+                lease = _ExecutableLease(
+                    staged_emulator_path,
+                    pinned,
+                    f"sha256:{emulator_binary_sha256}",
+                )
+                staged_command = dict(command)
+                staged_argv = list(command["argv"])
+                staged_argv[0] = str(lease.execution_path)
+                staged_command["argv"] = staged_argv
+                _write_snapshot(staged_command_path, _legacy._json_bytes(staged_command), "command")
+                if lease.pass_fds:
+                    def leased_execute(
+                        argv: Sequence[str],
+                        workdir: Path,
+                        timeout_seconds: int,
+                        *,
+                        require_detached_containment: bool = False,
+                    ) -> dict[str, Any]:
+                        return _execute_command_with_pass_fds(
+                            argv,
+                            workdir,
+                            timeout_seconds,
+                            require_detached_containment=require_detached_containment,
+                            pass_fds=lease.pass_fds if lease is not None else (),
+                        )
+                    _legacy._execute_command = leased_execute
+            else:
+                _require_non_synthetic_evidence_contract(
+                    target_manifest, scenario, emulator_binary_path, emulator_binary_sha256
+                )
 
-        if not synthetic_control:
-            original_binary = _resolve_command_binary(
-                command,
-                working_directory_resolved,
-                emulator_binary_path,
+            manifest = _LEGACY_RUN_EXPERIMENT(
+                target_manifest_path=staged_target,
+                scenario_path=staged_scenario,
+                command_path=staged_command_path,
+                emulator_binary_path=staged_emulator_path,
+                emulator_binary_sha256=emulator_binary_sha256,
+                source_repository=source_repository,
+                source_commit=source_commit,
+                source_tree=source_tree,
+                patch_commits=patch_commits,
+                target_root=target_root,
+                working_directory=working_directory,
+                output_path=output_path,
+                graphics_backend=graphics_backend,
+                emulator_config_path=emulator_config_path,
             )
-            source_info = _require_regular_unlinked_file(original_binary, "emulator binary")
-            pinned = _pinned_build_for_host()
-            staged_emulator_path = snapshot_root / str(pinned["binary_name"])
-            _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
-            _require_non_synthetic_evidence_contract(
-                target_manifest,
-                scenario,
-                staged_emulator_path,
-                emulator_binary_sha256,
-            )
-
-            staged_command = dict(command)
-            staged_argv = list(command["argv"])
-            staged_argv[0] = str(staged_emulator_path)
-            staged_command["argv"] = staged_argv
-            _write_snapshot(
-                staged_command_path,
-                _legacy._json_bytes(staged_command),
-                "command",
-            )
-        else:
-            _require_non_synthetic_evidence_contract(
-                target_manifest,
-                scenario,
-                emulator_binary_path,
-                emulator_binary_sha256,
-            )
-
-        return _LEGACY_RUN_EXPERIMENT(
-            target_manifest_path=staged_target,
-            scenario_path=staged_scenario,
-            command_path=staged_command_path,
-            emulator_binary_path=staged_emulator_path,
-            emulator_binary_sha256=emulator_binary_sha256,
-            source_repository=source_repository,
-            source_commit=source_commit,
-            source_tree=source_tree,
-            patch_commits=patch_commits,
-            target_root=target_root,
-            working_directory=working_directory,
-            output_path=output_path,
-            graphics_backend=graphics_backend,
-            emulator_config_path=emulator_config_path,
-        )
+            return _restore_original_command_identity(output_path.resolve(), manifest, command_raw)
+        finally:
+            _legacy._execute_command = original_execute_command
+            if lease is not None:
+                lease.close()
 
 
 _legacy._package_target_manifest = _package_target_manifest

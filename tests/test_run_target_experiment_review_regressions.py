@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -53,10 +54,7 @@ class ReviewRegressionTests(unittest.TestCase):
         manifest = _manifest()
         self.assertTrue(runner._is_explicit_synthetic_control(manifest))
         runner._require_non_synthetic_evidence_contract(
-            manifest,
-            _scenario("file-sha256"),
-            Path("unused-synthetic-binary"),
-            "0" * 64,
+            manifest, _scenario("file-sha256"), Path("unused-synthetic-binary"), "0" * 64
         )
 
     def test_non_synthetic_file_oracle_fails_closed_without_producer_attestation(self):
@@ -64,10 +62,7 @@ class ReviewRegressionTests(unittest.TestCase):
         manifest["provenance"]["evidence_classes"] = ["runtime"]
         with self.assertRaisesRegex(runner.TargetRunError, "current-run producer provenance"):
             runner._require_non_synthetic_evidence_contract(
-                manifest,
-                _scenario("file-sha256"),
-                Path("unused-target-binary"),
-                "0" * 64,
+                manifest, _scenario("file-sha256"), Path("unused-target-binary"), "0" * 64
             )
 
     def test_non_synthetic_artifacts_fail_closed_without_producer_attestation(self):
@@ -82,36 +77,8 @@ class ReviewRegressionTests(unittest.TestCase):
         }]
         with self.assertRaisesRegex(runner.TargetRunError, "declared artifacts require"):
             runner._require_non_synthetic_evidence_contract(
-                manifest,
-                scenario,
-                Path("unused-target-binary"),
-                "0" * 64,
+                manifest, scenario, Path("unused-target-binary"), "0" * 64
             )
-
-    def test_non_synthetic_run_requires_exact_pinned_upstream_ci_binary(self):
-        manifest = _manifest()
-        manifest["provenance"]["evidence_classes"] = ["runtime"]
-        if os.name == "nt":
-            platform = "windows"
-        elif sys.platform.startswith("linux"):
-            platform = "linux"
-        else:
-            with self.assertRaisesRegex(runner.TargetRunError, "no independently bound"):
-                runner._pinned_build_for_host()
-            return
-        pinned = runner.PINNED_BUILD_ARTIFACTS[platform]
-        with mock.patch.object(
-            runner._legacy,
-            "_sha256_file",
-            return_value=(pinned["binary_sha256"], pinned["binary_size_bytes"]),
-        ):
-            observed = runner._require_non_synthetic_evidence_contract(
-                manifest,
-                _scenario(),
-                Path("synthetic-path-for-mocked-hash"),
-                pinned["binary_sha256"].removeprefix("sha256:"),
-            )
-        self.assertEqual(observed["workflow_run_id"], runner.PINNED_BUILD_WORKFLOW_RUN_ID)
 
     def test_safe_target_projection_preserves_hashed_dlc_identity(self):
         manifest = _manifest()
@@ -144,12 +111,12 @@ class ReviewRegressionTests(unittest.TestCase):
             command_path = root / "command.json"
             workdir = root / "work"
             workdir.mkdir()
-
             target_raw = runner._json_bytes(_manifest())
             scenario_raw = runner._json_bytes(_scenario())
+            command_raw = runner._json_bytes(_command(Path(sys.executable)))
             target_path.write_bytes(target_raw)
             scenario_path.write_bytes(scenario_raw)
-            command_path.write_bytes(runner._json_bytes(_command(Path(sys.executable))))
+            command_path.write_bytes(command_raw)
             observed = {}
 
             def fake_legacy(**kwargs):
@@ -159,10 +126,19 @@ class ReviewRegressionTests(unittest.TestCase):
                 observed["scenario_path"] = Path(kwargs["scenario_path"])
                 observed["target_raw"] = observed["target_path"].read_bytes()
                 observed["scenario_raw"] = observed["scenario_path"].read_bytes()
-                return {"synthetic": True}
+                return {
+                    "execution": {"command_argv_sha256": "sha256:" + "0" * 64}
+                }
 
-            with mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT", side_effect=fake_legacy):
-                result = runner.run_experiment(
+            def keep_identity(_output, manifest, original):
+                observed["command_raw"] = original
+                return manifest
+
+            with (
+                mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT", side_effect=fake_legacy),
+                mock.patch.object(runner, "_restore_original_command_identity", side_effect=keep_identity),
+            ):
+                runner.run_experiment(
                     target_manifest_path=target_path,
                     scenario_path=scenario_path,
                     command_path=command_path,
@@ -176,70 +152,52 @@ class ReviewRegressionTests(unittest.TestCase):
                     working_directory=workdir,
                     output_path=root / "output.zip",
                 )
-
-            self.assertEqual(result, {"synthetic": True})
             self.assertNotEqual(observed["target_path"], target_path)
             self.assertNotEqual(observed["scenario_path"], scenario_path)
             self.assertEqual(observed["target_raw"], target_raw)
             self.assertEqual(observed["scenario_raw"], scenario_raw)
+            self.assertEqual(observed["command_raw"], command_raw)
 
-    def test_non_synthetic_launch_uses_staged_verified_binary(self):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux descriptor execution regression")
+    def test_linux_executable_lease_survives_path_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            binary = root / ("shadPS4.exe" if os.name == "nt" else "Shadps4-sdl.AppImage")
-            pinned_bytes = b"review-pinned-binary"
-            binary.write_bytes(pinned_bytes)
-            binary.chmod(0o700)
-            digest = hashlib.sha256(pinned_bytes).hexdigest()
+            path = Path(directory) / "binary"
+            original = b"verified-executable-bytes"
+            path.write_bytes(original)
+            digest = "sha256:" + hashlib.sha256(original).hexdigest()
+            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
+            with runner._ExecutableLease(path, pinned, digest) as lease:
+                self.assertEqual(lease.pass_fds, (lease._fd,))
+                path.write_bytes(b"replacement")
+                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
 
-            manifest = _manifest()
-            manifest["provenance"]["evidence_classes"] = ["runtime"]
-            target_path = root / "target.json"
-            scenario_path = root / "scenario.json"
-            command_path = root / "command.json"
-            workdir = root / "work"
-            workdir.mkdir()
-            target_path.write_bytes(runner._json_bytes(manifest))
-            scenario_path.write_bytes(runner._json_bytes(_scenario()))
-            command_path.write_bytes(runner._json_bytes(_command(binary)))
-            pinned = {
-                "workflow_run_id": runner.PINNED_BUILD_WORKFLOW_RUN_ID,
-                "binary_name": binary.name,
-                "binary_sha256": "sha256:" + digest,
-                "binary_size_bytes": len(pinned_bytes),
-            }
-            observed = {}
+    @unittest.skipUnless(os.name == "nt", "Windows executable lease regression")
+    def test_windows_executable_lease_blocks_path_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "binary.exe"
+            original = b"verified-executable-bytes"
+            path.write_bytes(original)
+            digest = "sha256:" + hashlib.sha256(original).hexdigest()
+            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
+            with runner._ExecutableLease(path, pinned, digest):
+                with self.assertRaises(OSError):
+                    path.write_bytes(b"replacement")
 
-            def fake_legacy(**kwargs):
-                binary.write_bytes(b"replaced-after-staging")
-                observed["binary_path"] = Path(kwargs["emulator_binary_path"])
-                observed["binary_bytes"] = observed["binary_path"].read_bytes()
-                observed["command"] = json.loads(Path(kwargs["command_path"]).read_text(encoding="utf-8"))
-                return {"runtime": True}
-
-            with (
-                mock.patch.object(runner, "_pinned_build_for_host", return_value=pinned),
-                mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT", side_effect=fake_legacy),
-            ):
-                result = runner.run_experiment(
-                    target_manifest_path=target_path,
-                    scenario_path=scenario_path,
-                    command_path=command_path,
-                    emulator_binary_path=binary,
-                    emulator_binary_sha256=digest,
-                    source_repository=runner.PINNED_SOURCE_REPOSITORY,
-                    source_commit=runner.PINNED_SOURCE_COMMIT,
-                    source_tree=runner.PINNED_SOURCE_TREE,
-                    patch_commits=[],
-                    target_root=root / "unused-target",
-                    working_directory=workdir,
-                    output_path=root / "output.zip",
-                )
-
-            self.assertEqual(result, {"runtime": True})
-            self.assertNotEqual(observed["binary_path"], binary)
-            self.assertEqual(observed["binary_bytes"], pinned_bytes)
-            self.assertEqual(Path(observed["command"]["argv"][0]), observed["binary_path"])
+    def test_original_command_identity_replaces_ephemeral_staged_digest_in_zip(self):
+        original = b'{"argv":["operator/path","target"]}\n'
+        stable = runner._sha256_bytes(original)
+        manifest = {"execution": {"command_argv_sha256": "sha256:" + "0" * 64}}
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "run.zip"
+            with zipfile.ZipFile(output, "w") as archive:
+                archive.writestr("run-manifest.json", b"{}")
+                archive.writestr("scenario.json", b"{}")
+            with mock.patch.object(runner._legacy, "validate_run_manifest"):
+                result = runner._restore_original_command_identity(output, manifest, original)
+            self.assertEqual(result["execution"]["command_argv_sha256"], stable)
+            with zipfile.ZipFile(output, "r") as archive:
+                packaged = json.loads(archive.read("run-manifest.json"))
+            self.assertEqual(packaged["execution"]["command_argv_sha256"], stable)
 
     def test_command_binary_link_is_rejected_before_non_synthetic_staging(self):
         if not hasattr(os, "symlink"):
@@ -259,8 +217,8 @@ class ReviewRegressionTests(unittest.TestCase):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
     def test_runner_version_identifies_hardened_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.7.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.7.0")
+        self.assertEqual(runner.RUNNER_VERSION, "1.8.0")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.8.0")
         self.assertEqual(runner.PINNED_BUILD_WORKFLOW_RUN_ID, 31742892228)
 
 

@@ -14,11 +14,9 @@ The repository contains only synthetic target material. The proprietary target t
 python tools/run_target_experiment.py run ...
 ```
 
-Before delegation to the compatibility engine, the supported entrypoint loads and validates the target manifest, scenario, and command exactly once. The exact target-manifest and scenario bytes are copied to a private per-run snapshot directory so later replacement of the operator input paths cannot change the evidence decision or the bytes that the engine executes/packages. The command bytes are snapshotted as well; for non-synthetic execution its `argv[0]` is rewritten only to the private staged executable described below.
+Before delegation, the supported entrypoint loads and validates the target manifest, scenario, and command exactly once. The exact target-manifest, scenario, and command bytes are copied into a private per-run snapshot so later replacement of operator input paths cannot change the evidence decision or the bytes consumed by the engine.
 
-The runner still requires the BB-BL2 target identity, bounded scenario, direct-emulator command schema, pinned BB-BL1 repository/commit/tree, no patch commits, no explicit emulator-config path, a target root, a separate writable working directory, and an output outside both trees.
-
-## Exact executable provenance for non-synthetic target runs
+## Exact executable provenance and hash-to-exec binding
 
 A caller-provided digest does not prove that executable bytes came from the declared source. Non-synthetic target execution therefore accepts only the independently observed upstream `shadps4-emu/shadPS4` **Build and Release** workflow run `31742892228` for BB-BL1 commit `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` / tree `e6026c14092b01702d4e49a5ac6c2f779a072dfe`.
 
@@ -27,11 +25,20 @@ Accepted artifacts:
 - Windows SDL: artifact `9198403207`, `shadps4-win64-sdl-2026-08-13-28c84fb`; archive SHA-256 `bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65`; contained `shadPS4.exe` SHA-256 `4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f`, size `67641344`.
 - Linux SDL: artifact `9198177755`, `shadps4-linux-sdl-2026-08-13-28c84fb`; archive SHA-256 `127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789`; contained `Shadps4-sdl.AppImage` SHA-256 `7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`, size `35179000`.
 
-For a non-synthetic run, both the supplied emulator path and the command `argv[0]` must be the same regular non-link file. The runner copies those bytes to a private per-run executable path, verifies the **staged** bytes against the pinned artifact digest/size, rewrites the snapshotted command to execute that staged path, and launches only the staged file. Replacement of the original executable path after staging therefore cannot change the bytes that passed provenance verification and are subsequently executed.
+For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes to a private per-run executable path and then establishes an execution lease that remains live through process launch and teardown:
 
-The existing v3 run record keeps exact source identity and actual executable digest/size. Producer version `bb-target-runner/1.7.0` identifies the contract that combines pinned upstream build identity, immutable executable staging, and single-snapshot gated inputs.
+- on Linux it opens and verifies the staged file descriptor, executes through `/proc/self/fd/<fd>`, and explicitly inherits that descriptor into the child; pathname replacement after verification cannot change the inode that is executed;
+- on Windows it opens the staged executable with a read-only handle that does not share write/delete access, verifies the locked path, and keeps the handle open through launch; replacement or overwrite is denied during the hash-to-exec window.
+
+The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.8.0` identifies this descriptor/handle-bound execution contract.
 
 Fully synthetic controls are exempt from the upstream executable pin. They remain capability evidence only.
+
+## Stable operator command identity
+
+Non-synthetic execution necessarily rewrites the snapshotted `argv[0]` to the leased execution endpoint. That endpoint is an implementation detail and may include a temporary path or file-descriptor number, so it is not a stable experiment identity.
+
+`execution.command_argv_sha256` therefore identifies the exact **operator-supplied command file bytes loaded before staging**, not the rewritten temporary command. After the compatibility engine emits the safe ZIP, the supported entrypoint replaces the ephemeral command digest in `run-manifest.json` with the digest of the original command snapshot, revalidates the run record, and atomically rewrites the ZIP. Identical operator command inputs therefore retain the same detached identity even when staging locations differ.
 
 ## Process containment and artifact boundary
 
@@ -50,7 +57,7 @@ The checked-in synthetic scenario remains a **synthetic capability control**. Sy
 For a non-synthetic BB-ENV1 run:
 
 - `file-sha256` is rejected before execution because matching bytes do not independently identify the current-run producer;
-- any declared scenario artifact is also rejected before execution for the same reason: a post-preflight file can be created or replayed by an unrelated process, and the v3 artifact record does not yet attest the producer/current-run relationship;
+- any declared scenario artifact is also rejected before execution for the same reason;
 - `process-exit` is therefore the only currently supported oracle, and it proves bounded execution/termination only, not a title-visible checkpoint or correctness state.
 
 A future versioned producer-attestation contract is required before non-synthetic file/capture outputs can become semantic correctness evidence.
@@ -93,15 +100,6 @@ The next target-machine execution can validate the bounded execution route with 
 
 ## Validation in this PR
 
-The target-run workflow executes the full contract suites, including review regressions for:
-
-- direct script invocation from the repository root;
-- single-snapshot target/scenario/command input handling;
-- immutable staged execution of the exact verified non-synthetic emulator bytes;
-- rejection of command-binary links/reparse aliases;
-- rejection of non-synthetic file oracles and declared artifacts without producer attestation;
-- pinned upstream executable identity;
-- hashed DLC identity;
-- runner version `1.7.0`.
+The target-run workflow executes the full contract suites, including review regressions for direct script invocation, immutable input snapshots, Linux descriptor-bound and Windows handle-locked executable leases, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.8.0`.
 
 These are synthetic/contract validations only; they do not establish Bloodborne runtime behavior.
