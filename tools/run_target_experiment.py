@@ -8,6 +8,7 @@ preserving the published v3 run-record shape for detached consumers.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import shutil
@@ -35,7 +36,7 @@ for _export_name in dir(_legacy):
 _LEGACY_PACKAGE_TARGET_MANIFEST = _legacy._package_target_manifest
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 
-RUNNER_VERSION = "1.9.0"
+RUNNER_VERSION = "1.10.0"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
 PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
@@ -201,20 +202,39 @@ def _sha256_fd(fd: int) -> tuple[str, int]:
     return f"sha256:{digest.hexdigest()}", size
 
 
+def _create_linux_executable_memfd() -> int:
+    """Create an executable memfd, falling back only for kernels predating MFD_EXEC."""
+    memfd_create = getattr(os, "memfd_create", None)
+    if memfd_create is None:
+        raise TargetRunError("Linux executable sealing requires memfd_create")
+    base_flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(os, "MFD_ALLOW_SEALING", 0x0002)
+    exec_flag = getattr(os, "MFD_EXEC", 0x0010)
+    try:
+        return memfd_create("bb-shadps4-executable", flags=base_flags | exec_flag)
+    except OSError as error:
+        if error.errno in {errno.EACCES, errno.EPERM}:
+            raise TargetRunError(
+                "Linux host policy blocks executable memfds; vm.memfd_noexec=2 is incompatible with non-synthetic BB-ENV1 execution"
+            ) from error
+        if error.errno != errno.EINVAL:
+            raise TargetRunError("unable to create executable Linux memfd") from error
+    try:
+        return memfd_create("bb-shadps4-executable", flags=base_flags)
+    except OSError as error:
+        if error.errno in {errno.EACCES, errno.EPERM}:
+            raise TargetRunError(
+                "Linux host policy blocks executable memfds; vm.memfd_noexec policy is incompatible with non-synthetic BB-ENV1 execution"
+            ) from error
+        raise TargetRunError("unable to create Linux memfd on the legacy-kernel compatibility path") from error
+
+
 def _sealed_linux_executable(path: Path) -> int:
     """Copy an executable into a write-sealed anonymous file and return its fd."""
     try:
         import fcntl
     except ImportError as error:
         raise TargetRunError("Linux executable sealing requires fcntl") from error
-    memfd_create = getattr(os, "memfd_create", None)
-    if memfd_create is None:
-        raise TargetRunError("Linux executable sealing requires memfd_create")
-    flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(os, "MFD_ALLOW_SEALING", 0x0002)
-    try:
-        fd = memfd_create("bb-shadps4-executable", flags=flags)
-    except OSError as error:
-        raise TargetRunError("unable to create sealed Linux executable") from error
+    fd = _create_linux_executable_memfd()
     try:
         with path.open("rb", buffering=0) as source:
             while True:
@@ -227,7 +247,14 @@ def _sealed_linux_executable(path: Path) -> int:
                     if written <= 0:
                         raise OSError("short write while staging sealed executable")
                     view = view[written:]
-        os.fchmod(fd, 0o500)
+        try:
+            os.fchmod(fd, 0o500)
+        except OSError as error:
+            if error.errno in {errno.EACCES, errno.EPERM}:
+                raise TargetRunError(
+                    "Linux host policy prevents executable memfds; check vm.memfd_noexec before non-synthetic BB-ENV1 execution"
+                ) from error
+            raise
         seals = (
             fcntl.F_SEAL_WRITE
             | fcntl.F_SEAL_GROW
@@ -254,10 +281,7 @@ class _ExecutableLease:
         self._fd: int | None = None
         self._windows_handle: Any = None
         if sys.platform.startswith("linux"):
-            try:
-                self._fd = _sealed_linux_executable(path)
-            except OSError as error:
-                raise TargetRunError("unable to seal staged Linux emulator binary") from error
+            self._fd = _sealed_linux_executable(path)
             actual_sha256, actual_size = _sha256_fd(self._fd)
             self.execution_path = Path(f"/proc/self/fd/{self._fd}")
             self.pass_fds = (self._fd,)

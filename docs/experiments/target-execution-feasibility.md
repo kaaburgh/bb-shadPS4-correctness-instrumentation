@@ -8,7 +8,7 @@ The repository contains only synthetic target material. The proprietary target t
 
 ## Supported handoff entrypoint
 
-[`tools/run_target_experiment.py`](../../tools/run_target_experiment.py) is the supported one-shot entrypoint. `tools/run_target_experiment_v3.py` remains an internal compatibility engine behind it. The documented direct invocation from the repository root is supported and regression-tested:
+[`tools/run_target_experiment.py`](../../tools/run_target_experiment.py) is the only supported one-shot entrypoint. `tools/run_target_experiment_v3.py` remains an internal compatibility engine behind it; direct module/script execution of that engine fails closed before exposing its `run`/`validate` CLI. The supported direct invocation from the repository root is regression-tested:
 
 ```text
 python tools/run_target_experiment.py run ...
@@ -25,12 +25,12 @@ Accepted artifacts:
 - Windows SDL: artifact `9198403207`, `shadps4-win64-sdl-2026-08-13-28c84fb`; archive SHA-256 `bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65`; contained `shadPS4.exe` SHA-256 `4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f`, size `67641344`.
 - Linux SDL: artifact `9198177755`, `shadps4-linux-sdl-2026-08-13-28c84fb`; archive SHA-256 `127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789`; contained `Shadps4-sdl.AppImage` SHA-256 `7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`, size `35179000`.
 
-For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes to a private per-run executable path and then establishes an execution lease that remains live through process launch and teardown:
+For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes into private per-run staging and then establishes an execution lease that remains live through process launch and teardown:
 
-- on Linux it opens and verifies the staged file descriptor, executes through `/proc/self/fd/<fd>`, and explicitly inherits that descriptor into the child; pathname replacement after verification cannot change the inode that is executed;
+- on Linux it copies the staged bytes into an anonymous `memfd`, requests executable memfd semantics (`MFD_EXEC` where supported), applies write/grow/shrink/seal locks, verifies the sealed bytes, and executes through `/proc/self/fd/<fd>` with that descriptor explicitly inherited. Atomic pathname replacement and same-inode writes to the staged pathname therefore cannot change the bytes executed after verification. Kernels predating `MFD_EXEC` use the legacy flag set only when the new flag is rejected as unknown; a host policy that forbids executable memfds (notably `vm.memfd_noexec=2`) is an explicit capability failure rather than a silent provenance downgrade;
 - on Windows it opens the staged executable with a read-only handle that does not share write/delete access, verifies the locked path, and keeps the handle open through launch; replacement or overwrite is denied during the hash-to-exec window.
 
-The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.8.0` identifies this descriptor/handle-bound execution contract.
+The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.10.0` identifies the sealed-memfd / locked-handle execution contract and the fail-closed compatibility-engine boundary.
 
 Fully synthetic controls are exempt from the upstream executable pin. They remain capability evidence only.
 
@@ -100,6 +100,6 @@ The next target-machine execution can validate the bounded execution route with 
 
 ## Validation in this PR
 
-The target-run workflow executes the full contract suites, including review regressions for direct script invocation, immutable input snapshots, Linux descriptor-bound and Windows handle-locked executable leases, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.8.0`.
+The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, Linux sealed-memfd and Windows handle-locked executable leases, executable-memfd policy handling, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.10.0`.
 
 These are synthetic/contract validations only; they do not establish Bloodborne runtime behavior.

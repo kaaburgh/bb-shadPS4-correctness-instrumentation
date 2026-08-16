@@ -1,3 +1,4 @@
+import errno
 import hashlib
 import json
 import os
@@ -103,6 +104,26 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("usage:", completed.stdout.lower())
 
+    def test_compatibility_engine_direct_cli_fails_closed(self):
+        invocations = (
+            [sys.executable, "-m", "tools.run_target_experiment_v3", "--help"],
+            [sys.executable, "tools/run_target_experiment_v3.py", "--help"],
+        )
+        for argv in invocations:
+            with self.subTest(argv=argv):
+                completed = subprocess.run(
+                    argv,
+                    cwd=ROOT,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("internal compatibility engine", completed.stderr)
+                self.assertNotIn("{run,validate}", completed.stdout + completed.stderr)
+
     def test_gated_target_and_scenario_use_single_loaded_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -189,6 +210,30 @@ class ReviewRegressionTests(unittest.TestCase):
                     Path(lease.execution_path).write_bytes(b"attempted-mutation")
                 self.assertEqual(Path(lease.execution_path).read_bytes(), original)
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux memfd policy regression")
+    def test_linux_memfd_requests_exec_and_falls_back_only_for_older_kernel(self):
+        fake_fd = 123456
+        with mock.patch.object(
+            runner.os,
+            "memfd_create",
+            side_effect=[OSError(errno.EINVAL, "unknown MFD_EXEC"), fake_fd],
+        ) as create:
+            self.assertEqual(runner._create_linux_executable_memfd(), fake_fd)
+        first_flags = create.call_args_list[0].kwargs["flags"]
+        second_flags = create.call_args_list[1].kwargs["flags"]
+        self.assertTrue(first_flags & 0x0010)
+        self.assertFalse(second_flags & 0x0010)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux memfd policy regression")
+    def test_linux_memfd_reports_noexec_policy_explicitly(self):
+        with mock.patch.object(
+            runner.os,
+            "memfd_create",
+            side_effect=OSError(errno.EACCES, "memfd execution denied"),
+        ):
+            with self.assertRaisesRegex(runner.TargetRunError, "vm.memfd_noexec=2"):
+                runner._create_linux_executable_memfd()
+
     @unittest.skipUnless(os.name == "nt", "Windows executable lease regression")
     def test_windows_executable_lease_blocks_path_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -235,8 +280,8 @@ class ReviewRegressionTests(unittest.TestCase):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
     def test_runner_version_identifies_hardened_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.9.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.9.0")
+        self.assertEqual(runner.RUNNER_VERSION, "1.10.0")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.10.0")
         self.assertEqual(runner.PINNED_BUILD_WORKFLOW_RUN_ID, 31742892228)
 
 
