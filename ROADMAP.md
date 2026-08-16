@@ -89,11 +89,11 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL5 — Build one-shot baseline capture workflow
-- **Status / priority / execution:** Blocked / Critical / CLOUD RESEARCH
+- **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
 - **Depends on:** BB-BL1, BB-BL2, BB-BL3
 - **Question:** Как одним запуском собирать comparable FPS/frametime/RAM/VRAM/shader-compilation metadata и provenance?
-- **Next experiment / information gain:** Инвентаризировать telemetry/signals pinned baseline; сделать bounded collector/packer и явно отмечать unavailable metrics.
-- **Acceptance / artifacts:** `tools/` + `docs/experiments/baseline-capture.md`; one command emits safe artifact; overhead measurable.
+- **Result / evidence:** Issue #21 inventories the published BB-ENV1 target-run v3 contract: bounded run wall time is available with exact manifest provenance, while FPS, frametime, RAM, VRAM and shader-compilation metrics are not exposed by that contract and therefore remain explicitly `unavailable`. The stdlib-only post-run packer binds output to the exact safe target-run ZIP and records its own processing overhead without observing or automating the target process. Evidence: `static` + `synthetic`; no Bloodborne runtime metric availability is claimed beyond the published run contract.
+- **Acceptance / artifacts:** `tools/collect_benchmark_metrics.py`, `schemas/benchmark-metrics.schema.json`, `tests/test_collect_benchmark_metrics.py`, and `docs/experiments/baseline-capture.md` define the one-command safe metrics artifact, exact input provenance, explicit unavailable-state semantics and measurable packer overhead.
 - **Scope:** Medium
 
 ### BB-BL6 — Capture reproducible baseline dataset
