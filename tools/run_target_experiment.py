@@ -35,7 +35,7 @@ for _export_name in dir(_legacy):
 _LEGACY_PACKAGE_TARGET_MANIFEST = _legacy._package_target_manifest
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 
-RUNNER_VERSION = "1.8.0"
+RUNNER_VERSION = "1.9.0"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
 PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
@@ -201,6 +201,49 @@ def _sha256_fd(fd: int) -> tuple[str, int]:
     return f"sha256:{digest.hexdigest()}", size
 
 
+def _sealed_linux_executable(path: Path) -> int:
+    """Copy an executable into a write-sealed anonymous file and return its fd."""
+    try:
+        import fcntl
+    except ImportError as error:
+        raise TargetRunError("Linux executable sealing requires fcntl") from error
+    memfd_create = getattr(os, "memfd_create", None)
+    if memfd_create is None:
+        raise TargetRunError("Linux executable sealing requires memfd_create")
+    flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(os, "MFD_ALLOW_SEALING", 0x0002)
+    try:
+        fd = memfd_create("bb-shadps4-executable", flags=flags)
+    except OSError as error:
+        raise TargetRunError("unable to create sealed Linux executable") from error
+    try:
+        with path.open("rb", buffering=0) as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(fd, view)
+                    if written <= 0:
+                        raise OSError("short write while staging sealed executable")
+                    view = view[written:]
+        os.fchmod(fd, 0o500)
+        seals = (
+            fcntl.F_SEAL_WRITE
+            | fcntl.F_SEAL_GROW
+            | fcntl.F_SEAL_SHRINK
+            | fcntl.F_SEAL_SEAL
+        )
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, seals)
+        applied = fcntl.fcntl(fd, fcntl.F_GET_SEALS)
+        if applied & seals != seals:
+            raise TargetRunError("Linux executable memfd did not retain all required seals")
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 class _ExecutableLease:
     """Hold identity-stable executable bytes through the entire launch window."""
 
@@ -211,7 +254,10 @@ class _ExecutableLease:
         self._fd: int | None = None
         self._windows_handle: Any = None
         if sys.platform.startswith("linux"):
-            self._fd = os.open(path, os.O_RDONLY)
+            try:
+                self._fd = _sealed_linux_executable(path)
+            except OSError as error:
+                raise TargetRunError("unable to seal staged Linux emulator binary") from error
             actual_sha256, actual_size = _sha256_fd(self._fd)
             self.execution_path = Path(f"/proc/self/fd/{self._fd}")
             self.pass_fds = (self._fd,)

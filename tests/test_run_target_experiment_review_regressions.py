@@ -172,6 +172,23 @@ class ReviewRegressionTests(unittest.TestCase):
                 self.assertEqual(Path(lease.execution_path).read_bytes(), original)
                 self.assertEqual(path.read_bytes(), b"replacement")
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux sealed executable regression")
+    def test_linux_executable_lease_is_immune_to_in_place_staged_file_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "binary"
+            original = b"verified-executable-bytes"
+            replacement = b"same-inode-replacement"
+            path.write_bytes(original)
+            digest = "sha256:" + hashlib.sha256(original).hexdigest()
+            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
+            with runner._ExecutableLease(path, pinned, digest) as lease:
+                path.write_bytes(replacement)
+                self.assertEqual(path.read_bytes(), replacement)
+                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
+                with self.assertRaises(OSError):
+                    Path(lease.execution_path).write_bytes(b"attempted-mutation")
+                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
+
     @unittest.skipUnless(os.name == "nt", "Windows executable lease regression")
     def test_windows_executable_lease_blocks_path_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -218,8 +235,8 @@ class ReviewRegressionTests(unittest.TestCase):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
     def test_runner_version_identifies_hardened_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.8.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.8.0")
+        self.assertEqual(runner.RUNNER_VERSION, "1.9.0")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.9.0")
         self.assertEqual(runner.PINNED_BUILD_WORKFLOW_RUN_ID, 31742892228)
 
 
