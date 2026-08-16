@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kaaburgh/bb-shadPS4-correctness-instrumentation/main/schemas/benchmark-metrics.schema.json",
+  "title": "Bloodborne/shadPS4 baseline benchmark metrics",
+  "description": "Safe derived metric availability/provenance record for one bounded target-run artifact.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_kind", "schema_version", "producer", "input", "capture", "metrics"],
+  "properties": {
+    "manifest_kind": {"const": "bb-benchmark-metrics"},
+    "schema_version": {"const": 1},
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "tools/collect_benchmark_metrics.py"},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_run_sha256", "target_run_size_bytes", "target_run_manifest_kind", "target_run_schema_version"],
+      "properties": {
+        "target_run_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "target_run_size_bytes": {"type": "integer", "minimum": 1, "maximum": 33554432},
+        "target_run_manifest_kind": {"const": "bb-target-run"},
+        "target_run_schema_version": {"const": 3}
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collector_overhead_ms", "target_process_observed", "target_process_automated"],
+      "properties": {
+        "collector_overhead_ms": {"type": "number", "minimum": 0},
+        "target_process_observed": {"const": false},
+        "target_process_automated": {"const": false}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fps", "frametime_ms", "ram_bytes", "vram_bytes", "shader_compilations", "run_wall_time_seconds"],
+      "properties": {
+        "fps": {"$ref": "#/$defs/metric"},
+        "frametime_ms": {"$ref": "#/$defs/metric"},
+        "ram_bytes": {"$ref": "#/$defs/metric"},
+        "vram_bytes": {"$ref": "#/$defs/metric"},
+        "shader_compilations": {"$ref": "#/$defs/metric"},
+        "run_wall_time_seconds": {"$ref": "#/$defs/metric"}
+      }
+    }
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "unit", "source", "reason"],
+      "properties": {
+        "status": {"enum": ["available", "unavailable"]},
+        "value": {"type": ["number", "integer", "null"]},
+        "unit": {"type": ["string", "null"], "maxLength": 32},
+        "source": {"type": ["string", "null"], "maxLength": 256},
+        "reason": {"type": ["string", "null"], "maxLength": 256}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "available"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "value": {"type": ["number", "integer"]},
+              "unit": {"type": "string", "minLength": 1},
+              "source": {"type": "string", "minLength": 1},
+              "reason": {"type": "null"}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "unavailable"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "value": {"type": "null"},
+              "unit": {"type": "null"},
+              "source": {"type": "null"},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
