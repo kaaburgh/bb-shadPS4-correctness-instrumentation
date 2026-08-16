@@ -125,7 +125,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         capture, target_bytes, host_bytes = build_capture(args.target_manifest, backend=args.backend, emulator_config=args.emulator_config)
