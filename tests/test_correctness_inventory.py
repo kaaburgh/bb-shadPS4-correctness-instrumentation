@@ -16,11 +16,12 @@ SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 SOURCE_COMMIT_B = "f" * 40
 
 
-def runtime_entry(host=HOST_A, target=TARGET, source_commit=SOURCE_COMMIT):
+def runtime_entry(host=HOST_A, target=TARGET, source_commit=SOURCE_COMMIT, scenario_id="startup"):
     return {
         "class": "runtime",
         "source": "synthetic runtime mutation",
         "artifact_sha256": None,
+        "scenario_id": scenario_id,
         "baseline": {
             "source_repository": "https://github.com/shadps4-emu/shadPS4",
             "source_commit": source_commit,
@@ -44,6 +45,13 @@ class CorrectnessInventoryTests(unittest.TestCase):
         case["provenance"]["evidence"] = [entry]
         case["reproduction"] = {"status": "reproduced", "quality": "bounded", "scenario_id": "startup"}
         with self.assertRaisesRegex(CorrectnessCaseError, "exact target and host"):
+            validate_case(case, SCHEMA)
+
+    def test_runtime_evidence_requires_exact_scenario_identity(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [runtime_entry(scenario_id=None)]
+        case["reproduction"] = {"status": "reproduced", "quality": "bounded", "scenario_id": "startup"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "exact scenario_id"):
             validate_case(case, SCHEMA)
 
     def test_reported_only_cannot_smuggle_runtime_evidence(self):
@@ -75,6 +83,13 @@ class CorrectnessInventoryTests(unittest.TestCase):
         case["provenance"]["evidence"] = [runtime_entry()]
         case["reproduction"] = {"status": "reproduced", "quality": "partial", "scenario_id": None}
         with self.assertRaisesRegex(CorrectnessCaseError, "bounded or repeatable"):
+            validate_case(case, SCHEMA)
+
+    def test_runtime_observation_scenario_must_match_reproduction_scenario(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [runtime_entry(scenario_id="gameplay")]
+        case["reproduction"] = {"status": "reproduced", "quality": "bounded", "scenario_id": "startup"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "match reproduction scenario_id"):
             validate_case(case, SCHEMA)
 
     def test_generic_bug_requires_semantic_seam(self):
@@ -117,6 +132,17 @@ class CorrectnessInventoryTests(unittest.TestCase):
         case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
         case["classification"] = {"kind": "driver_specific", "semantic_seam": "driver boundary"}
         with self.assertRaisesRegex(CorrectnessCaseError, "target manifest"):
+            validate_case(case, SCHEMA)
+
+    def test_backend_specific_rejects_scenario_confounded_host_contrast(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [
+            runtime_entry(HOST_A, scenario_id="startup"),
+            runtime_entry(HOST_B, scenario_id="gameplay"),
+        ]
+        case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
+        case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "match reproduction scenario_id"):
             validate_case(case, SCHEMA)
 
     def test_backend_specific_accepts_controlled_host_contrast(self):

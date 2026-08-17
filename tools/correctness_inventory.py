@@ -32,17 +32,19 @@ def _runtime_evidence(case: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 
 
 def _has_controlled_host_contrast(runtime: list[Mapping[str, Any]]) -> bool:
-    hosts_by_non_host_baseline: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    hosts_by_non_host_baseline: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
     for entry in runtime:
         baseline = entry["baseline"]
         target = baseline["target_manifest_sha256"]
         host = baseline["host_manifest_sha256"]
-        if target is None or host is None:
+        scenario_id = entry["scenario_id"]
+        if target is None or host is None or scenario_id is None:
             continue
         key = (
             baseline["source_repository"],
             baseline["source_commit"],
             target,
+            scenario_id,
         )
         hosts_by_non_host_baseline[key].add(host)
     return any(len(hosts) >= 2 for hosts in hosts_by_non_host_baseline.values())
@@ -64,6 +66,8 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
         baseline = entry["baseline"]
         if baseline["target_manifest_sha256"] is None or baseline["host_manifest_sha256"] is None:
             raise CorrectnessCaseError("runtime evidence requires exact target and host baseline references")
+        if entry["scenario_id"] is None:
+            raise CorrectnessCaseError("runtime evidence requires an exact scenario_id")
 
     reproduction = case["reproduction"]
     status = reproduction["status"]
@@ -81,6 +85,10 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
             raise CorrectnessCaseError(
                 f"{status} status requires bounded or repeatable quality and a scenario_id"
             )
+        if any(entry["scenario_id"] != scenario_id for entry in runtime):
+            raise CorrectnessCaseError(
+                f"{status} runtime evidence scenario_id must match reproduction scenario_id"
+            )
 
     classification = case["classification"]
     kind = classification["kind"]
@@ -95,7 +103,7 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
     if kind in {"backend_specific", "driver_specific"} and not _has_controlled_host_contrast(runtime):
         raise CorrectnessCaseError(
             f"{kind} requires at least two exact host baselines while source repository, "
-            "source commit, target manifest, and case scenario remain fixed"
+            "source commit, target manifest, and exact scenario_id remain fixed"
         )
 
 

@@ -12,6 +12,7 @@
         "class": "reported",
         "source": "synthetic fixture report",
         "artifact_sha256": null,
+        "scenario_id": null,
         "baseline": {
           "source_repository": "https://github.com/shadps4-emu/shadPS4",
           "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
