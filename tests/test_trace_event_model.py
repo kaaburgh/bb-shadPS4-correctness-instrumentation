@@ -14,11 +14,34 @@ class TraceEventContractTests(unittest.TestCase):
         self.document = trace_event_model.load_strict(EXAMPLE)
 
     def test_synthetic_fixture_validates(self):
+        trace_event_model.validate_schema(self.document)
         trace_event_model.validate_semantics(self.document)
 
     def test_duplicate_json_member_is_rejected(self):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "duplicate JSON member"):
             trace_event_model.loads_strict('{"schema_version":"a","schema_version":"b"}')
+
+    def test_provenance_material_change_invalidates_baseline_id(self):
+        document = copy.deepcopy(self.document)
+        document["provenance"]["material"]["target_manifest_sha256"] = "9" * 64
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "baseline_id does not match"):
+            trace_event_model.validate_semantics(document)
+
+    def test_expected_baseline_mismatch_is_rejected(self):
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "does not match expected baseline"):
+            trace_event_model.validate_semantics(self.document, expected_baseline_id="0" * 64)
+
+    def test_private_operator_string_is_rejected_as_resource_id(self):
+        document = copy.deepcopy(self.document)
+        document["events"][0]["correlation"]["resource_id"] = "alice"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "schema validation failed"):
+            trace_event_model.validate_schema(document)
+
+    def test_token_like_kind_is_rejected(self):
+        document = copy.deepcopy(self.document)
+        document["events"][0]["kind"] = "ghp_deadbeefdeadbeef"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "schema validation failed"):
+            trace_event_model.validate_schema(document)
 
     def test_event_count_is_bounded(self):
         document = copy.deepcopy(self.document)

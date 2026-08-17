@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -32,9 +33,41 @@ def load_strict(path: Path):
     return loads_strict(path.read_text(encoding="utf-8"))
 
 
-def validate_semantics(document):
+def baseline_id_for(material) -> str:
+    payload = json.dumps(
+        material,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def validate_schema(document):
+    try:
+        import jsonschema
+    except ModuleNotFoundError as exc:
+        raise TraceContractError("jsonschema is required for schema validation") from exc
+
+    schema = load_strict(Path(__file__).parents[1] / "schemas" / "trace-event.schema.json")
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(document), key=lambda error: list(error.absolute_path))
+    if errors:
+        location = "/".join(str(part) for part in errors[0].absolute_path) or "<root>"
+        raise TraceContractError(f"schema validation failed at {location}: {errors[0].message}")
+    return document
+
+
+def validate_semantics(document, *, expected_baseline_id: str | None = None):
     if document.get("schema_version") != SCHEMA_VERSION:
         raise TraceContractError("unsupported schema_version")
+
+    provenance = document["provenance"]
+    actual_baseline_id = baseline_id_for(provenance["material"])
+    if provenance["baseline_id"] != actual_baseline_id:
+        raise TraceContractError("baseline_id does not match provenance material")
+    if expected_baseline_id is not None and actual_baseline_id != expected_baseline_id:
+        raise TraceContractError("trace baseline does not match expected baseline")
 
     capture = document["capture"]
     limits = capture["limits"]
@@ -68,16 +101,10 @@ def validate_semantics(document):
     return document
 
 
-def validate_document(path: Path):
+def validate_document(path: Path, *, expected_baseline_id: str | None = None):
     document = load_strict(path)
-    try:
-        import jsonschema
-    except ModuleNotFoundError as exc:
-        raise TraceContractError("jsonschema is required for schema validation") from exc
-
-    schema = load_strict(Path(__file__).parents[1] / "schemas" / "trace-event.schema.json")
-    jsonschema.Draft202012Validator(schema).validate(document)
-    return validate_semantics(document)
+    validate_schema(document)
+    return validate_semantics(document, expected_baseline_id=expected_baseline_id)
 
 
 if __name__ == "__main__":
@@ -85,6 +112,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Validate a bounded BB trace event stream")
     parser.add_argument("path", type=Path)
+    parser.add_argument(
+        "--expected-baseline-id",
+        help="fail closed unless provenance material hashes to this exact baseline id",
+    )
     args = parser.parse_args()
-    validate_document(args.path)
+    validate_document(args.path, expected_baseline_id=args.expected_baseline_id)
     print("trace event contract valid")
