@@ -45,6 +45,16 @@ A missing tool or failed acquisition in one sandbox is not, by itself, evidence 
 
 If local execution is genuinely required, prefer a one-shot experiment prepared by the agent that creates a self-contained safe artifact for later analysis.
 
+## Operator-facing derived projections
+
+The roadmap remains authoritative for planning state: project state, dependencies, readiness, evidence, acceptance criteria, and sequencing. A repository may maintain a separate short checklist or handoff for the human operator. That projection may incorporate procedural detail from linked durable docs, scripts, or tooling, but those sources supply procedure rather than competing readiness or sequencing state.
+
+When a PR changes what the operator must do now or how they must do it, reconcile the projection in the same PR, whether the trigger is a roadmap edit or a procedural change elsewhere. Operator-relevant changes include ready/current `LOCAL ONLY` work, operator handoffs, `Next experiment`, required inputs or steps, acceptance or collection requirements, the appearance or disappearance of a local action, and changes to referenced commands, flags, preflight steps, scripts, or packaging/collection procedure.
+
+Project only current human actions. Use the roadmap to decide what is current, ready, blocked, or sequenced; use linked durable docs/scripts for procedural detail when they define how an operator action is performed. Do not copy the whole dependency graph, rationale, or history, and do not automatically surface completed work, blocked downstream work, or purely cloud-executable items. The repository may identify the projection through local policy or a future explicit configuration mechanism; no particular filename is required.
+
+`agentic-repo check` currently validates generated-file drift, links, and normalized roadmap graph invariants. Without an explicit projection/generator contract, it cannot be assumed to semantically derive or prove the correctness of an arbitrary operator checklist.
+
 ## Structural validation after normalization
 
 `agentic-repo check` leaves milestone-only planning documents alone. Once the roadmap contains structured ID-bearing item headings such as `## ID — Title` or `### ID — Title`, it also checks stable mechanical graph invariants: unique IDs, a status field, a dependency field, resolvable dependency IDs, and an acyclic dependency graph.
