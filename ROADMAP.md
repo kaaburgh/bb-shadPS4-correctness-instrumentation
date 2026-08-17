@@ -89,11 +89,12 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL5 — Build one-shot baseline capture workflow
-- **Status / priority / execution:** Blocked / Critical / CLOUD RESEARCH
+- **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
 - **Depends on:** BB-BL1, BB-BL2, BB-BL3
 - **Question:** Как одним запуском собирать comparable FPS/frametime/RAM/VRAM/shader-compilation metadata и provenance?
-- **Next experiment / information gain:** Инвентаризировать telemetry/signals pinned baseline; сделать bounded collector/packer и явно отмечать unavailable metrics.
-- **Acceptance / artifacts:** `tools/` + `docs/experiments/baseline-capture.md`; one command emits safe artifact; overhead measurable.
+- **Result / evidence:** Static inventory of the pinned baseline and available cloud route found no producer-bound target runtime telemetry for FPS, frametime, RAM, VRAM or shader-compilation measurements. `tools/capture_baseline.py` therefore emits a privacy-bounded one-shot ZIP with exact BB-BL1 source identity, a fail-closed transfer-safe BB-BL2 target projection, BB-BL3 host provenance, explicit `unavailable` states for all five runtime metrics, and measured collector/packer overhead. Evidence is `static` + `synthetic`; no Bloodborne target runtime was executed or inferred.
+- **Acceptance / artifacts:** `tools/capture_baseline.py`, `tests/test_capture_baseline.py`, `.github/workflows/baseline-capture.yml`, and `docs/experiments/baseline-capture.md` define and exercise the one-command safe artifact contract. The artifact records separate source/packaged target digests, excludes unrestricted operator strings, and reports `packer_elapsed_ns` separately from target runtime. A future producer-bound GATED telemetry contract may replace individual `unavailable` states without changing this negative result.
+- **Validation:** Synthetic/unit and CI smoke checks validate the packer contract and privacy boundary only; they do not establish Bloodborne runtime behavior, real performance values, or target telemetry availability outside the inventoried route.
 - **Scope:** Medium
 
 ### BB-BL6 — Capture reproducible baseline dataset
