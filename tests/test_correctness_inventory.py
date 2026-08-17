@@ -9,19 +9,22 @@ ROOT = Path(__file__).parents[1]
 EXAMPLE = ROOT / "docs" / "correctness" / "examples" / "correctness-case.reported.synthetic.json"
 SCHEMA = ROOT / "schemas" / "correctness-case.schema.json"
 TARGET = "sha256:" + "1" * 64
+TARGET_B = "sha256:" + "4" * 64
 HOST_A = "sha256:" + "2" * 64
 HOST_B = "sha256:" + "3" * 64
+SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+SOURCE_COMMIT_B = "f" * 40
 
 
-def runtime_entry(host=HOST_A):
+def runtime_entry(host=HOST_A, target=TARGET, source_commit=SOURCE_COMMIT):
     return {
         "class": "runtime",
         "source": "synthetic runtime mutation",
         "artifact_sha256": None,
         "baseline": {
             "source_repository": "https://github.com/shadps4-emu/shadPS4",
-            "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
-            "target_manifest_sha256": TARGET,
+            "source_commit": source_commit,
+            "target_manifest_sha256": target,
             "host_manifest_sha256": host,
         },
     }
@@ -94,9 +97,42 @@ class CorrectnessInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(CorrectnessCaseError, "two exact host baselines"):
             validate_case(case, SCHEMA)
 
-    def test_backend_specific_accepts_explicit_host_contrast(self):
+    def test_backend_specific_rejects_source_confounded_host_contrast(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [
+            runtime_entry(HOST_A, source_commit=SOURCE_COMMIT),
+            runtime_entry(HOST_B, source_commit=SOURCE_COMMIT_B),
+        ]
+        case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
+        case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "source repository"):
+            validate_case(case, SCHEMA)
+
+    def test_driver_specific_rejects_target_confounded_host_contrast(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [
+            runtime_entry(HOST_A, target=TARGET),
+            runtime_entry(HOST_B, target=TARGET_B),
+        ]
+        case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
+        case["classification"] = {"kind": "driver_specific", "semantic_seam": "driver boundary"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "target manifest"):
+            validate_case(case, SCHEMA)
+
+    def test_backend_specific_accepts_controlled_host_contrast(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [runtime_entry(HOST_A), runtime_entry(HOST_B)]
+        case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
+        case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
+        validate_case(case, SCHEMA)
+
+    def test_backend_specific_ignores_unrelated_runtime_evidence_when_control_exists(self):
+        case = copy.deepcopy(self.case)
+        case["provenance"]["evidence"] = [
+            runtime_entry(HOST_A),
+            runtime_entry(HOST_B),
+            runtime_entry(HOST_A, target=TARGET_B, source_commit=SOURCE_COMMIT_B),
+        ]
         case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
         case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
         validate_case(case, SCHEMA)

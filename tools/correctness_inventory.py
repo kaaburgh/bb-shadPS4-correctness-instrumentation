@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -28,6 +29,23 @@ def load_strict(path: Path) -> Mapping[str, Any]:
 
 def _runtime_evidence(case: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [entry for entry in case["provenance"]["evidence"] if entry["class"] == "runtime"]
+
+
+def _has_controlled_host_contrast(runtime: list[Mapping[str, Any]]) -> bool:
+    hosts_by_non_host_baseline: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    for entry in runtime:
+        baseline = entry["baseline"]
+        target = baseline["target_manifest_sha256"]
+        host = baseline["host_manifest_sha256"]
+        if target is None or host is None:
+            continue
+        key = (
+            baseline["source_repository"],
+            baseline["source_commit"],
+            target,
+        )
+        hosts_by_non_host_baseline[key].add(host)
+    return any(len(hosts) >= 2 for hosts in hosts_by_non_host_baseline.values())
 
 
 def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> None:
@@ -74,13 +92,11 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
             raise CorrectnessCaseError(
                 f"{kind} requires static or runtime evidence, not only reported/synthetic/assumed evidence"
             )
-    if kind in {"backend_specific", "driver_specific"}:
-        host_refs = {entry["baseline"]["host_manifest_sha256"] for entry in runtime}
-        host_refs.discard(None)
-        if len(host_refs) < 2:
-            raise CorrectnessCaseError(
-                f"{kind} requires runtime evidence across at least two exact host baselines"
-            )
+    if kind in {"backend_specific", "driver_specific"} and not _has_controlled_host_contrast(runtime):
+        raise CorrectnessCaseError(
+            f"{kind} requires at least two exact host baselines while source repository, "
+            "source commit, target manifest, and case scenario remain fixed"
+        )
 
 
 def main() -> int:

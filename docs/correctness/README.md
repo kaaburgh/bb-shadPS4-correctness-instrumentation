@@ -12,7 +12,7 @@ Evidence entries should point to durable repository notes, issue/PR references, 
 
 ## Hypotheses versus classification
 
-`hypothesis` is explicitly provisional. Its subsystem and confidence rank the next investigation; they are not ownership claims. Consequential ownership classifications (`generic_bug`, `title_specific`, `backend_specific`, `driver_specific`) fail closed: each requires an established semantic seam and static or runtime evidence. Backend/driver-specific classifications additionally require runtime observations across at least two exact host baselines so an untested report cannot become an environment-ownership claim.
+`hypothesis` is explicitly provisional. Its subsystem and confidence rank the next investigation; they are not ownership claims. Consequential ownership classifications (`generic_bug`, `title_specific`, `backend_specific`, `driver_specific`) fail closed: each requires an established semantic seam and static or runtime evidence. Backend/driver-specific classifications additionally require a controlled host contrast: at least two exact host baselines must be observed while source repository, source commit, target manifest, and the case's scenario remain fixed. Runtime observations from other source/target baselines may coexist in the case, but they do not establish that host contrast.
 
 When evidence does not establish ownership, keep `classification.kind` as `unknown`. Preserve stale/not-reproduced outcomes rather than deleting them.
 
