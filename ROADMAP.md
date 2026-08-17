@@ -229,11 +229,12 @@ Outcome: priority defects исправляются только после ус�
 Outcome: bounded tracing восстанавливает resource/access/sync/graphics events and timing, а tracing overhead измерим.
 
 ### BB-INS1 — Define trace event model and overhead contract
-- **Status / priority / execution:** Blocked / High / CLOUD
+- **Status / priority / execution:** Completed / High / CLOUD
 - **Depends on:** BB-BL1, BB-BL2, BB-BL3
 - **Question:** Какой minimal schema/correlation model покрывает resource, access, sync, graphics and timing без ad-hoc unbounded logs?
-- **Next experiment / information gain:** Versioned schema + filtering/sampling controls + synthetic parser fixtures.
-- **Acceptance / artifacts:** `docs/instrumentation/schema.md` + tests; no per-draw filesystem I/O/unbounded buffers/private data; overhead plan explicit.
+- **Result / evidence:** `bb-trace-events/v1` defines provenance-bound resource/access/sync/graphics/timing events with typed generated correlation IDs, explicit observer coverage, category filters, deterministic sampling, bounded event/buffer limits and dropped-event accounting. Material source/target/host/scenario/config/producer/schema identities are digest-bound into `baseline_id` and consumers fail closed on missing or mismatched provenance. Evidence: `synthetic`; no Bloodborne runtime or shadPS4 source-seam observation was performed.
+- **Acceptance / artifacts:** `schemas/trace-event.schema.json`, `tools/trace_event_model.py`, `docs/instrumentation/schema.md`, `docs/instrumentation/examples/trace-events.synthetic.json`, `tests/test_trace_event_model.py`, and `.github/workflows/trace-event-contract.yml` define and validate the bounded contract. Instrumentation and serialization CPU overhead are recorded separately by the contract; actual target overhead remains a BB-INS4 tracing-off/on measurement and is not established by this item.
+- **Validation:** Exact-head GitHub Actions at `4b904ed8edbe49c9908146c16e1dc777d9d38899` passed `Trace event contract`, `Agentic repository contract`, `Host environment manifest`, `Bloodborne target manifest`, and `Target run contract`. These checks establish schema/semantic/synthetic contract behavior only; they do not establish runtime observer coverage, target correctness, or target performance overhead.
 - **Scope:** Medium
 
 ### BB-INS2 — Instrument resource mapping/lifetime/access and sync/readbacks
