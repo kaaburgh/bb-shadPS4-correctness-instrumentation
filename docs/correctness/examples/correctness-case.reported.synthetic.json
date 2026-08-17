@@ -1,0 +1,26 @@
+{
+  "schema": "bb-correctness-case/v1",
+  "case_id": "BB-C-SYNTHETIC_REPORT",
+  "title": "Synthetic reported-only rendering symptom",
+  "symptom": {
+    "summary": "Synthetic example: a reporter describes an intermittent rendering artifact.",
+    "observed_context": "Synthetic documentation fixture only; no Bloodborne runtime was observed."
+  },
+  "provenance": {
+    "source_repository": "https://github.com/shadps4-emu/shadPS4",
+    "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "target_manifest_sha256": null,
+    "host_manifest_sha256": null,
+    "evidence": [
+      {"class": "reported", "source": "synthetic fixture report", "artifact_sha256": null}
+    ]
+  },
+  "reproduction": {"status": "reported_only", "quality": "none", "scenario_id": null},
+  "hypothesis": {"subsystem": "unknown", "statement": "Multiple emulator subsystems remain plausible.", "confidence": "low"},
+  "classification": {"kind": "unknown", "semantic_seam": null},
+  "next_experiment": {
+    "question": "Can the symptom be reproduced on an exact target/host baseline?",
+    "oracle": "A bounded scenario reaches a predeclared artifact-specific semantic checkpoint.",
+    "bounded_by": "one scenario, one exact baseline, fixed timeout"
+  }
+}
