@@ -17,6 +17,16 @@ For normalized roadmap items, keep IDs unique and dependency references valid an
 
 Keep work bounded. Do not opportunistically absorb adjacent roadmap items unless inseparable. A PR must be understandable without chat history.
 
+## Operator-facing derived projections
+
+The authoritative roadmap remains the single source of truth for planning state: project state, dependencies, readiness, evidence, acceptance criteria, and sequencing. A repository may also maintain a short operator-facing checklist or handoff document that projects the current actions a human needs to take. The projection may carry procedural detail from linked durable docs, scripts, or tooling, but those sources supply procedure rather than competing planning state. Treat the operator-facing document as a derived projection, never as a second source of truth.
+
+If a PR changes current operator actions or instructions, reconcile any existing operator-facing projection in the same PR, whether the change comes from roadmap state or from the procedure that implements it. This includes changes to ready/current `LOCAL ONLY` work, operator handoffs, `Next experiment`, required inputs or steps, acceptance or collection requirements, the appearance or disappearance of a local step, and referenced commands, flags, preflight steps, scripts, or packaging/collection procedure.
+
+Keep the projection limited to current actionable human work. Completed items, blocked downstream items, and purely cloud-executable items do not become operator checklist entries merely because they exist in the roadmap. If the projection disagrees with the roadmap about planning state, the roadmap wins; if its procedural detail is stale relative to the durable docs/scripts it summarizes, correct the projection.
+
+The projection's path, format, and maintenance mechanism are project-specific and may be declared through local policy or future configuration. Do not assume a file is named `NEXT-STEPS.md`. Unless an explicit projection/reconciliation mechanism exists, `agentic-repo check` must not be treated as semantically deriving or validating an arbitrary operator checklist from roadmap prose.
+
 ## Validation and claims
 
 Run the narrowest meaningful checks first, then broader checks warranted by the change. State exactly what ran and what did not. Compilation, linting, or synthetic tests do not establish real-target behavior.
@@ -28,6 +38,8 @@ Do not invent commands, targets, performance numbers, supported versions, or arc
 ## Tool availability and operator handoff
 
 A missing tool or capability in one agent environment is **not** evidence that the capability is unavailable to the project or that the task is impossible. Escalate environment-specific acquisition failures as bounded operator handoffs instead of turning them into unsupported project conclusions.
+
+Before escalating an unavailable capability, confirm that it is required by the task's acceptance or evidence needs rather than merely a useful optional cross-check.
 
 When a required capability is missing:
 
