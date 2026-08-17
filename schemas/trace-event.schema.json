@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/trace-event.schema.json",
+  "title": "BB instrumentation trace event stream",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capture", "events", "summary"],
+  "properties": {
+    "schema_version": {"const": "bb-trace-events/v1"},
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clock", "limits", "filter", "sampling"],
+      "properties": {
+        "clock": {"enum": ["monotonic_ns"]},
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_events", "max_buffer_bytes"],
+          "properties": {
+            "max_events": {"type": "integer", "minimum": 1, "maximum": 1000000},
+            "max_buffer_bytes": {"type": "integer", "minimum": 4096, "maximum": 67108864}
+          }
+        },
+        "filter": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["resource", "access", "sync", "graphics", "timing"]}
+        },
+        "sampling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "every_n"],
+          "properties": {
+            "mode": {"enum": ["all", "every_n"]},
+            "every_n": {"type": "integer", "minimum": 1, "maximum": 1000000}
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {"$ref": "#/$defs/event"}
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recorded_events", "dropped_events", "buffer_high_water_bytes", "instrumentation_cpu_ns", "serialization_cpu_ns"],
+      "properties": {
+        "recorded_events": {"type": "integer", "minimum": 0},
+        "dropped_events": {"type": "integer", "minimum": 0},
+        "buffer_high_water_bytes": {"type": "integer", "minimum": 0},
+        "instrumentation_cpu_ns": {"type": "integer", "minimum": 0},
+        "serialization_cpu_ns": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "safe_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "timestamp_ns", "category", "kind", "correlation"],
+      "properties": {
+        "seq": {"type": "integer", "minimum": 0},
+        "timestamp_ns": {"type": "integer", "minimum": 0},
+        "category": {"enum": ["resource", "access", "sync", "graphics", "timing"]},
+        "kind": {"$ref": "#/$defs/safe_id"},
+        "correlation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "resource_id": {"$ref": "#/$defs/safe_id"},
+            "queue_id": {"$ref": "#/$defs/safe_id"},
+            "pipeline_id": {"$ref": "#/$defs/safe_id"},
+            "span_id": {"$ref": "#/$defs/safe_id"}
+          }
+        },
+        "duration_ns": {"type": "integer", "minimum": 0},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "access": {"enum": ["read", "write", "read_write"]},
+        "coverage": {"enum": ["observed", "unobserved", "unknown", "ambiguous"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "bb-trace-events/v1",
+  "capture": {
+    "clock": "monotonic_ns",
+    "limits": {"max_events": 16, "max_buffer_bytes": 65536},
+    "filter": ["resource", "access", "sync", "graphics", "timing"],
+    "sampling": {"mode": "all", "every_n": 1}
+  },
+  "events": [
+    {"seq": 0, "timestamp_ns": 100, "category": "resource", "kind": "create", "correlation": {"resource_id": "res:1"}, "size_bytes": 4096},
+    {"seq": 1, "timestamp_ns": 120, "category": "access", "kind": "guest_cpu", "correlation": {"resource_id": "res:1"}, "access": "write", "coverage": "observed"},
+    {"seq": 2, "timestamp_ns": 160, "category": "sync", "kind": "barrier", "correlation": {"resource_id": "res:1", "queue_id": "queue:0"}},
+    {"seq": 3, "timestamp_ns": 200, "category": "graphics", "kind": "draw", "correlation": {"resource_id": "res:1", "pipeline_id": "pipe:7"}},
+    {"seq": 4, "timestamp_ns": 260, "category": "timing", "kind": "gpu_span", "correlation": {"queue_id": "queue:0", "span_id": "span:2"}, "duration_ns": 60}
+  ],
+  "summary": {
+    "recorded_events": 5,
+    "dropped_events": 0,
+    "buffer_high_water_bytes": 2048,
+    "instrumentation_cpu_ns": 900,
+    "serialization_cpu_ns": 300
+  }
+}
