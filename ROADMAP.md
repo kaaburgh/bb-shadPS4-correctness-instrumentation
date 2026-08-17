@@ -348,7 +348,7 @@ Outcome: cost attribution rank-ит 3–5 real opportunities с explicit uncerta
 - **Depends on:** BB-PERF2
 - **Question:** Какие 3–5 cost classes имеют largest measured optimization potential и sufficient confidence?
 - **Next experiment / information gain:** Cross-scenario ranking with uncertainty/overhead sensitivity; “no meaningful headroom” is valid result.
-- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only для evidence-backed candidates.
+- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only for evidence-backed candidates.
 - **Scope:** Medium
 
 ---
