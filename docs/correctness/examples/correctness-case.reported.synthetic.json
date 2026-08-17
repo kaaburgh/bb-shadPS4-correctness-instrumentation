@@ -7,12 +7,18 @@
     "observed_context": "Synthetic documentation fixture only; no Bloodborne runtime was observed."
   },
   "provenance": {
-    "source_repository": "https://github.com/shadps4-emu/shadPS4",
-    "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
-    "target_manifest_sha256": null,
-    "host_manifest_sha256": null,
     "evidence": [
-      {"class": "reported", "source": "synthetic fixture report", "artifact_sha256": null}
+      {
+        "class": "reported",
+        "source": "synthetic fixture report",
+        "artifact_sha256": null,
+        "baseline": {
+          "source_repository": "https://github.com/shadps4-emu/shadPS4",
+          "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+          "target_manifest_sha256": null,
+          "host_manifest_sha256": null
+        }
+      }
     ]
   },
   "reproduction": {"status": "reported_only", "quality": "none", "scenario_id": null},
