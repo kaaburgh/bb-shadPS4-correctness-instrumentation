@@ -37,7 +37,7 @@ The **CLOUD**, **CLOUD RESEARCH**, **GATED** and **LOCAL ONLY** distinctions, to
 
 ## Ready now
 
-Items со статусом `Open` готовы к независимой работе, если все их `Depends on` completed и для item нет активного PR. `GATED` item после completed **BB-ENV1** использует зафиксированный target-machine route и operator handoff; его нельзя подменять cloud-only runtime claim. Остальные items остаются blocked до выполнения своих явных dependencies.
+Items со статусом `Open` или `Partially implemented` готовы к независимой bounded работе, если все их `Depends on` completed и для item нет активного PR. `GATED` item после completed **BB-ENV1** использует зафиксированный target-machine route и operator handoff; его нельзя подменять cloud-only runtime claim. Остальные items остаются blocked до выполнения своих явных dependencies.
 
 ---
 
