@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tools import trace_event_model
+try:
+    from tools import trace_event_model
+except ModuleNotFoundError:
+    import trace_event_model
 
 
 class ResourceTraceError(ValueError):
