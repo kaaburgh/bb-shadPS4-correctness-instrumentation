@@ -1,0 +1,102 @@
+{
+  "schema_version": "bb-trace-events/v1",
+  "provenance": {
+    "baseline_id": "3a80bd8feda35db83745353b7ffd72c641a1875b5ca30473cf6776c21438f749",
+    "material": {
+      "evidence_class": "synthetic",
+      "source": {
+        "repository": "shadps4-emu/shadPS4",
+        "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+        "patches_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "target_manifest_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "host_manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "scenario_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "emulator_config_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "producer": {
+        "producer_id": "bb-trace-event-model",
+        "producer_sha256": "eacb36135b402435b8283d3b93497d071184f39ccd496a65edf389701d472664",
+        "schema_sha256": "d9377a3c6448ceb9bb1ebccefbecbb66e5d73e08ecc30ffa318e0e9b9facd7d0"
+      }
+    }
+  },
+  "capture": {
+    "clock": "monotonic_ns",
+    "limits": {
+      "max_events": 16,
+      "max_buffer_bytes": 65536
+    },
+    "filter": [
+      "resource",
+      "graphics",
+      "timing"
+    ],
+    "sampling": {
+      "mode": "all",
+      "every_n": 1
+    }
+  },
+  "events": [
+    {
+      "seq": 0,
+      "timestamp_ns": 100,
+      "category": "resource",
+      "kind": "create",
+      "correlation": {
+        "resource_id": "res:00000011"
+      },
+      "size_bytes": 8192
+    },
+    {
+      "seq": 1,
+      "timestamp_ns": 140,
+      "category": "graphics",
+      "kind": "draw",
+      "correlation": {
+        "resource_id": "res:00000011",
+        "queue_id": "queue:00000000",
+        "pipeline_id": "pipe:00000007",
+        "span_id": "span:00000021"
+      }
+    },
+    {
+      "seq": 2,
+      "timestamp_ns": 180,
+      "category": "timing",
+      "kind": "cpu_span",
+      "correlation": {
+        "pipeline_id": "pipe:00000007",
+        "span_id": "span:00000021"
+      },
+      "duration_ns": 40
+    },
+    {
+      "seq": 3,
+      "timestamp_ns": 220,
+      "category": "timing",
+      "kind": "gpu_span",
+      "correlation": {
+        "queue_id": "queue:00000000",
+        "pipeline_id": "pipe:00000007",
+        "span_id": "span:00000021"
+      },
+      "duration_ns": 55
+    },
+    {
+      "seq": 4,
+      "timestamp_ns": 300,
+      "category": "graphics",
+      "kind": "present",
+      "correlation": {
+        "queue_id": "queue:00000000"
+      }
+    }
+  ],
+  "summary": {
+    "recorded_events": 5,
+    "dropped_events": 0,
+    "buffer_high_water_bytes": 2048,
+    "instrumentation_cpu_ns": 700,
+    "serialization_cpu_ns": 250
+  }
+}

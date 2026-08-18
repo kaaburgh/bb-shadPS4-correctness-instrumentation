@@ -250,11 +250,13 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 - **Scope:** Medium
 
 ### BB-INS3 — Instrument render/depth/shader/pipeline identity and timing
-- **Status / priority / execution:** Open / High / CLOUD RESEARCH
+- **Status / priority / execution:** Partially implemented / High / CLOUD RESEARCH
 - **Depends on:** BB-INS1
 - **Question:** Как correlate render/depth resources with safe shader/pipeline IDs, creation/cache events and coarse CPU/GPU timings?
-- **Next experiment / information gain:** Source lifecycle tracing + stable ID/timing prototype + synthetic variant fixtures.
-- **Acceptance / artifacts:** Deterministic synthetic correlation, bounded descriptors, no proprietary shader payload; `docs/instrumentation/graphics-timing.md`.
+- **Result / evidence:** Static inspection at exact BB-BL1 baseline identified `PipelineCache::RefreshGraphicsKey`/`GetGraphicsPipeline` and `Scheduler::BeginRendering`/`SubmitExecution` as candidate graphics/pipeline/render-lifecycle seams. Synthetic `bb-trace-events/v1` reconstruction now correlates capture-local graphics events with pipeline IDs and CPU/GPU timing spans, preserves full validated resource/queue/pipeline/span correlation metadata, keeps CPU and GPU durations separate, rejects missing or mismatched pipeline/span anchors, and leaves unscoped timing explicit instead of assigning it by proximity. Evidence is `static` + `synthetic`; no Bloodborne runtime execution, stable cross-run shader/pipeline identity, shader-stage membership, render/depth role descriptor coverage, pipeline-cache hit/miss tracing, GPU timestamp semantics, or measured instrumentation overhead is established.
+- **Next experiment / information gain:** Derive a minimal safe descriptor/identity model from `GraphicsPipelineKey`, shader-module association and render attachment state, including explicit render/depth roles and creation/cache observations, then establish a bounded runtime timing producer separately. Preserve capture-local correlation versus cross-run identity as distinct claims and do not treat optional Tracy GPU scopes as the BB timing source without independent semantics.
+- **Acceptance / artifacts:** `tools/graphics_timing_trace.py`, `tests/test_graphics_timing_trace.py`, `docs/instrumentation/examples/graphics-timing.synthetic.json`, `.github/workflows/graphics-timing-trace.yml`, and `docs/instrumentation/graphics-timing.md` provide the current bounded reconstruction slice. Completion still requires evidence-backed bounded descriptors and stable safe shader/pipeline identity suitable for cross-run correlation, creation/cache and render/depth role observations, a runtime timing producer with established CPU/GPU semantics, and measured tracing overhead; no proprietary shader payload may be committed.
+- **Validation:** Exact-head CI for the reconstruction slice exercises schema validation, unit regressions, and the synthetic CLI example only. These checks establish synthetic contract behavior, not target runtime coverage, stable cross-run identity, GPU timestamp semantics, or target overhead.
 - **Scope:** Medium
 
 ### BB-INS4 — Validate instrumentation coverage and overhead on target
