@@ -18,6 +18,16 @@ LOGICAL_STAGES = {
     "compute",
 }
 ATTACHMENT_ROLES = {"color", "depth", "stencil"}
+PIPELINE_STATE_KEYS = {
+    "primitive_type",
+    "polygon_mode",
+    "clip_space",
+    "num_samples",
+    "depth_samples",
+    "color_formats",
+    "depth_format",
+    "stencil_format",
+}
 
 
 class GraphicsIdentityError(ValueError):
@@ -33,7 +43,8 @@ def _identity(kind: str, value) -> str:
     return f"{kind}:sha256:{digest}"
 
 
-def _require_exact_keys(value: dict, required: set[str], optional: set[str] = set()) -> None:
+def _require_exact_keys(value: dict, required: set[str], optional: set[str] | None = None) -> None:
+    optional = optional or set()
     if not isinstance(value, dict):
         raise GraphicsIdentityError("expected object")
     missing = required - value.keys()
@@ -42,6 +53,11 @@ def _require_exact_keys(value: dict, required: set[str], optional: set[str] = se
         raise GraphicsIdentityError(f"missing keys: {sorted(missing)}")
     if extra:
         raise GraphicsIdentityError(f"unexpected keys: {sorted(extra)}")
+
+
+def _require_text(value, field: str) -> None:
+    if not isinstance(value, str) or not value or len(value) > 96:
+        raise GraphicsIdentityError(f"{field} must be a bounded non-empty string")
 
 
 def derive(document: dict) -> dict:
@@ -78,10 +94,18 @@ def derive(document: dict) -> dict:
     normalized_shaders.sort(key=lambda item: item["logical_stage"])
 
     pipeline_state = document["pipeline_state"]
-    if not isinstance(pipeline_state, dict) or not pipeline_state:
-        raise GraphicsIdentityError("pipeline_state must be a non-empty semantic projection")
-    if any(key.startswith("_") for key in pipeline_state):
-        raise GraphicsIdentityError("private/raw implementation fields are not allowed")
+    _require_exact_keys(pipeline_state, PIPELINE_STATE_KEYS)
+    for field in ("primitive_type", "polygon_mode", "clip_space", "depth_format", "stencil_format"):
+        _require_text(pipeline_state[field], f"pipeline_state.{field}")
+    for field in ("num_samples", "depth_samples"):
+        if not isinstance(pipeline_state[field], int) or pipeline_state[field] <= 0 or pipeline_state[field] > 64:
+            raise GraphicsIdentityError(f"pipeline_state.{field} must be an integer in [1, 64]")
+    color_formats = pipeline_state["color_formats"]
+    if not isinstance(color_formats, list) or len(color_formats) > 8:
+        raise GraphicsIdentityError("pipeline_state.color_formats must contain at most 8 entries")
+    for value in color_formats:
+        _require_text(value, "pipeline_state.color_formats[]")
+
     pipeline_semantic = {
         "source": PINNED_SOURCE,
         "shader_identities": [item["shader_identity"] for item in normalized_shaders],
@@ -94,8 +118,8 @@ def derive(document: dict) -> dict:
         if not isinstance(render_state[field], int) or render_state[field] <= 0:
             raise GraphicsIdentityError(f"render_state.{field} must be a positive integer")
     attachments = render_state["attachments"]
-    if not isinstance(attachments, list):
-        raise GraphicsIdentityError("render_state.attachments must be a list")
+    if not isinstance(attachments, list) or len(attachments) > 10:
+        raise GraphicsIdentityError("render_state.attachments must contain at most 10 entries")
     normalized_attachments = []
     color_indices = set()
     seen_depth = False
@@ -122,10 +146,9 @@ def derive(document: dict) -> dict:
             if seen_stencil:
                 raise GraphicsIdentityError("duplicate stencil attachment")
             seen_stencil = True
-        if not isinstance(attachment["format"], str) or not attachment["format"]:
-            raise GraphicsIdentityError("attachment format must be a non-empty string")
-        if not isinstance(attachment["samples"], int) or attachment["samples"] <= 0:
-            raise GraphicsIdentityError("attachment samples must be positive")
+        _require_text(attachment["format"], "attachment.format")
+        if not isinstance(attachment["samples"], int) or attachment["samples"] <= 0 or attachment["samples"] > 64:
+            raise GraphicsIdentityError("attachment samples must be an integer in [1, 64]")
         if attachment["load_op"] not in {"load", "clear"}:
             raise GraphicsIdentityError("load_op must be load or clear")
         if attachment["store_op"] != "store":
