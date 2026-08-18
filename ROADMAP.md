@@ -37,13 +37,13 @@ The **CLOUD**, **CLOUD RESEARCH**, **GATED** and **LOCAL ONLY** distinctions, to
 
 ## Ready now
 
-Готовы к независимой работе baseline items со статусом `Open` и `Depends on: None`, если для item нет активного PR. После завершения всех трёх baseline items **BB-ENV1** определяет, где и как разрешены target runs. Остальные items имеют явные dependencies.
+Items со статусом `Open` готовы к независимой работе, если все их `Depends on` completed и для item нет активного PR. `GATED` item после completed **BB-ENV1** использует зафиксированный target-machine route и operator handoff; его нельзя подменять cloud-only runtime claim. Остальные items остаются blocked до выполнения своих явных dependencies.
 
 ---
 
 # Milestone 0 — Reproducible baseline
 
-Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы между runs.
+Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы between runs.
 
 ### BB-BL1 — Pin shadPS4 source baseline and integration model
 - **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
@@ -81,7 +81,7 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL4 — Select minimal reproducible scenario catalogue
-- **Status / priority / execution:** Blocked / Critical / GATED
+- **Status / priority / execution:** Open / Critical / GATED
 - **Depends on:** BB-ENV1, BB-BL1, BB-BL2, BB-BL3
 - **Question:** Какие 3–6 коротких scenarios покрывают startup, representative gameplay и correctness/performance-sensitive behavior?
 - **Next experiment / information gain:** Подготовить scenario template и выполнить bounded target selection run по execution route из BB-ENV1.
@@ -240,7 +240,7 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 - **Scope:** Medium
 
 ### BB-INS2 — Instrument resource mapping/lifetime/access and sync/readbacks
-- **Status / priority / execution:** Blocked / High / CLOUD RESEARCH
+- **Status / priority / execution:** Open / High / CLOUD RESEARCH
 - **Depends on:** BB-INS1
 - **Question:** Где minimal source seams для guest-memory↔host-resource lifetime/access, CPU↔GPU transfers, waits/barriers/readbacks, включая прямые чтения/записи guest CPU в tracked GPU-backed guest-memory ranges, которые не проходят через explicit HLE transfer/readback API?
 - **Next experiment / information gain:** Source tracing + synthetic/unit event prototypes with stable resource correlation; exercise direct guest CPU read/write events both inside and outside explicit transfer/readback seams, preserve observed/unknown/unobserved/ambiguous coverage, and keep the observation mechanism open until seam evidence exists. Static analysis may supplement runtime evidence but is not the primary proof mechanism.
@@ -248,7 +248,7 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 - **Scope:** Medium
 
 ### BB-INS3 — Instrument render/depth/shader/pipeline identity and timing
-- **Status / priority / execution:** Blocked / High / CLOUD RESEARCH
+- **Status / priority / execution:** Open / High / CLOUD RESEARCH
 - **Depends on:** BB-INS1
 - **Question:** Как correlate render/depth resources with safe shader/pipeline IDs, creation/cache events and coarse CPU/GPU timings?
 - **Next experiment / information gain:** Source lifecycle tracing + stable ID/timing prototype + synthetic variant fixtures.
@@ -350,7 +350,7 @@ Outcome: cost attribution rank-ит 3–5 real opportunities с explicit uncerta
 - **Depends on:** BB-PERF2
 - **Question:** Какие 3–5 cost classes имеют largest measured optimization potential и sufficient confidence?
 - **Next experiment / information gain:** Cross-scenario ranking with uncertainty/overhead sensitivity; “no meaningful headroom” is valid result.
-- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only for evidence-backed candidates.
+- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only для evidence-backed candidates.
 - **Scope:** Medium
 
 ---
