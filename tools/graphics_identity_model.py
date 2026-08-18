@@ -18,7 +18,9 @@ LOGICAL_STAGES = {
     "compute",
 }
 ATTACHMENT_ROLES = {"color", "depth", "stencil"}
-PIPELINE_STATE_KEYS = {
+# This is deliberately a bounded semantic projection, not the complete upstream
+# GraphicsPipelineKey. Callers must not use its digest as an exact pipeline ID.
+PIPELINE_FAMILY_STATE_KEYS = {
     "primitive_type",
     "polygon_mode",
     "clip_space",
@@ -94,7 +96,7 @@ def derive(document: dict) -> dict:
     normalized_shaders.sort(key=lambda item: item["logical_stage"])
 
     pipeline_state = document["pipeline_state"]
-    _require_exact_keys(pipeline_state, PIPELINE_STATE_KEYS)
+    _require_exact_keys(pipeline_state, PIPELINE_FAMILY_STATE_KEYS)
     for field in ("primitive_type", "polygon_mode", "clip_space", "depth_format", "stencil_format"):
         _require_text(pipeline_state[field], f"pipeline_state.{field}")
     for field in ("num_samples", "depth_samples"):
@@ -106,10 +108,10 @@ def derive(document: dict) -> dict:
     for value in color_formats:
         _require_text(value, "pipeline_state.color_formats[]")
 
-    pipeline_semantic = {
+    pipeline_family_semantic = {
         "source": PINNED_SOURCE,
         "shader_identities": [item["shader_identity"] for item in normalized_shaders],
-        "state": pipeline_state,
+        "state_projection": pipeline_state,
     }
 
     render_state = document["render_state"]
@@ -167,7 +169,7 @@ def derive(document: dict) -> dict:
         "model_version": MODEL_VERSION,
         "source": PINNED_SOURCE,
         "shaders": normalized_shaders,
-        "pipeline_identity": _identity("pipeline", pipeline_semantic),
+        "pipeline_family_identity": _identity("pipeline-family", pipeline_family_semantic),
         "render_identity": _identity("render", render_semantic),
         "pipeline_state": pipeline_state,
         "render_state": {**render_state, "attachments": normalized_attachments},
