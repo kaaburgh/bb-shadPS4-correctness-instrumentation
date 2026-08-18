@@ -63,6 +63,7 @@ def reconstruct(document):
             "seq": event["seq"],
             "timestamp_ns": event["timestamp_ns"],
             "kind": kind,
+            "correlation": dict(event["correlation"]),
         }
         if "access" in event:
             record["access"] = event["access"]
