@@ -112,11 +112,12 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 Outcome: каждый актуальный symptom class воспроизводим либо закрыт как stale и имеет evidence-driven generic-vs-specific classification.
 
 ### BB-COR1 — Define correctness inventory and triage contract
-- **Status / priority / execution:** Blocked / High / CLOUD
+- **Status / priority / execution:** Completed / High / CLOUD
 - **Depends on:** BB-BL1, BB-BL2, BB-BL3
 - **Question:** Как хранить symptom, provenance, evidence class, subsystem hypothesis, reproduction quality и next experiment?
-- **Next experiment / information gain:** Schema/template с synthetic examples; `reported` явно отделён от reproduced `runtime`.
-- **Acceptance / artifacts:** `docs/correctness/README.md` позволяет добавлять cases без chat context; “generic bug” требует evidence.
+- **Result / evidence:** `bb-correctness-case/v1` separates reported observations from target runtime outcomes, binds every observation to its own source/target/host baseline references, preserves provisional subsystem hypotheses, and fails closed when evidence is insufficient for ownership classification. Evidence: synthetic contract fixtures only; no Bloodborne runtime observation.
+- **Acceptance / artifacts:** `docs/correctness/README.md`, `schemas/correctness-case.schema.json`, `tools/correctness_inventory.py`, the synthetic reported-only example, tests, and the dedicated correctness-inventory workflow define the triage contract without chat context. Runtime evidence requires exact target/host manifest references; `reported_only` cannot carry reproduction claims; `reproduced`, `not_reproduced`, and `stale` require bounded/repeatable runtime evidence plus a scenario; ownership classifications require an established semantic seam and static/runtime evidence, with backend/driver-specific claims additionally requiring explicit host-baseline contrast.
+- **Validation:** Exact-head GitHub Actions for the final PR head must pass `Correctness inventory contract` plus the repository contract workflows. These are schema/semantic synthetic contract checks only, so BB-COR1 is completed as a contract definition but is not marked verified by target evidence.
 - **Scope:** Small
 
 ### BB-COR2 — Reproduce graphics/shader/depth/render-target symptoms

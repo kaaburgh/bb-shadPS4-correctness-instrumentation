@@ -1,0 +1,23 @@
+name: Correctness inventory contract
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Install schema validator
+        run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
+      - name: Run correctness inventory tests
+        run: python -m unittest tests.test_correctness_inventory -v
+      - name: Validate published synthetic example
+        run: python tools/correctness_inventory.py docs/correctness/examples/correctness-case.reported.synthetic.json
