@@ -43,7 +43,7 @@ Items со статусом `Open` готовы к независимой раб
 
 # Milestone 0 — Reproducible baseline
 
-Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы между runs.
+Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы between runs.
 
 ### BB-BL1 — Pin shadPS4 source baseline and integration model
 - **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
@@ -81,11 +81,13 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Scope:** Medium
 
 ### BB-BL4 — Select minimal reproducible scenario catalogue
-- **Status / priority / execution:** Open / Critical / GATED
+- **Status / priority / execution:** Partially implemented / Critical / GATED
 - **Depends on:** BB-ENV1, BB-BL1, BB-BL2, BB-BL3
 - **Question:** Какие 3–6 коротких scenarios покрывают startup, representative gameplay и correctness/performance-sensitive behavior?
-- **Next experiment / information gain:** Подготовить scenario template и выполнить bounded target selection run по execution route из BB-ENV1.
-- **Acceptance / artifacts:** `docs/scenarios/` хранит start condition, actions, duration/end condition, expected observable и baseline identity; non-redistributable saves/assets не коммитятся.
+- **Result / evidence:** `docs/scenarios/README.md` now defines the durable scenario-entry template, baseline/evidence fields, bounded actions/end conditions, oracle-strength boundary, and candidate→selected gate. Static inspection of the existing BB-ENV1 route established that non-synthetic runs currently accept only the `process-exit` oracle and no declared artifacts: this can bind exact provenance and bounded termination, but it cannot independently attest a title-visible gameplay/correctness/performance checkpoint. Evidence is `static`; no Bloodborne target was executed and no scenario is selected by this slice.
+- **Next experiment / information gain:** On a target-owning machine, exercise bounded candidates through the BB-ENV1 route and retain only safe evidence. Keep operator checkpoint observations as `reported`; promote a candidate to `selected` only when the expected observable has an independent evidence path appropriate to the claim. If the current runner cannot produce that semantic evidence, add a producer-bound oracle/artifact path in its own bounded work before relying on it for selection.
+- **Acceptance / artifacts:** `docs/scenarios/README.md` is the current template/evidence boundary. Completion still requires 3–6 selected scenarios with minimal overlap, including startup and representative gameplay plus correctness/performance-sensitive coverage, each recording reproducible start/actions/end conditions, expected observable, exact source/target/host baseline identity, oracle strength, and safe run-evidence references; non-redistributable saves/assets are never committed.
+- **Validation:** Repository/CI checks for this partial slice validate documentation and roadmap consistency only; they do not establish target scenario reproducibility or semantic checkpoint evidence.
 - **Scope:** Medium
 
 ### BB-BL5 — Build one-shot baseline capture workflow
