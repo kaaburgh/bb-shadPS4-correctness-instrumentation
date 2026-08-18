@@ -43,7 +43,7 @@ Items со статусом `Open` готовы к независимой раб
 
 # Milestone 0 — Reproducible baseline
 
-Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы between runs.
+Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы между runs.
 
 ### BB-BL1 — Pin shadPS4 source baseline and integration model
 - **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
@@ -166,7 +166,7 @@ Outcome: каждый актуальный symptom class воспроизвод�
 
 Outcome: priority defects исправляются только после установленного semantic seam, при этом generic PS4/shadPS4 defects получают предпочтительно generic upstreamable correction; false premises сохраняются как negative results; profiling открывается отдельным correctness gate.
 
-**Shared acceptance policy:** Для каждого correction path evidence сначала определяет ownership boundary. Установленный generic defect должен вести к generic, reviewable и upstreamable shadPS4 fix; upstream merge не требуется для completion этого roadmap, поскольку решение находится у maintainers. Hardcoded title/resource/shader IDs не закрывают generic correctness requirement. Title-specific workaround остаётся допустимым только при documented evidence о genuine title-specific behavior либо impractical/disproportionate generic solution; в этом случае PR фиксирует evidence и tradeoff, применяет explicit guard/validated scope и передаёт решение к `BB-SPEC1`, а не выдаёт его за generic correctness fix.
+**Shared acceptance policy:** Для каждого correction path evidence сначала определяет ownership boundary. Установленный generic defect должен вести к generic, reviewable и upstreamable shadPS4 fix; upstream merge не требуется for completion этого roadmap, поскольку решение находится у maintainers. Hardcoded title/resource/shader IDs не закрывают generic correctness requirement. Title-specific workaround остаётся допустимым только при documented evidence о genuine title-specific behavior либо impractical/disproportionate generic solution; в этом случае PR фиксирует evidence и tradeoff, применяет explicit guard/validated scope и передаёт решение к `BB-SPEC1`, а не выдаёт его за generic correctness fix.
 
 ### BB-FIX1 — Establish resource-lifetime semantic seam
 - **Status / priority / execution:** Blocked / Critical / CLOUD RESEARCH
@@ -350,7 +350,7 @@ Outcome: cost attribution rank-ит 3–5 real opportunities с explicit uncerta
 - **Depends on:** BB-PERF2
 - **Question:** Какие 3–5 cost classes имеют largest measured optimization potential и sufficient confidence?
 - **Next experiment / information gain:** Cross-scenario ranking with uncertainty/overhead sensitivity; “no meaningful headroom” is valid result.
-- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only для evidence-backed candidates.
+- **Acceptance / artifacts:** `docs/performance/bottleneck-map.md` gives contribution/range, confidence, constraints and creates bounded feasibility items only for evidence-backed candidates.
 - **Scope:** Medium
 
 ---
