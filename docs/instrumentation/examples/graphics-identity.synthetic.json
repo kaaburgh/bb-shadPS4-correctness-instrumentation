@@ -1,0 +1,30 @@
+{
+  "model_version": "bb-graphics-identity/v1",
+  "source": {
+    "repository": "https://github.com/shadps4-emu/shadPS4",
+    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+  },
+  "shaders": [
+    {"logical_stage": "vertex", "stage_hash": "1111111111111111"},
+    {"logical_stage": "fragment", "stage_hash": "2222222222222222"}
+  ],
+  "pipeline_state": {
+    "primitive_type": "triangle_list",
+    "polygon_mode": "fill",
+    "clip_space": "zero_to_w",
+    "num_samples": 1,
+    "depth_samples": 1,
+    "color_formats": ["r8g8b8a8_unorm"],
+    "depth_format": "d32_sfloat",
+    "stencil_format": "invalid"
+  },
+  "render_state": {
+    "width": 1920,
+    "height": 1080,
+    "layers": 1,
+    "attachments": [
+      {"role": "color", "index": 0, "format": "r8g8b8a8_unorm", "samples": 1, "load_op": "load", "store_op": "store"},
+      {"role": "depth", "format": "d32_sfloat", "samples": 1, "load_op": "load", "store_op": "store"}
+    ]
+  }
+}
