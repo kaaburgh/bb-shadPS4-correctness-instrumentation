@@ -66,6 +66,12 @@ class GraphicsIdentityModelTests(unittest.TestCase):
         with self.assertRaises(graphics_identity_model.GraphicsIdentityError):
             graphics_identity_model.derive(document)
 
+    def test_rejects_unbounded_pipeline_state_fields(self):
+        document = self.load()
+        document["pipeline_state"]["shader_payload"] = "not allowed"
+        with self.assertRaises(graphics_identity_model.GraphicsIdentityError):
+            graphics_identity_model.derive(document)
+
 
 if __name__ == "__main__":
     unittest.main()
