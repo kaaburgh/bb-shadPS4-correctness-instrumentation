@@ -24,6 +24,17 @@ class ResourceSyncTraceTests(unittest.TestCase):
         )
         self.assertEqual(resource["guest_cpu_coverage_states"], ["observed", "ambiguous"])
 
+    def test_reconstruction_preserves_correlation_ids(self):
+        result = resource_sync_trace.reconstruct(self.document)
+        resource = result["resources"][0]
+        self.assertEqual(
+            resource["sync"][0]["correlation"],
+            {
+                "resource_id": "res:00000001",
+                "queue_id": "queue:00000000",
+            },
+        )
+
     def test_missing_guest_cpu_events_remain_unknown(self):
         document = copy.deepcopy(self.document)
         document["events"] = [
