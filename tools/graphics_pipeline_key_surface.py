@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v3"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v4"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -45,6 +45,7 @@ EXPECTED_COMPLETE_CANONICALIZATIONS = {
     "z_format": {"kind": "raw_bit_pattern", "bits": 2},
     "stencil_format": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]},
     "depth_clamp_enable": {"kind": "unsigned_integer", "bits": 1},
+    "prim_type": {"kind": "raw_bit_pattern", "bits": 5},
     "polygon_mode": {"kind": "raw_bit_pattern", "bits": 2},
     "clip_space": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]},
     "provoking_vtx_last": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]},
