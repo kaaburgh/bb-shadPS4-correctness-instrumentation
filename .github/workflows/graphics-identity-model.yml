@@ -1,0 +1,27 @@
+name: Graphics identity model
+
+on:
+  pull_request:
+    paths:
+      - "tools/graphics_identity_model.py"
+      - "tests/test_graphics_identity_model.py"
+      - "docs/instrumentation/examples/graphics-identity.synthetic.json"
+      - ".github/workflows/graphics-identity-model.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/graphics_identity_model.py"
+      - "tests/test_graphics_identity_model.py"
+      - "docs/instrumentation/examples/graphics-identity.synthetic.json"
+      - ".github/workflows/graphics-identity-model.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m unittest tests.test_graphics_identity_model -v
+      - run: python tools/graphics_identity_model.py docs/instrumentation/examples/graphics-identity.synthetic.json
