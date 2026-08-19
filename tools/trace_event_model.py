@@ -63,7 +63,8 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
         raise TraceContractError("unsupported schema_version")
 
     provenance = document["provenance"]
-    actual_baseline_id = baseline_id_for(provenance["material"])
+    material = provenance["material"]
+    actual_baseline_id = baseline_id_for(material)
     if provenance["baseline_id"] != actual_baseline_id:
         raise TraceContractError("baseline_id does not match provenance material")
     if expected_baseline_id is not None and actual_baseline_id != expected_baseline_id:
@@ -89,6 +90,14 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
             raise TraceContractError("event seq must be contiguous from zero")
         if event["timestamp_ns"] < previous_timestamp:
             raise TraceContractError("timestamps must be monotonic")
+        if (
+            material["evidence_class"] == "runtime"
+            and event["kind"] == "guest_cpu"
+            and event.get("coverage") == "unobserved"
+        ):
+            raise TraceContractError(
+                "runtime guest_cpu coverage=unobserved requires versioned observer provenance"
+            )
         previous_seq = event["seq"]
         previous_timestamp = event["timestamp_ns"]
 

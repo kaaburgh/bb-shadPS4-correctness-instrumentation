@@ -67,6 +67,20 @@ class TraceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "not enabled"):
             trace_event_model.validate_semantics(document)
 
+    def test_runtime_guest_cpu_unobserved_requires_observer_provenance(self):
+        document = copy.deepcopy(self.document)
+        material = document["provenance"]["material"]
+        material["evidence_class"] = "runtime"
+        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+        document["events"][1]["coverage"] = "unobserved"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "observer provenance"):
+            trace_event_model.validate_semantics(document)
+
+    def test_synthetic_guest_cpu_unobserved_remains_contract_testable(self):
+        document = copy.deepcopy(self.document)
+        document["events"][1]["coverage"] = "unobserved"
+        trace_event_model.validate_semantics(document)
+
     def test_drop_accounting_is_explicit(self):
         document = copy.deepcopy(self.document)
         document["summary"]["dropped_events"] = 17

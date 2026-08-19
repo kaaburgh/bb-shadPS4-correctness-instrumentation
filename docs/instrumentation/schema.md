@@ -10,6 +10,8 @@ BB-INS1 defines a contract for future diagnostic instrumentation. It does **not*
 
 The stream is deliberately reconstructable rather than verbose: lifecycle/access/synchronization/graphics/timing consumers share stable IDs and timestamps. Missing observation coverage is represented explicitly with `observed`, `unobserved`, `unknown`, or `ambiguous`; absence of an event is not by itself a negative semantic claim.
 
+For `guest_cpu` events, `bb-trace-events/v1` does not encode the observer/fault mechanism or independently established read/write capability coverage. Consequently a **runtime** `guest_cpu` event with `coverage=unobserved` is semantically inadmissible under v1 and the validator fails closed on it. Synthetic fixtures may still use `unobserved` to exercise consumer behavior, but runtime negative direct-access evidence requires a versioned observer-provenance boundary first. Runtime `unknown`/`ambiguous` remain the truthful representations when observer completeness is not established.
+
 ## Provenance and stale-evidence rejection
 
 Every detached stream carries `provenance.material` for all material baseline inputs: the exact shadPS4 repository/commit and patch-set digest, Bloodborne target-manifest digest, host-manifest digest, scenario digest, emulator-config digest, producer identity/digest, and schema digest. `evidence_class` distinguishes `synthetic` from `runtime`.
@@ -40,7 +42,7 @@ python tools/trace_event_model.py docs/instrumentation/examples/trace-events.syn
 
 To fail closed when consuming a trace for an already selected baseline, add `--expected-baseline-id <64-hex-id>`.
 
-Validation checks schema shape plus semantic invariants that JSON Schema alone does not express: provenance digest binding, optional exact-baseline matching, contiguous sequence numbers, monotonic timestamps, filter enforcement, configured event/buffer bounds, sampling consistency, and exact recorded-event accounting. Regression tests also reject representative private/token-like identifier values.
+Validation checks schema shape plus semantic invariants that JSON Schema alone does not express: provenance digest binding, optional exact-baseline matching, contiguous sequence numbers, monotonic timestamps, filter enforcement, configured event/buffer bounds, sampling consistency, exact recorded-event accounting, and rejection of runtime `guest_cpu coverage=unobserved` until observer provenance is versioned. Regression tests also reject representative private/token-like identifier values.
 
 ## Evidence boundary
 
