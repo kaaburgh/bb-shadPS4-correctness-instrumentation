@@ -13,11 +13,11 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def load(self):
         return json.loads(SURFACE.read_text(encoding="utf-8"))
 
-    def test_current_surface_is_complete_inventory_but_not_exact_identity(self):
+    def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 0)
-        self.assertEqual(summary["exact_missing_fields"], 21)
+        self.assertEqual(summary["exact_canonicalized_fields"], 8)
+        self.assertEqual(summary["exact_missing_fields"], 13)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
@@ -51,6 +51,26 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_rejects_wrong_equality_semantics(self):
         document = self.load()
         document["equality"]["operator"] = "fieldwise"
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_complete_field_without_established_rule(self):
+        document = self.load()
+        document["fields"][0]["exact_canonicalization"] = "complete"
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_canonicalization_rule(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "num_samples")
+        field["canonicalization"]["bits"] = 16
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_rule_on_missing_field(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "stage_hashes")
+        field["canonicalization"] = {"kind": "unsigned_integer", "bits": 64}
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
