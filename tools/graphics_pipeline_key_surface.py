@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v1"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v2"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -35,6 +35,16 @@ EXPECTED_FIELDS = (
 )
 FAMILY_RELATIONS = {"direct", "derived", "omitted"}
 CANONICALIZATION_STATES = {"missing", "complete"}
+EXPECTED_COMPLETE_CANONICALIZATIONS = {
+    "patch_control_points": {"kind": "unsigned_integer", "bits": 32},
+    "num_color_attachments": {"kind": "unsigned_integer", "bits": 32},
+    "num_samples": {"kind": "unsigned_integer", "bits": 8},
+    "depth_samples": {"kind": "unsigned_integer", "bits": 8},
+    "color_samples": {"kind": "unsigned_integer_array", "bits": 8, "length": 8},
+    "mrt_mask": {"kind": "unsigned_integer", "bits": 32},
+    "depth_clamp_enable": {"kind": "unsigned_integer", "bits": 1},
+    "depth_clip_enable": {"kind": "unsigned_integer", "bits": 1},
+}
 
 
 class PipelineKeySurfaceError(ValueError):
@@ -58,13 +68,15 @@ def validate(document: dict) -> dict:
     relation_counts = {relation: 0 for relation in sorted(FAMILY_RELATIONS)}
     complete = 0
     for field in fields:
-        if not isinstance(field, dict) or set(field) != {
-            "name",
-            "shape",
-            "family_relation",
-            "exact_canonicalization",
-        }:
-            raise PipelineKeySurfaceError("each field must use the exact v1 field schema")
+        if not isinstance(field, dict):
+            raise PipelineKeySurfaceError("each field must be an object")
+        allowed_keys = {"name", "shape", "family_relation", "exact_canonicalization", "canonicalization"}
+        if not set(field).issubset(allowed_keys):
+            raise PipelineKeySurfaceError("field contains unsupported keys")
+        required_keys = {"name", "shape", "family_relation", "exact_canonicalization"}
+        if not required_keys.issubset(field):
+            raise PipelineKeySurfaceError("field is missing required keys")
+
         name = field["name"]
         shape = field["shape"]
         relation = field["family_relation"]
@@ -77,6 +89,17 @@ def validate(document: dict) -> dict:
             raise PipelineKeySurfaceError(f"field {name} has invalid family_relation")
         if canonicalization not in CANONICALIZATION_STATES:
             raise PipelineKeySurfaceError(f"field {name} has invalid exact_canonicalization")
+
+        rule = field.get("canonicalization")
+        expected_rule = EXPECTED_COMPLETE_CANONICALIZATIONS.get(name)
+        if canonicalization == "complete":
+            if expected_rule is None:
+                raise PipelineKeySurfaceError(f"field {name} cannot be marked complete without an independently established rule")
+            if rule != expected_rule:
+                raise PipelineKeySurfaceError(f"field {name} canonicalization does not match pinned declaration semantics")
+        elif rule is not None:
+            raise PipelineKeySurfaceError(f"field {name} cannot carry a canonicalization rule while marked missing")
+
         names.append(name)
         relation_counts[relation] += 1
         complete += canonicalization == "complete"
