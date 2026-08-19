@@ -1,0 +1,27 @@
+name: Graphics pipeline key surface
+
+on:
+  pull_request:
+    paths:
+      - "tools/graphics_pipeline_key_surface.py"
+      - "tests/test_graphics_pipeline_key_surface.py"
+      - "docs/instrumentation/graphics-pipeline-key-surface.json"
+      - ".github/workflows/graphics-pipeline-key-surface.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools/graphics_pipeline_key_surface.py"
+      - "tests/test_graphics_pipeline_key_surface.py"
+      - "docs/instrumentation/graphics-pipeline-key-surface.json"
+      - ".github/workflows/graphics-pipeline-key-surface.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m unittest tests.test_graphics_pipeline_key_surface -v
+      - run: python tools/graphics_pipeline_key_surface.py docs/instrumentation/graphics-pipeline-key-surface.json
