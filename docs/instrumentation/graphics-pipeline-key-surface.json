@@ -1,5 +1,5 @@
 {
-  "schema_version": "bb-graphics-pipeline-key-surface/v2",
+  "schema_version": "bb-graphics-pipeline-key-surface/v3",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -23,13 +23,13 @@
     {"name": "depth_samples", "shape": "u8", "family_relation": "direct", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 8}},
     {"name": "color_samples", "shape": "array[8]<u8>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer_array", "bits": 8, "length": 8}},
     {"name": "mrt_mask", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
-    {"name": "z_format", "shape": "AmdGpu::DepthBuffer::ZFormat:2", "family_relation": "derived", "exact_canonicalization": "missing"},
-    {"name": "stencil_format", "shape": "AmdGpu::DepthBuffer::StencilFormat:1", "family_relation": "direct", "exact_canonicalization": "missing"},
+    {"name": "z_format", "shape": "AmdGpu::DepthBuffer::ZFormat:2", "family_relation": "derived", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern", "bits": 2}},
+    {"name": "stencil_format", "shape": "AmdGpu::DepthBuffer::StencilFormat:1", "family_relation": "direct", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]}},
     {"name": "depth_clamp_enable", "shape": "u32:1", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 1}},
     {"name": "prim_type", "shape": "AmdGpu::PrimitiveType:5", "family_relation": "direct", "exact_canonicalization": "missing"},
-    {"name": "polygon_mode", "shape": "AmdGpu::PolygonMode:2", "family_relation": "direct", "exact_canonicalization": "missing"},
-    {"name": "clip_space", "shape": "AmdGpu::ClipSpace:1", "family_relation": "direct", "exact_canonicalization": "missing"},
-    {"name": "provoking_vtx_last", "shape": "AmdGpu::ProvokingVtxLast:1", "family_relation": "omitted", "exact_canonicalization": "missing"},
+    {"name": "polygon_mode", "shape": "AmdGpu::PolygonMode:2", "family_relation": "direct", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern", "bits": 2}},
+    {"name": "clip_space", "shape": "AmdGpu::ClipSpace:1", "family_relation": "direct", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]}},
+    {"name": "provoking_vtx_last", "shape": "AmdGpu::ProvokingVtxLast:1", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_unsigned_integer", "bits": 1, "values": [0, 1]}},
     {"name": "depth_clip_enable", "shape": "u32:1", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 1}}
   ]
 }
