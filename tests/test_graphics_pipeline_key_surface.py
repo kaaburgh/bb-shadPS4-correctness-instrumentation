@@ -24,6 +24,13 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
             {"derived": 3, "direct": 6, "omitted": 12},
         )
 
+    def test_two_bit_raw_domains_preserve_reserved_patterns(self):
+        document = self.load()
+        z_format = next(field for field in document["fields"] if field["name"] == "z_format")
+        polygon_mode = next(field for field in document["fields"] if field["name"] == "polygon_mode")
+        self.assertEqual(z_format["canonicalization"], {"kind": "raw_bit_pattern", "bits": 2})
+        self.assertEqual(polygon_mode["canonicalization"], {"kind": "raw_bit_pattern", "bits": 2})
+
     def test_rejects_missing_field(self):
         document = self.load()
         document["fields"].pop()
@@ -67,14 +74,14 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
-    def test_rejects_wrong_enum_value_domain(self):
+    def test_rejects_named_enum_domain_for_raw_two_bit_field(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "polygon_mode")
-        field["canonicalization"]["values"] = [0, 1, 2, 3]
+        field["canonicalization"] = {"kind": "enum_unsigned_integer", "bits": 2, "values": [0, 1, 2]}
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
-    def test_rejects_wrong_enum_bit_width(self):
+    def test_rejects_wrong_raw_bit_width(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "z_format")
         field["canonicalization"]["bits"] = 3
