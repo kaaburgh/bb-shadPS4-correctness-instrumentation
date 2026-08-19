@@ -16,8 +16,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 8)
-        self.assertEqual(summary["exact_missing_fields"], 13)
+        self.assertEqual(summary["exact_canonicalized_fields"], 13)
+        self.assertEqual(summary["exact_missing_fields"], 8)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
@@ -64,6 +64,20 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "num_samples")
         field["canonicalization"]["bits"] = 16
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_enum_value_domain(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "polygon_mode")
+        field["canonicalization"]["values"] = [0, 1, 2, 3]
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_enum_bit_width(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "z_format")
+        field["canonicalization"]["bits"] = 3
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
