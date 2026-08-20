@@ -16,12 +16,12 @@ from typing import Any, Sequence
 try:
     from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
     from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
-    from tools.run_target_experiment_v3 import TargetRunError, _package_target_manifest
+    from tools.run_target_experiment import TargetRunError, _package_target_manifest
 except ModuleNotFoundError:  # direct `python tools/capture_baseline.py`
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
     from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
-    from tools.run_target_experiment_v3 import TargetRunError, _package_target_manifest
+    from tools.run_target_experiment import TargetRunError, _package_target_manifest
 
 SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
@@ -64,6 +64,15 @@ def _target_projection(target: dict[str, Any], source_payload: bytes, packaged_p
     }
 
 
+def _capture_evidence_class(target: dict[str, Any]) -> str:
+    classes = set(target["provenance"]["evidence_classes"])
+    if "runtime" in classes:
+        return "runtime"
+    if "synthetic" in classes:
+        return "synthetic"
+    return "static"
+
+
 def build_capture(target_manifest: Path, *, backend: str | None = None, emulator_config: Path | None = None) -> tuple[dict[str, Any], bytes, bytes]:
     started = time.perf_counter_ns()
     target, source_target_bytes = _read_target(target_manifest)
@@ -83,7 +92,7 @@ def build_capture(target_manifest: Path, *, backend: str | None = None, emulator
             "scope": "target-manifest validation + safe projection + host collection + canonical serialization; excludes target runtime",
         },
         "evidence": {
-            "class": "synthetic" if "synthetic" in target["provenance"]["evidence_classes"] else "static",
+            "class": _capture_evidence_class(target),
             "runtime_claims": False,
         },
     }
