@@ -170,6 +170,10 @@ def _stage_emulator_binary(source: Path, destination: Path, source_info: os.stat
     except OSError as error:
         raise TargetRunError("unable to stage emulator binary for private execution") from error
     _require_regular_unlinked_file(destination, "staged emulator binary")
+    if os.name == "posix" and not os.access(destination, os.X_OK):
+        raise TargetRunError(
+            "staged emulator binary is not executable; working_directory filesystem may be mounted noexec"
+        )
     return destination
 
 
@@ -229,8 +233,11 @@ def run_experiment(
 
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
     working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
+    snapshot_parent = working_directory_resolved if not synthetic_control else None
 
-    with tempfile.TemporaryDirectory(prefix="bb-target-run-snapshot-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="bb-target-run-snapshot-", dir=snapshot_parent
+    ) as directory:
         snapshot_root = Path(directory)
         staged_target = snapshot_root / "target-manifest.json"
         staged_scenario = snapshot_root / "scenario.json"
