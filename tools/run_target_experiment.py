@@ -173,8 +173,9 @@ def _restore_original_command_identity(
     run_manifest: dict[str, Any],
     original_command_raw: bytes,
     packaged_target_raw: bytes | None = None,
+    publish_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Bind the detached record to stable operator/shared-projection identities."""
+    """Bind stable identities and atomically publish the supported artifact."""
     run_manifest["execution"]["command_argv_sha256"] = _legacy._sha256_bytes(original_command_raw)
     if packaged_target_raw is not None:
         run_manifest["target"]["packaged_manifest_sha256"] = _legacy._sha256_bytes(
@@ -190,11 +191,11 @@ def _restore_original_command_identity(
         with zipfile.ZipFile(output_path, "r") as archive:
             entries = {name: archive.read(name) for name in archive.namelist()}
     except (OSError, zipfile.BadZipFile) as error:
-        raise TargetRunError("unable to reopen run artifact for stable command identity") from error
+        raise TargetRunError("unable to reopen run artifact for stable identities") from error
     if packaged_target_raw is not None:
         entries["target-manifest.json"] = packaged_target_raw
     entries["run-manifest.json"] = _legacy._json_bytes(run_manifest)
-    _legacy._write_zip_atomic(output_path, entries)
+    _legacy._write_zip_atomic(publish_path or output_path, entries)
     return run_manifest
 
 
@@ -229,6 +230,7 @@ def run_experiment(
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
     working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
     snapshot_parent = working_directory_resolved if not synthetic_control else None
+    output_resolved = output_path.resolve()
 
     with tempfile.TemporaryDirectory(
         prefix="bb-target-run-snapshot-", dir=snapshot_parent
@@ -265,28 +267,34 @@ def run_experiment(
                 target_manifest, scenario, emulator_binary_path, emulator_binary_sha256
             )
 
-        manifest = _LEGACY_RUN_EXPERIMENT(
-            target_manifest_path=staged_target,
-            scenario_path=staged_scenario,
-            command_path=staged_command_path,
-            emulator_binary_path=staged_emulator_path,
-            emulator_binary_sha256=emulator_binary_sha256,
-            source_repository=source_repository,
-            source_commit=source_commit,
-            source_tree=source_tree,
-            patch_commits=patch_commits,
-            target_root=target_root,
-            working_directory=working_directory,
-            output_path=output_path,
-            graphics_backend=graphics_backend,
-            emulator_config_path=emulator_config_path,
-        )
-        return _restore_original_command_identity(
-            output_path.resolve(),
-            manifest,
-            command_raw,
-            packaged_target_raw=safe_target_raw,
-        )
+        output_resolved.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="bb-target-run-artifact-", dir=output_resolved.parent
+        ) as artifact_directory:
+            legacy_output = Path(artifact_directory) / "legacy-run.zip"
+            manifest = _LEGACY_RUN_EXPERIMENT(
+                target_manifest_path=staged_target,
+                scenario_path=staged_scenario,
+                command_path=staged_command_path,
+                emulator_binary_path=staged_emulator_path,
+                emulator_binary_sha256=emulator_binary_sha256,
+                source_repository=source_repository,
+                source_commit=source_commit,
+                source_tree=source_tree,
+                patch_commits=patch_commits,
+                target_root=target_root,
+                working_directory=working_directory,
+                output_path=legacy_output,
+                graphics_backend=graphics_backend,
+                emulator_config_path=emulator_config_path,
+            )
+            return _restore_original_command_identity(
+                legacy_output,
+                manifest,
+                command_raw,
+                packaged_target_raw=safe_target_raw,
+                publish_path=output_resolved,
+            )
 
 
 _legacy.run_experiment = run_experiment
