@@ -1,4 +1,3 @@
-import errno
 import hashlib
 import json
 import os
@@ -48,6 +47,55 @@ def _command(binary: Path) -> dict:
         "emulator_binary_index": 0,
         "target_path_index": 1,
     }
+
+
+def _write_bound_target_fixture(root: Path, *, runtime_classified: bool = False) -> tuple[Path, Path]:
+    target_root = root / "target-root"
+    payloads = {
+        "app/eboot.bin": b"synthetic-eboot",
+        "app/sce_sys/param.sfo": b"synthetic-param-sfo",
+        "app/data/control.bin": b"synthetic-content",
+    }
+    for relative, payload in payloads.items():
+        path = target_root.joinpath(*relative.split("/"))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+
+    manifest = _manifest()
+    if runtime_classified:
+        manifest["provenance"]["evidence_classes"] = ["runtime"]
+    manifest["build"]["eboot"]["sha256"] = hashlib.sha256(payloads["app/eboot.bin"]).hexdigest()
+    manifest["build"]["eboot"]["size_bytes"] = len(payloads["app/eboot.bin"])
+    manifest["build"]["param_sfo"]["sha256"] = hashlib.sha256(
+        payloads["app/sce_sys/param.sfo"]
+    ).hexdigest()
+    manifest["build"]["param_sfo"]["size_bytes"] = len(
+        payloads["app/sce_sys/param.sfo"]
+    )
+    records = []
+    total_bytes = 0
+    for canonical_path, payload in payloads.items():
+        digest = hashlib.sha256(payload).hexdigest()
+        total_bytes += len(payload)
+        records.append(
+            (
+                canonical_path.encode("utf-8"),
+                canonical_path.encode("utf-8")
+                + b"\x00"
+                + str(len(payload)).encode("ascii")
+                + b"\x00"
+                + digest.encode("ascii")
+                + b"\n",
+            )
+        )
+    records.sort(key=lambda item: item[0])
+    tree = manifest["content"]["resolved_tree"]
+    tree["sha256"] = hashlib.sha256(b"".join(record for _path, record in records)).hexdigest()
+    tree["file_count"] = len(records)
+    tree["total_bytes"] = total_bytes
+    manifest_path = root / "target-manifest.json"
+    manifest_path.write_bytes(runner._json_bytes(manifest))
+    return target_root, manifest_path
 
 
 class ReviewRegressionTests(unittest.TestCase):
@@ -180,74 +228,147 @@ class ReviewRegressionTests(unittest.TestCase):
             self.assertEqual(observed["scenario_raw"], scenario_raw)
             self.assertEqual(observed["command_raw"], command_raw)
 
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux descriptor execution regression")
-    def test_linux_executable_lease_survives_atomic_path_replacement(self):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
+    def test_linux_non_synthetic_staged_binary_executes_end_to_end(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "binary"
-            original = b"verified-executable-bytes"
-            path.write_bytes(original)
-            digest = "sha256:" + hashlib.sha256(original).hexdigest()
-            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
-            with runner._ExecutableLease(path, pinned, digest) as lease:
-                replacement = Path(directory) / "replacement"
-                replacement.write_bytes(b"replacement")
-                os.replace(replacement, path)
-                self.assertEqual(lease.pass_fds, (lease._fd,))
-                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
-                self.assertEqual(path.read_bytes(), b"replacement")
+            root = Path(directory)
+            target_root, target_manifest_path = _write_bound_target_fixture(
+                root, runtime_classified=True
+            )
+            workdir = root / "work"
+            workdir.mkdir()
+            output = root / "run.zip"
 
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux sealed executable regression")
-    def test_linux_executable_lease_is_immune_to_in_place_staged_file_writes(self):
+            standin = root / "standin-emulator"
+            standin.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
+            pinned = {
+                "binary_name": "standin-emulator",
+                "binary_sha256": "sha256:" + standin_sha256,
+                "binary_size_bytes": standin.stat().st_size,
+            }
+
+            scenario_path = root / "scenario.json"
+            scenario_path.write_bytes(runner._json_bytes(_scenario()))
+            command = {
+                "schema_id": runner.COMMAND_SCHEMA_ID,
+                "schema_version": runner.COMMAND_SCHEMA_VERSION,
+                "argv": [str(standin), str(target_root / "app")],
+                "emulator_binary_index": 0,
+                "target_path_index": 1,
+            }
+            command_path = root / "command.json"
+            command_path.write_bytes(runner._json_bytes(command))
+
+            with mock.patch.dict(
+                runner.PINNED_BUILD_ARTIFACTS,
+                {"linux": pinned},
+                clear=False,
+            ):
+                manifest = runner.run_experiment(
+                    target_manifest_path=target_manifest_path,
+                    scenario_path=scenario_path,
+                    command_path=command_path,
+                    emulator_binary_path=standin,
+                    emulator_binary_sha256=standin_sha256,
+                    source_repository=runner.PINNED_SOURCE_REPOSITORY,
+                    source_commit=runner.PINNED_SOURCE_COMMIT,
+                    source_tree=runner.PINNED_SOURCE_TREE,
+                    patch_commits=[],
+                    target_root=target_root,
+                    working_directory=workdir,
+                    output_path=output,
+                    graphics_backend="synthetic",
+                    emulator_config_path=None,
+                )
+
+            self.assertFalse(runner._is_explicit_synthetic_control(
+                json.loads(target_manifest_path.read_text(encoding="utf-8"))
+            ))
+            self.assertEqual(manifest["termination"]["state"], "completed")
+            self.assertEqual(manifest["oracle"]["state"], "passed")
+            self.assertEqual(manifest["provenance"]["producer"]["version"], "1.11.0")
+            self.assertEqual(manifest["emulator"]["binary"]["sha256"], "sha256:" + standin_sha256)
+            self.assertTrue(output.is_file())
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
+    def test_linux_non_synthetic_digest_mismatch_fails_before_delegation(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "binary"
-            original = b"verified-executable-bytes"
-            replacement = b"same-inode-replacement"
-            path.write_bytes(original)
-            digest = "sha256:" + hashlib.sha256(original).hexdigest()
-            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
-            with runner._ExecutableLease(path, pinned, digest) as lease:
-                path.write_bytes(replacement)
-                self.assertEqual(path.read_bytes(), replacement)
-                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
-                with self.assertRaises(OSError):
-                    Path(lease.execution_path).write_bytes(b"attempted-mutation")
-                self.assertEqual(Path(lease.execution_path).read_bytes(), original)
+            root = Path(directory)
+            target_root, target_manifest_path = _write_bound_target_fixture(
+                root, runtime_classified=True
+            )
+            workdir = root / "work"
+            workdir.mkdir()
+            standin = root / "standin-emulator"
+            standin.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
+            pinned = {
+                "binary_name": "standin-emulator",
+                "binary_sha256": "sha256:" + standin_sha256,
+                "binary_size_bytes": standin.stat().st_size,
+            }
+            scenario_path = root / "scenario.json"
+            scenario_path.write_bytes(runner._json_bytes(_scenario()))
+            command_path = root / "command.json"
+            command_path.write_bytes(
+                runner._json_bytes(
+                    {
+                        "schema_id": runner.COMMAND_SCHEMA_ID,
+                        "schema_version": runner.COMMAND_SCHEMA_VERSION,
+                        "argv": [str(standin), str(target_root / "app")],
+                        "emulator_binary_index": 0,
+                        "target_path_index": 1,
+                    }
+                )
+            )
 
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux memfd policy regression")
-    def test_linux_memfd_requests_exec_and_falls_back_only_for_older_kernel(self):
-        fake_fd = 123456
-        with mock.patch.object(
-            runner.os,
-            "memfd_create",
-            side_effect=[OSError(errno.EINVAL, "unknown MFD_EXEC"), fake_fd],
-        ) as create:
-            self.assertEqual(runner._create_linux_executable_memfd(), fake_fd)
-        first_flags = create.call_args_list[0].kwargs["flags"]
-        second_flags = create.call_args_list[1].kwargs["flags"]
-        self.assertTrue(first_flags & 0x0010)
-        self.assertFalse(second_flags & 0x0010)
+            with (
+                mock.patch.dict(
+                    runner.PINNED_BUILD_ARTIFACTS,
+                    {"linux": pinned},
+                    clear=False,
+                ),
+                mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT") as legacy_run,
+            ):
+                with self.assertRaisesRegex(
+                    runner.TargetRunError,
+                    "requires the exact independently observed upstream",
+                ):
+                    runner.run_experiment(
+                        target_manifest_path=target_manifest_path,
+                        scenario_path=scenario_path,
+                        command_path=command_path,
+                        emulator_binary_path=standin,
+                        emulator_binary_sha256="0" * 64,
+                        source_repository=runner.PINNED_SOURCE_REPOSITORY,
+                        source_commit=runner.PINNED_SOURCE_COMMIT,
+                        source_tree=runner.PINNED_SOURCE_TREE,
+                        patch_commits=[],
+                        target_root=target_root,
+                        working_directory=workdir,
+                        output_path=root / "run.zip",
+                        graphics_backend="synthetic",
+                        emulator_config_path=None,
+                    )
+                legacy_run.assert_not_called()
 
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux memfd policy regression")
-    def test_linux_memfd_reports_noexec_policy_explicitly(self):
-        with mock.patch.object(
-            runner.os,
-            "memfd_create",
-            side_effect=OSError(errno.EACCES, "memfd execution denied"),
+    def test_removed_sealing_symbols_do_not_reappear(self):
+        for name in (
+            "_ExecutableLease",
+            "_sha256_fd",
+            "_create_linux_executable_memfd",
+            "_sealed_linux_executable",
+            "_execute_command_with_pass_fds",
         ):
-            with self.assertRaisesRegex(runner.TargetRunError, "vm.memfd_noexec=2"):
-                runner._create_linux_executable_memfd()
-
-    @unittest.skipUnless(os.name == "nt", "Windows executable lease regression")
-    def test_windows_executable_lease_blocks_path_replacement(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "binary.exe"
-            original = b"verified-executable-bytes"
-            path.write_bytes(original)
-            digest = "sha256:" + hashlib.sha256(original).hexdigest()
-            pinned = {"binary_sha256": digest, "binary_size_bytes": len(original)}
-            with runner._ExecutableLease(path, pinned, digest):
-                with self.assertRaises(OSError):
-                    path.write_bytes(b"replacement")
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(runner, name))
 
     def test_original_command_identity_replaces_ephemeral_staged_digest_in_zip(self):
         original = b'{"argv":["operator/path","target"]}\n'
@@ -282,9 +403,9 @@ class ReviewRegressionTests(unittest.TestCase):
             with self.assertRaisesRegex(runner.TargetRunError, "link or reparse alias"):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
-    def test_runner_version_identifies_hardened_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.10.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.10.0")
+    def test_runner_version_identifies_supported_entrypoint(self):
+        self.assertEqual(runner.RUNNER_VERSION, "1.11.0")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.11.0")
         self.assertEqual(runner.PINNED_BUILD_WORKFLOW_RUN_ID, 31742892228)
 
 

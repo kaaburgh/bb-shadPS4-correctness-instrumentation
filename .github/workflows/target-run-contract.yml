@@ -23,6 +23,7 @@ jobs:
           tests.test_run_target_experiment
           tests.test_run_target_experiment_hardening
           tests.test_run_target_experiment_review_regressions
+          tests.test_run_target_experiment_staging
           -v
       - name: Validate published target-run schema and synthetic scenario
         run: >-
