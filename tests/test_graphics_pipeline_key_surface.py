@@ -16,8 +16,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 16)
-        self.assertEqual(summary["exact_missing_fields"], 5)
+        self.assertEqual(summary["exact_canonicalized_fields"], 17)
+        self.assertEqual(summary["exact_missing_fields"], 4)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
@@ -26,11 +26,16 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
 
     def test_raw_domains_preserve_reserved_patterns(self):
         document = self.load()
+        write_masks = next(field for field in document["fields"] if field["name"] == "write_masks")
         cb_shader_mask = next(field for field in document["fields"] if field["name"] == "cb_shader_mask")
         logic_op = next(field for field in document["fields"] if field["name"] == "logic_op")
         z_format = next(field for field in document["fields"] if field["name"] == "z_format")
         prim_type = next(field for field in document["fields"] if field["name"] == "prim_type")
         polygon_mode = next(field for field in document["fields"] if field["name"] == "polygon_mode")
+        self.assertEqual(
+            write_masks["canonicalization"],
+            {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
+        )
         self.assertEqual(cb_shader_mask["canonicalization"], {"kind": "raw_bit_pattern", "bits": 32})
         self.assertEqual(logic_op["canonicalization"], {"kind": "raw_bit_pattern", "bits": 8})
         self.assertEqual(z_format["canonicalization"], {"kind": "raw_bit_pattern", "bits": 2})
@@ -102,6 +107,25 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "cb_shader_mask")
         field["canonicalization"]["bits"] = 16
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_narrowed_write_mask_domain(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "write_masks")
+        field["canonicalization"] = {
+            "kind": "enum_unsigned_integer_array",
+            "bits": 4,
+            "length": 8,
+            "values": list(range(16)),
+        }
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_write_mask_length(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "write_masks")
+        field["canonicalization"]["length"] = 7
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
