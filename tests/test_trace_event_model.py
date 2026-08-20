@@ -31,6 +31,30 @@ class TraceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "does not match expected baseline"):
             trace_event_model.validate_semantics(self.document, expected_baseline_id="0" * 64)
 
+    def test_repository_producer_digest_mismatch_is_rejected(self):
+        document = copy.deepcopy(self.document)
+        material = document["provenance"]["material"]
+        material["producer"]["producer_sha256"] = "0" * 64
+        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "producer_sha256"):
+            trace_event_model.validate_semantics(document)
+
+    def test_repository_schema_digest_mismatch_is_rejected(self):
+        document = copy.deepcopy(self.document)
+        material = document["provenance"]["material"]
+        material["producer"]["schema_sha256"] = "0" * 64
+        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "schema_sha256"):
+            trace_event_model.validate_semantics(document)
+
+    def test_contract_producer_cannot_self_declare_runtime(self):
+        document = copy.deepcopy(self.document)
+        material = document["provenance"]["material"]
+        material["evidence_class"] = "runtime"
+        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "runtime evidence requires"):
+            trace_event_model.validate_semantics(document)
+
     def test_private_operator_string_is_rejected_as_resource_id(self):
         document = copy.deepcopy(self.document)
         document["events"][0]["correlation"]["resource_id"] = "alice"
@@ -71,6 +95,7 @@ class TraceEventContractTests(unittest.TestCase):
         document = copy.deepcopy(self.document)
         material = document["provenance"]["material"]
         material["evidence_class"] = "runtime"
+        material["producer"]["producer_id"] = "shadps4-bb-instrumentation"
         document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
         document["events"][1]["coverage"] = "unobserved"
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "observer provenance"):

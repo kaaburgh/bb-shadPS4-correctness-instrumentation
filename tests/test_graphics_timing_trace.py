@@ -30,6 +30,12 @@ class GraphicsTimingTraceTests(unittest.TestCase):
         )
         self.assertEqual(result["unscoped_timing"], [])
 
+    def test_expected_baseline_mismatch_is_rejected(self):
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "expected baseline"):
+            graphics_timing_trace.reconstruct(
+                self.document, expected_baseline_id="0" * 64
+            )
+
     def test_draw_without_pipeline_id_is_rejected(self):
         document = copy.deepcopy(self.document)
         del document["events"][1]["correlation"]["pipeline_id"]

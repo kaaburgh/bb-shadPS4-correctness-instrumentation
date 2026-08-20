@@ -13,9 +13,11 @@ class ResourceTraceError(ValueError):
     pass
 
 
-def reconstruct(document):
+def reconstruct(document, *, expected_baseline_id: str | None = None):
     trace_event_model.validate_schema(document)
-    trace_event_model.validate_semantics(document)
+    trace_event_model.validate_semantics(
+        document, expected_baseline_id=expected_baseline_id
+    )
 
     resources = {}
     active = set()
@@ -102,8 +104,11 @@ def reconstruct(document):
     }
 
 
-def analyze(path: Path):
-    return reconstruct(trace_event_model.load_strict(path))
+def analyze(path: Path, *, expected_baseline_id: str | None = None):
+    return reconstruct(
+        trace_event_model.load_strict(path),
+        expected_baseline_id=expected_baseline_id,
+    )
 
 
 if __name__ == "__main__":
@@ -111,5 +116,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Reconstruct resource/access/sync timelines")
     parser.add_argument("path", type=Path)
+    parser.add_argument(
+        "--expected-baseline-id",
+        help="fail closed unless trace provenance matches this exact baseline id",
+    )
     args = parser.parse_args()
-    print(json.dumps(analyze(args.path), indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            analyze(args.path, expected_baseline_id=args.expected_baseline_id),
+            indent=2,
+            sort_keys=True,
+        )
+    )
