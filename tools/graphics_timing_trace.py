@@ -13,9 +13,11 @@ class GraphicsTimingError(ValueError):
     pass
 
 
-def reconstruct(document):
+def reconstruct(document, *, expected_baseline_id: str | None = None):
     trace_event_model.validate_schema(document)
-    trace_event_model.validate_semantics(document)
+    trace_event_model.validate_semantics(
+        document, expected_baseline_id=expected_baseline_id
+    )
 
     pipelines = {}
     span_anchors = {}
@@ -107,8 +109,11 @@ def reconstruct(document):
     }
 
 
-def reconstruct_path(path: Path):
-    return reconstruct(trace_event_model.load_strict(path))
+def reconstruct_path(path: Path, *, expected_baseline_id: str | None = None):
+    return reconstruct(
+        trace_event_model.load_strict(path),
+        expected_baseline_id=expected_baseline_id,
+    )
 
 
 if __name__ == "__main__":
@@ -118,5 +123,17 @@ if __name__ == "__main__":
         description="Reconstruct bounded graphics/pipeline/timing correlation from a BB trace"
     )
     parser.add_argument("path", type=Path)
+    parser.add_argument(
+        "--expected-baseline-id",
+        help="fail closed unless trace provenance matches this exact baseline id",
+    )
     args = parser.parse_args()
-    print(json.dumps(reconstruct_path(args.path), sort_keys=True, indent=2))
+    print(
+        json.dumps(
+            reconstruct_path(
+                args.path, expected_baseline_id=args.expected_baseline_id
+            ),
+            sort_keys=True,
+            indent=2,
+        )
+    )

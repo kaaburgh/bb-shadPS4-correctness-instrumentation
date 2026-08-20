@@ -35,6 +35,12 @@ class ResourceSyncTraceTests(unittest.TestCase):
             },
         )
 
+    def test_expected_baseline_mismatch_is_rejected(self):
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "expected baseline"):
+            resource_sync_trace.reconstruct(
+                self.document, expected_baseline_id="0" * 64
+            )
+
     def test_missing_guest_cpu_events_remain_unknown(self):
         document = copy.deepcopy(self.document)
         document["events"] = [

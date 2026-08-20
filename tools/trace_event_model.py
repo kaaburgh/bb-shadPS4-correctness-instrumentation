@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 
+ROOT = Path(__file__).parents[1]
+TRACE_SCHEMA_PATH = ROOT / "schemas" / "trace-event.schema.json"
 SCHEMA_VERSION = "bb-trace-events/v1"
 CATEGORIES = {"resource", "access", "sync", "graphics", "timing"}
 
@@ -33,6 +35,12 @@ def load_strict(path: Path):
     return loads_strict(path.read_text(encoding="utf-8"))
 
 
+def _sha256_repository_text(path: Path) -> str:
+    """Hash repository text canonically across Git working-tree line endings."""
+    canonical = path.read_text(encoding="utf-8").encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def baseline_id_for(material) -> str:
     payload = json.dumps(
         material,
@@ -49,13 +57,32 @@ def validate_schema(document):
     except ModuleNotFoundError as exc:
         raise TraceContractError("jsonschema is required for schema validation") from exc
 
-    schema = load_strict(Path(__file__).parents[1] / "schemas" / "trace-event.schema.json")
+    schema = load_strict(TRACE_SCHEMA_PATH)
     validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(document), key=lambda error: list(error.absolute_path))
     if errors:
         location = "/".join(str(part) for part in errors[0].absolute_path) or "<root>"
         raise TraceContractError(f"schema validation failed at {location}: {errors[0].message}")
     return document
+
+
+def _validate_bound_provenance(material) -> None:
+    producer = material["producer"]
+    producer_id = producer["producer_id"]
+
+    actual_schema_sha256 = _sha256_repository_text(TRACE_SCHEMA_PATH)
+    if producer["schema_sha256"] != actual_schema_sha256:
+        raise TraceContractError("schema_sha256 does not match repository trace schema")
+
+    if producer_id == "bb-trace-event-model":
+        actual_producer_sha256 = _sha256_repository_text(Path(__file__))
+        if producer["producer_sha256"] != actual_producer_sha256:
+            raise TraceContractError("producer_sha256 does not match repository trace event model")
+
+    if material["evidence_class"] == "runtime" and producer_id != "shadps4-bb-instrumentation":
+        raise TraceContractError(
+            "runtime evidence requires shadps4-bb-instrumentation producer provenance"
+        )
 
 
 def validate_semantics(document, *, expected_baseline_id: str | None = None):
@@ -69,6 +96,7 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
         raise TraceContractError("baseline_id does not match provenance material")
     if expected_baseline_id is not None and actual_baseline_id != expected_baseline_id:
         raise TraceContractError("trace baseline does not match expected baseline")
+    _validate_bound_provenance(material)
 
     capture = document["capture"]
     limits = capture["limits"]
