@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from tools import capture_baseline
+from tools import run_target_experiment as target_runner
 
 ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_TARGET = ROOT / "docs/baseline/examples/bloodborne-target-manifest.synthetic.json"
@@ -55,6 +57,30 @@ class BaselineCaptureTests(unittest.TestCase):
                 self.assertEqual(projected["target"]["name"], "Bloodborne")
                 self.assertIsNone(projected["build"]["app_version"])
                 self.assertIsNone(projected["content"]["base"]["content_id"])
+        validate.assert_called_once()
+
+    @mock.patch("tools.capture_baseline.validate_host_manifest")
+    @mock.patch("tools.capture_baseline.collect_manifest")
+    def test_dlc_projection_matches_supported_runner_and_runtime_class_is_preserved(self, collect, validate):
+        collect.return_value = self._host()
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target.json"
+            document = json.loads(SYNTHETIC_TARGET.read_text(encoding="utf-8"))
+            document["provenance"]["evidence_classes"] = ["runtime"]
+            document["content"]["dlc"] = {
+                "dlc.alpha": {"version": "private-looking-version-label", "source_package": None}
+            }
+            target.write_text(json.dumps(document), encoding="utf-8")
+
+            capture, target_bytes, _host_bytes = capture_baseline.build_capture(target)
+            projected = json.loads(target_bytes)
+            expected_key = "dlc-sha256-" + hashlib.sha256(b"dlc.alpha").hexdigest()
+
+            self.assertIs(capture_baseline._package_target_manifest, target_runner._package_target_manifest)
+            self.assertEqual(target_bytes, target_runner._package_target_manifest(document))
+            self.assertEqual(set(projected["content"]["dlc"]), {expected_key})
+            self.assertEqual(capture["evidence"]["class"], "runtime")
+            self.assertFalse(capture["evidence"]["runtime_claims"])
         validate.assert_called_once()
 
     @mock.patch("tools.capture_baseline.validate_host_manifest")
