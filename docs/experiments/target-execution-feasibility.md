@@ -16,7 +16,7 @@ python tools/run_target_experiment.py run ...
 
 Before delegation, the supported entrypoint loads and validates the target manifest, scenario, and command exactly once. The exact target-manifest, scenario, and command bytes are copied into a private per-run snapshot so later replacement of operator input paths cannot change the evidence decision or the bytes consumed by the engine.
 
-## Exact executable provenance and hash-to-exec binding
+## Exact executable provenance and private staging
 
 A caller-provided digest does not prove that executable bytes came from the declared source. Non-synthetic target execution therefore accepts only the independently observed upstream `shadps4-emu/shadPS4` **Build and Release** workflow run `31742892228` for BB-BL1 commit `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` / tree `e6026c14092b01702d4e49a5ac6c2f779a072dfe`.
 
@@ -25,18 +25,17 @@ Accepted artifacts:
 - Windows SDL: artifact `9198403207`, `shadps4-win64-sdl-2026-08-13-28c84fb`; archive SHA-256 `bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65`; contained `shadPS4.exe` SHA-256 `4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f`, size `67641344`.
 - Linux SDL: artifact `9198177755`, `shadps4-linux-sdl-2026-08-13-28c84fb`; archive SHA-256 `127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789`; contained `Shadps4-sdl.AppImage` SHA-256 `7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`, size `35179000`.
 
-For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes into private per-run staging and then establishes an execution lease that remains live through process launch and teardown:
+For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes into private per-run staging, adds the user execute bit to the staged copy, and verifies the staged digest and size against both the independently pinned artifact and the caller-supplied digest before delegating execution. The compatibility engine then repeats direct command-path binding and binary-digest verification against that staged path before launch.
 
-- on Linux it copies the staged bytes into an anonymous `memfd`, requests executable memfd semantics (`MFD_EXEC` where supported), applies write/grow/shrink/seal locks, verifies the sealed bytes, and executes through `/proc/self/fd/<fd>` with that descriptor explicitly inherited. Atomic pathname replacement and same-inode writes to the staged pathname therefore cannot change the bytes executed after verification. Kernels predating `MFD_EXEC` use the legacy flag set only when the new flag is rejected as unknown; a host policy that forbids executable memfds (notably `vm.memfd_noexec=2`) is an explicit capability failure rather than a silent provenance downgrade;
-- on Windows it opens the staged executable with a read-only handle that does not share write/delete access, verifies the locked path, and keeps the handle open through launch; replacement or overwrite is denied during the hash-to-exec window.
+The project execution model has no documented adversary: the target run occurs on the maintainer's own machine with a binary they selected, while the maintainer is present to confirm whether the emulator launched. The previous platform-specific sealed-memfd / locked-handle hash-to-exec lease was therefore removed rather than repaired. No `vm.memfd_noexec` capability is required, and Linux and Windows use the existing bounded compatibility-engine executor after the same staged-byte provenance checks. This contract does not claim resistance to a hostile same-user process mutating the staged file after verification.
 
-The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.10.0` identifies the sealed-memfd / locked-handle execution contract and the fail-closed compatibility-engine boundary.
+The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.11.0` identifies the private-staging + pre-launch digest contract and the fail-closed compatibility-engine boundary.
 
 Fully synthetic controls are exempt from the upstream executable pin. They remain capability evidence only.
 
 ## Stable operator command identity
 
-Non-synthetic execution necessarily rewrites the snapshotted `argv[0]` to the leased execution endpoint. That endpoint is an implementation detail and may include a temporary path or file-descriptor number, so it is not a stable experiment identity.
+Non-synthetic execution rewrites the snapshotted `argv[0]` to the private staged executable path. That temporary path is an implementation detail and is not a stable experiment identity.
 
 `execution.command_argv_sha256` therefore identifies the exact **operator-supplied command file bytes loaded before staging**, not the rewritten temporary command. After the compatibility engine emits the safe ZIP, the supported entrypoint replaces the ephemeral command digest in `run-manifest.json` with the digest of the original command snapshot, revalidates the run record, and atomically rewrites the ZIP. Identical operator command inputs therefore retain the same detached identity even when staging locations differ.
 
@@ -100,6 +99,6 @@ The next target-machine execution can validate the bounded execution route with 
 
 ## Validation in this PR
 
-The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, Linux sealed-memfd and Windows handle-locked executable leases, executable-memfd policy handling, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.10.0`.
+The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.11.0`. A Linux regression drives a non-synthetic-classified manifest end-to-end through the supported entrypoint with a locally generated stand-in executable and verifies that the private staged binary reaches the normal bounded executor. Dedicated sealing symbols are asserted absent so the retired descriptor-executor path cannot silently reappear.
 
 These are synthetic/contract validations only; they do not establish Bloodborne runtime behavior.
