@@ -18,8 +18,23 @@ class CorrectnessCaseError(ValueError):
 def load_strict(path: Path) -> Mapping[str, Any]:
     def reject_constant(value: str) -> None:
         raise CorrectnessCaseError(f"non-finite JSON number: {value}")
+
+    def reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise CorrectnessCaseError(f"duplicate JSON member: {key}")
+            result[key] = value
+        return result
+
     try:
-        value = json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant)
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_members,
+            parse_constant=reject_constant,
+        )
+    except CorrectnessCaseError:
+        raise
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise CorrectnessCaseError(f"unable to read correctness case: {error}") from error
     if not isinstance(value, dict):
@@ -31,7 +46,7 @@ def _runtime_evidence(case: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [entry for entry in case["provenance"]["evidence"] if entry["class"] == "runtime"]
 
 
-def _has_controlled_host_contrast(runtime: list[Mapping[str, Any]]) -> bool:
+def _has_distinct_host_baselines(runtime: list[Mapping[str, Any]]) -> bool:
     hosts_by_non_host_baseline: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
     for entry in runtime:
         baseline = entry["baseline"]
@@ -89,6 +104,11 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
             raise CorrectnessCaseError(
                 f"{status} runtime evidence scenario_id must match reproduction scenario_id"
             )
+    elif status == "unknown":
+        if quality not in {"none", "partial"} or scenario_id is not None:
+            raise CorrectnessCaseError(
+                "unknown status requires quality=none or partial and scenario_id=null"
+            )
 
     classification = case["classification"]
     kind = classification["kind"]
@@ -100,10 +120,11 @@ def validate_case(case: Mapping[str, Any], schema_path: Path = SCHEMA_PATH) -> N
             raise CorrectnessCaseError(
                 f"{kind} requires static or runtime evidence, not only reported/synthetic/assumed evidence"
             )
-    if kind in {"backend_specific", "driver_specific"} and not _has_controlled_host_contrast(runtime):
+    if kind in {"backend_specific", "driver_specific"} and not _has_distinct_host_baselines(runtime):
         raise CorrectnessCaseError(
-            f"{kind} requires at least two exact host baselines while source repository, "
-            "source commit, target manifest, and exact scenario_id remain fixed"
+            f"{kind} requires at least two distinct exact host baselines while source repository, "
+            "source commit, target manifest, and exact scenario_id remain fixed; this gate does "
+            "not establish which host dimension differs"
         )
 
 
