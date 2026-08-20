@@ -1,9 +1,10 @@
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from tools.correctness_inventory import CorrectnessCaseError, validate_case
+from tools.correctness_inventory import CorrectnessCaseError, load_strict, validate_case
 
 ROOT = Path(__file__).parents[1]
 EXAMPLE = ROOT / "docs" / "correctness" / "examples" / "correctness-case.reported.synthetic.json"
@@ -38,6 +39,13 @@ class CorrectnessInventoryTests(unittest.TestCase):
     def test_published_reported_example_is_valid(self):
         validate_case(self.case, SCHEMA)
 
+    def test_load_strict_rejects_duplicate_members(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "case.json"
+            path.write_text('{"schema":"first","schema":"second"}', encoding="utf-8")
+            with self.assertRaisesRegex(CorrectnessCaseError, "duplicate JSON member: schema"):
+                load_strict(path)
+
     def test_runtime_evidence_requires_exact_target_and_host_baselines(self):
         case = copy.deepcopy(self.case)
         entry = runtime_entry()
@@ -65,6 +73,17 @@ class CorrectnessInventoryTests(unittest.TestCase):
         case["reproduction"] = {"status": "reported_only", "quality": "repeatable", "scenario_id": "startup"}
         with self.assertRaisesRegex(CorrectnessCaseError, "quality=none"):
             validate_case(case, SCHEMA)
+
+    def test_unknown_reproduction_requires_non_positive_quality_and_no_scenario(self):
+        case = copy.deepcopy(self.case)
+        case["reproduction"] = {"status": "unknown", "quality": "repeatable", "scenario_id": "never-run"}
+        with self.assertRaisesRegex(CorrectnessCaseError, "unknown status"):
+            validate_case(case, SCHEMA)
+
+    def test_unknown_reproduction_accepts_partial_without_scenario(self):
+        case = copy.deepcopy(self.case)
+        case["reproduction"] = {"status": "unknown", "quality": "partial", "scenario_id": None}
+        validate_case(case, SCHEMA)
 
     def test_reproduced_requires_runtime_evidence(self):
         case = copy.deepcopy(self.case)
@@ -104,15 +123,15 @@ class CorrectnessInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(CorrectnessCaseError, "static or runtime"):
             validate_case(case, SCHEMA)
 
-    def test_backend_specific_requires_host_contrast(self):
+    def test_backend_specific_requires_distinct_host_baselines(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [runtime_entry()]
         case["reproduction"] = {"status": "reproduced", "quality": "bounded", "scenario_id": "startup"}
         case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
-        with self.assertRaisesRegex(CorrectnessCaseError, "two exact host baselines"):
+        with self.assertRaisesRegex(CorrectnessCaseError, "two distinct exact host baselines"):
             validate_case(case, SCHEMA)
 
-    def test_backend_specific_rejects_source_confounded_host_contrast(self):
+    def test_backend_specific_rejects_source_confounded_host_baseline_pair(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [
             runtime_entry(HOST_A, source_commit=SOURCE_COMMIT),
@@ -123,7 +142,7 @@ class CorrectnessInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(CorrectnessCaseError, "source repository"):
             validate_case(case, SCHEMA)
 
-    def test_driver_specific_rejects_target_confounded_host_contrast(self):
+    def test_driver_specific_rejects_target_confounded_host_baseline_pair(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [
             runtime_entry(HOST_A, target=TARGET),
@@ -134,7 +153,7 @@ class CorrectnessInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(CorrectnessCaseError, "target manifest"):
             validate_case(case, SCHEMA)
 
-    def test_backend_specific_rejects_scenario_confounded_host_contrast(self):
+    def test_backend_specific_rejects_scenario_confounded_host_baseline_pair(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [
             runtime_entry(HOST_A, scenario_id="startup"),
@@ -145,14 +164,14 @@ class CorrectnessInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(CorrectnessCaseError, "match reproduction scenario_id"):
             validate_case(case, SCHEMA)
 
-    def test_backend_specific_accepts_controlled_host_contrast(self):
+    def test_backend_specific_accepts_distinct_host_baselines_at_fixed_non_host_baseline(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [runtime_entry(HOST_A), runtime_entry(HOST_B)]
         case["reproduction"] = {"status": "reproduced", "quality": "repeatable", "scenario_id": "startup"}
         case["classification"] = {"kind": "backend_specific", "semantic_seam": "backend translation boundary"}
         validate_case(case, SCHEMA)
 
-    def test_backend_specific_ignores_unrelated_runtime_evidence_when_control_exists(self):
+    def test_backend_specific_ignores_unrelated_runtime_evidence_when_host_pair_exists(self):
         case = copy.deepcopy(self.case)
         case["provenance"]["evidence"] = [
             runtime_entry(HOST_A),
