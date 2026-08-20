@@ -294,6 +294,71 @@ class ReviewRegressionTests(unittest.TestCase):
             self.assertEqual(manifest["emulator"]["binary"]["sha256"], "sha256:" + standin_sha256)
             self.assertTrue(output.is_file())
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
+    def test_linux_non_synthetic_digest_mismatch_fails_before_delegation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target_root, target_manifest_path = _write_bound_target_fixture(
+                root, runtime_classified=True
+            )
+            workdir = root / "work"
+            workdir.mkdir()
+            standin = root / "standin-emulator"
+            standin.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(0)\n",
+                encoding="utf-8",
+            )
+            standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
+            pinned = {
+                "binary_name": "standin-emulator",
+                "binary_sha256": "sha256:" + standin_sha256,
+                "binary_size_bytes": standin.stat().st_size,
+            }
+            scenario_path = root / "scenario.json"
+            scenario_path.write_bytes(runner._json_bytes(_scenario()))
+            command_path = root / "command.json"
+            command_path.write_bytes(
+                runner._json_bytes(
+                    {
+                        "schema_id": runner.COMMAND_SCHEMA_ID,
+                        "schema_version": runner.COMMAND_SCHEMA_VERSION,
+                        "argv": [str(standin), str(target_root / "app")],
+                        "emulator_binary_index": 0,
+                        "target_path_index": 1,
+                    }
+                )
+            )
+
+            with (
+                mock.patch.dict(
+                    runner.PINNED_BUILD_ARTIFACTS,
+                    {"linux": pinned},
+                    clear=False,
+                ),
+                mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT") as legacy_run,
+            ):
+                with self.assertRaisesRegex(
+                    runner.TargetRunError,
+                    "requires the exact independently observed upstream",
+                ):
+                    runner.run_experiment(
+                        target_manifest_path=target_manifest_path,
+                        scenario_path=scenario_path,
+                        command_path=command_path,
+                        emulator_binary_path=standin,
+                        emulator_binary_sha256="0" * 64,
+                        source_repository=runner.PINNED_SOURCE_REPOSITORY,
+                        source_commit=runner.PINNED_SOURCE_COMMIT,
+                        source_tree=runner.PINNED_SOURCE_TREE,
+                        patch_commits=[],
+                        target_root=target_root,
+                        working_directory=workdir,
+                        output_path=root / "run.zip",
+                        graphics_backend="synthetic",
+                        emulator_config_path=None,
+                    )
+                legacy_run.assert_not_called()
+
     def test_removed_sealing_symbols_do_not_reappear(self):
         for name in (
             "_ExecutableLease",
