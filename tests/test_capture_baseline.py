@@ -10,6 +10,7 @@ from unittest import mock
 
 from tools import capture_baseline
 from tools import run_target_experiment as target_runner
+from tools import target_manifest_projection
 
 ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_TARGET = ROOT / "docs/baseline/examples/bloodborne-target-manifest.synthetic.json"
@@ -61,7 +62,7 @@ class BaselineCaptureTests(unittest.TestCase):
 
     @mock.patch("tools.capture_baseline.validate_host_manifest")
     @mock.patch("tools.capture_baseline.collect_manifest")
-    def test_dlc_projection_matches_supported_runner_and_runtime_class_is_preserved(self, collect, validate):
+    def test_dlc_projection_matches_shared_runner_projection_without_legacy_rebinding(self, collect, validate):
         collect.return_value = self._host()
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "target.json"
@@ -76,8 +77,26 @@ class BaselineCaptureTests(unittest.TestCase):
             projected = json.loads(target_bytes)
             expected_key = "dlc-sha256-" + hashlib.sha256(b"dlc.alpha").hexdigest()
 
-            self.assertIs(capture_baseline._package_target_manifest, target_runner._package_target_manifest)
-            self.assertEqual(target_bytes, target_runner._package_target_manifest(document))
+            self.assertIs(
+                capture_baseline.package_target_manifest,
+                target_manifest_projection.package_target_manifest,
+            )
+            self.assertIs(
+                target_runner._package_target_manifest,
+                target_manifest_projection.package_target_manifest,
+            )
+            self.assertIsNot(
+                target_runner._legacy._package_target_manifest,
+                target_manifest_projection.package_target_manifest,
+            )
+            self.assertEqual(
+                target_bytes,
+                target_manifest_projection.package_target_manifest(document),
+            )
+            legacy_projected = json.loads(
+                target_runner._legacy._package_target_manifest(document)
+            )
+            self.assertEqual(legacy_projected["content"]["dlc"], {})
             self.assertEqual(set(projected["content"]["dlc"]), {expected_key})
             self.assertEqual(capture["evidence"]["class"], "runtime")
             self.assertFalse(capture["evidence"]["runtime_claims"])
