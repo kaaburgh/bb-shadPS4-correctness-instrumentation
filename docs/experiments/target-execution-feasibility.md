@@ -25,7 +25,7 @@ Accepted artifacts:
 - Windows SDL: artifact `9198403207`, `shadps4-win64-sdl-2026-08-13-28c84fb`; archive SHA-256 `bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65`; contained `shadPS4.exe` SHA-256 `4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f`, size `67641344`.
 - Linux SDL: artifact `9198177755`, `shadps4-linux-sdl-2026-08-13-28c84fb`; archive SHA-256 `127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789`; contained `Shadps4-sdl.AppImage` SHA-256 `7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`, size `35179000`.
 
-For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner copies those bytes into private per-run staging, adds the user execute bit to the staged copy, and verifies the staged digest and size against both the independently pinned artifact and the caller-supplied digest before delegating execution. The compatibility engine then repeats direct command-path binding and binary-digest verification against that staged path before launch.
+For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner creates the private per-run snapshot beneath the operator-selected `working_directory`, copies the executable into that snapshot, adds the user execute bit to the staged copy, and verifies the staged digest and size against both the independently pinned artifact and the caller-supplied digest before delegating execution. On POSIX the staged copy must also pass an explicit executable-access preflight; a `working_directory` on a `noexec` filesystem fails closed before the compatibility engine is invoked. The compatibility engine then repeats direct command-path binding and binary-digest verification against that staged path before launch.
 
 The project execution model has no documented adversary: the target run occurs on the maintainer's own machine with a binary they selected, while the maintainer is present to confirm whether the emulator launched. The previous platform-specific sealed-memfd / locked-handle hash-to-exec lease was therefore removed rather than repaired. No `vm.memfd_noexec` capability is required, and Linux and Windows use the existing bounded compatibility-engine executor after the same staged-byte provenance checks. This contract does not claim resistance to a hostile same-user process mutating the staged file after verification.
 
@@ -65,7 +65,7 @@ Synthetic file-oracle and artifact paths are still rejected if they pre-exist in
 
 ## One-shot operator procedure
 
-Prepare an immutable target view, separate writable working directory, validated BB-BL2 manifest, and command whose `argv[0]` names the exact pinned upstream artifact binary for the host. Do not use a wrapper. For non-synthetic execution use a `process-exit` scenario with no declared artifacts.
+Prepare an immutable target view, separate writable working directory, validated BB-BL2 manifest, and command whose `argv[0]` names the exact pinned upstream artifact binary for the host. Do not use a wrapper. For a Linux/POSIX run, the working-directory filesystem must permit executable files because the verified private executable copy is staged there; the runner preflights that property and fails closed before delegation if the location is `noexec`. For non-synthetic execution use a `process-exit` scenario with no declared artifacts.
 
 ```text
 python tools/run_target_experiment.py run \
@@ -78,7 +78,7 @@ python tools/run_target_experiment.py run \
   --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
   --source-tree e6026c14092b01702d4e49a5ac6c2f779a072dfe \
   --target-root <immutable-target-tree> \
-  --working-directory <isolated-writable-directory> \
+  --working-directory <isolated-writable-executable-directory> \
   --backend vulkan \
   --output <safe-output-directory>/run-<scenario-id>.zip
 ```
@@ -99,6 +99,6 @@ The next target-machine execution can validate the bounded execution route with 
 
 ## Validation in this PR
 
-The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.11.0`. A Linux regression drives a non-synthetic-classified manifest end-to-end through the supported entrypoint with a locally generated stand-in executable and verifies that the private staged binary reaches the normal bounded executor. Dedicated sealing symbols are asserted absent so the retired descriptor-executor path cannot silently reappear.
+The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, and runner version `1.11.0`. A Linux regression drives a non-synthetic-classified manifest end-to-end through the supported entrypoint with a locally generated stand-in executable and verifies that the private staged binary reaches the normal bounded executor. A POSIX staging regression verifies that a non-executable staging filesystem is rejected before delegation. Dedicated sealing symbols are asserted absent so the retired descriptor-executor path cannot silently reappear.
 
 These are synthetic/contract validations only; they do not establish Bloodborne runtime behavior.
