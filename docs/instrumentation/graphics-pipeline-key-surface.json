@@ -1,5 +1,5 @@
 {
-  "schema_version": "bb-graphics-pipeline-key-surface/v6",
+  "schema_version": "bb-graphics-pipeline-key-surface/v7",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -16,7 +16,7 @@
     {"name": "num_color_attachments", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
     {"name": "color_buffers", "shape": "array[8]<Shader::PsColorBuffer>", "family_relation": "derived", "exact_canonicalization": "missing"},
     {"name": "blend_controls", "shape": "array[8]<AmdGpu::BlendControl>", "family_relation": "omitted", "exact_canonicalization": "missing"},
-    {"name": "write_masks", "shape": "array[8]<vk::ColorComponentFlags>", "family_relation": "omitted", "exact_canonicalization": "missing"},
+    {"name": "write_masks", "shape": "array[8]<vk::ColorComponentFlags>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8}},
     {"name": "cb_shader_mask", "shape": "AmdGpu::ColorBufferMask", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern", "bits": 32}},
     {"name": "logic_op", "shape": "AmdGpu::ColorControl::LogicOp", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern", "bits": 8}},
     {"name": "num_samples", "shape": "u8", "family_relation": "direct", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 8}},
