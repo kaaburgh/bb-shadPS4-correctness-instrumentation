@@ -228,9 +228,20 @@ def run_experiment(
     _legacy.validate_command(command)
 
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
+    target_root_resolved = _legacy._resolve_directory(target_root, "target_root")
     working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
-    snapshot_parent = working_directory_resolved if not synthetic_control else None
+    if (
+        target_root_resolved == working_directory_resolved
+        or _legacy._is_under(working_directory_resolved, target_root_resolved)
+        or _legacy._is_under(target_root_resolved, working_directory_resolved)
+    ):
+        raise TargetRunError("target_root and working_directory must be separate trees")
     output_resolved = output_path.resolve()
+    if _legacy._is_under(output_resolved, target_root_resolved) or _legacy._is_under(
+        output_resolved, working_directory_resolved
+    ):
+        raise TargetRunError("output artifact must be outside target_root and working_directory")
+    snapshot_parent = working_directory_resolved if not synthetic_control else None
 
     with tempfile.TemporaryDirectory(
         prefix="bb-target-run-snapshot-", dir=snapshot_parent
