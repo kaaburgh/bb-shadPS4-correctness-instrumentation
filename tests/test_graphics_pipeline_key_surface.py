@@ -16,12 +16,34 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 17)
-        self.assertEqual(summary["exact_missing_fields"], 4)
+        self.assertEqual(summary["exact_canonicalized_fields"], 18)
+        self.assertEqual(summary["exact_missing_fields"], 3)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
             {"derived": 3, "direct": 6, "omitted": 12},
+        )
+
+    def test_pins_vulkan_headers_dependency_for_vk_format_semantics(self):
+        document = self.load()
+        self.assertEqual(
+            document["dependencies"]["vulkan_headers"],
+            {
+                "repository": "https://github.com/KhronosGroup/Vulkan-Headers",
+                "commit": "ee3b5caaa7e372715873c7b9c390ee1c3ca5db25",
+                "path": "include/vulkan/vulkan_enums.hpp",
+                "relationship": "externals/vulkan-headers submodule at pinned BB-BL1 source",
+            },
+        )
+
+    def test_vertex_buffer_formats_preserve_scoped_enum_integer_values(self):
+        document = self.load()
+        field = next(
+            field for field in document["fields"] if field["name"] == "vertex_buffer_formats"
+        )
+        self.assertEqual(
+            field["canonicalization"],
+            {"kind": "enum_signed_integer_array", "bits": 32, "length": 32},
         )
 
     def test_raw_domains_preserve_reserved_patterns(self):
@@ -66,6 +88,12 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
+    def test_rejects_wrong_dependency_pin(self):
+        document = self.load()
+        document["dependencies"]["vulkan_headers"]["commit"] = "0" * 40
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
     def test_rejects_wrong_equality_semantics(self):
         document = self.load()
         document["equality"]["operator"] = "fieldwise"
@@ -85,13 +113,48 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
+    def test_rejects_wrong_vertex_format_width(self):
+        document = self.load()
+        field = next(
+            field for field in document["fields"] if field["name"] == "vertex_buffer_formats"
+        )
+        field["canonicalization"]["bits"] = 16
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_vertex_format_length(self):
+        document = self.load()
+        field = next(
+            field for field in document["fields"] if field["name"] == "vertex_buffer_formats"
+        )
+        field["canonicalization"]["length"] = 31
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
     def test_rejects_named_enum_domain_for_raw_field(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "logic_op")
         field["canonicalization"] = {
             "kind": "enum_unsigned_integer",
             "bits": 8,
-            "values": [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+            "values": [
+                0x00,
+                0x11,
+                0x22,
+                0x33,
+                0x44,
+                0x55,
+                0x66,
+                0x77,
+                0x88,
+                0x99,
+                0xAA,
+                0xBB,
+                0xCC,
+                0xDD,
+                0xEE,
+                0xFF,
+            ],
         }
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
