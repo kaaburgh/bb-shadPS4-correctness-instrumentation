@@ -168,6 +168,27 @@ def _write_snapshot(path: Path, payload: bytes, label: str) -> None:
         raise TargetRunError(f"unable to stage {label} snapshot") from error
 
 
+def _record_post_run_target_verification(
+    run_manifest: dict[str, Any],
+    target_root: Path,
+    target_manifest: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Record whether the target still matches the exact pre-run BB-BL2 identity."""
+    try:
+        _legacy._verify_target_root(target_root, target_manifest)
+    except TargetRunError:
+        run_manifest["target"]["post_run_tree_state"] = "changed_or_unverifiable"
+        warning = "post-run-target-tree-verification-failed"
+        warnings = run_manifest["packaging"]["warnings"]
+        if warning not in warnings:
+            warnings.append(warning)
+            warnings.sort()
+        run_manifest["packaging"]["state"] = "partial"
+    else:
+        run_manifest["target"]["post_run_tree_state"] = "verified"
+    return run_manifest
+
+
 def _restore_original_command_identity(
     output_path: Path,
     run_manifest: dict[str, Any],
@@ -298,6 +319,9 @@ def run_experiment(
                 output_path=legacy_output,
                 graphics_backend=graphics_backend,
                 emulator_config_path=emulator_config_path,
+            )
+            _record_post_run_target_verification(
+                manifest, target_root_resolved, target_manifest
             )
             return _restore_original_command_identity(
                 legacy_output,

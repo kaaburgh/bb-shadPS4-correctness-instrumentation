@@ -86,6 +86,12 @@
             "partial"
           ]
         },
+        "post_run_tree_state": {
+          "enum": [
+            "verified",
+            "changed_or_unverifiable"
+          ]
+        },
         "packaged_manifest_sha256": {
           "$ref": "#/$defs/sha256"
         },
