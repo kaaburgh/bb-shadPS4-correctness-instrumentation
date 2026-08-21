@@ -41,6 +41,12 @@ class ResourceSyncTraceTests(unittest.TestCase):
                 self.document, expected_baseline_id="0" * 64
             )
 
+    def test_invalid_category_kind_pair_is_rejected_before_reconstruction(self):
+        document = copy.deepcopy(self.document)
+        document["events"][1]["kind"] = "barrier"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "invalid for category"):
+            resource_sync_trace.reconstruct(document)
+
     def test_missing_guest_cpu_events_remain_unknown(self):
         document = copy.deepcopy(self.document)
         document["events"] = [

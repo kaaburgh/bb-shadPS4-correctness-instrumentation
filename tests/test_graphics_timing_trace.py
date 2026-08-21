@@ -36,6 +36,12 @@ class GraphicsTimingTraceTests(unittest.TestCase):
                 self.document, expected_baseline_id="0" * 64
             )
 
+    def test_invalid_category_kind_pair_is_rejected_before_reconstruction(self):
+        document = copy.deepcopy(self.document)
+        document["events"][1]["kind"] = "cpu_span"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "invalid for category"):
+            graphics_timing_trace.reconstruct(document)
+
     def test_draw_without_pipeline_id_is_rejected(self):
         document = copy.deepcopy(self.document)
         del document["events"][1]["correlation"]["pipeline_id"]
@@ -45,7 +51,7 @@ class GraphicsTimingTraceTests(unittest.TestCase):
     def test_timing_without_duration_is_rejected(self):
         document = copy.deepcopy(self.document)
         del document["events"][2]["duration_ns"]
-        with self.assertRaisesRegex(graphics_timing_trace.GraphicsTimingError, "requires duration_ns"):
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "timing events require duration_ns"):
             graphics_timing_trace.reconstruct(document)
 
     def test_pipeline_timing_without_graphics_anchor_is_rejected(self):
