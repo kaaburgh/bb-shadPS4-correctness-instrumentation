@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v8"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v9"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -44,6 +44,7 @@ EXPECTED_FIELDS = (
 FAMILY_RELATIONS = {"direct", "derived", "omitted"}
 CANONICALIZATION_STATES = {"missing", "complete"}
 EXPECTED_COMPLETE_CANONICALIZATIONS = {
+    "stage_hashes": {"kind": "unsigned_integer_array", "bits": 64, "length": 6},
     "vertex_buffer_formats": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32},
     "patch_control_points": {"kind": "unsigned_integer", "bits": 32},
     "num_color_attachments": {"kind": "unsigned_integer", "bits": 32},
