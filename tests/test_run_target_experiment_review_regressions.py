@@ -208,6 +208,11 @@ class ReviewRegressionTests(unittest.TestCase):
 
             with (
                 mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT", side_effect=fake_legacy),
+                mock.patch.object(
+                    runner,
+                    "_record_post_run_target_verification",
+                    side_effect=lambda manifest, *_args: manifest,
+                ),
                 mock.patch.object(runner, "_restore_original_command_identity", side_effect=keep_identity),
             ):
                 runner.run_experiment(
