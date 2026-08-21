@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v9"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v10"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -48,6 +48,23 @@ EXPECTED_COMPLETE_CANONICALIZATIONS = {
     "vertex_buffer_formats": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32},
     "patch_control_points": {"kind": "unsigned_integer", "bits": 32},
     "num_color_attachments": {"kind": "unsigned_integer", "bits": 32},
+    "color_buffers": {
+        "kind": "record_array",
+        "length": 8,
+        "fields": [
+            {"name": "data_format", "kind": "raw_bit_pattern", "bits": 6},
+            {"name": "num_format", "kind": "raw_bit_pattern", "bits": 4},
+            {"name": "num_conversion", "kind": "raw_bit_pattern", "bits": 3},
+            {"name": "export_format", "kind": "raw_bit_pattern", "bits": 4},
+            {
+                "name": "swizzle",
+                "kind": "enum_unsigned_integer_array",
+                "bits": 8,
+                "length": 4,
+                "values": [0, 1, 4, 5, 6, 7],
+            },
+        ],
+    },
     "write_masks": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
     "cb_shader_mask": {"kind": "raw_bit_pattern", "bits": 32},
     "logic_op": {"kind": "raw_bit_pattern", "bits": 8},

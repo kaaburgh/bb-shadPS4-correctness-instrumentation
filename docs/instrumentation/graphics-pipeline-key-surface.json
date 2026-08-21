@@ -1,5 +1,5 @@
 {
-  "schema_version": "bb-graphics-pipeline-key-surface/v9",
+  "schema_version": "bb-graphics-pipeline-key-surface/v10",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -22,7 +22,7 @@
     {"name": "vertex_buffer_formats", "shape": "array[32]<vk::Format>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32}},
     {"name": "patch_control_points", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
     {"name": "num_color_attachments", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
-    {"name": "color_buffers", "shape": "array[8]<Shader::PsColorBuffer>", "family_relation": "derived", "exact_canonicalization": "missing"},
+    {"name": "color_buffers", "shape": "array[8]<Shader::PsColorBuffer>", "family_relation": "derived", "exact_canonicalization": "complete", "canonicalization": {"kind": "record_array", "length": 8, "fields": [{"name": "data_format", "kind": "raw_bit_pattern", "bits": 6}, {"name": "num_format", "kind": "raw_bit_pattern", "bits": 4}, {"name": "num_conversion", "kind": "raw_bit_pattern", "bits": 3}, {"name": "export_format", "kind": "raw_bit_pattern", "bits": 4}, {"name": "swizzle", "kind": "enum_unsigned_integer_array", "bits": 8, "length": 4, "values": [0, 1, 4, 5, 6, 7]}]}},
     {"name": "blend_controls", "shape": "array[8]<AmdGpu::BlendControl>", "family_relation": "omitted", "exact_canonicalization": "missing"},
     {"name": "write_masks", "shape": "array[8]<vk::ColorComponentFlags>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8}},
     {"name": "cb_shader_mask", "shape": "AmdGpu::ColorBufferMask", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "raw_bit_pattern", "bits": 32}},

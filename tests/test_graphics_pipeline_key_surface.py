@@ -16,8 +16,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 19)
-        self.assertEqual(summary["exact_missing_fields"], 2)
+        self.assertEqual(summary["exact_canonicalized_fields"], 20)
+        self.assertEqual(summary["exact_missing_fields"], 1)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
@@ -52,6 +52,30 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         self.assertEqual(
             field["canonicalization"],
             {"kind": "enum_signed_integer_array", "bits": 32, "length": 32},
+        )
+
+    def test_color_buffers_preserve_assigned_semantic_tuple(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        self.assertEqual(
+            field["canonicalization"],
+            {
+                "kind": "record_array",
+                "length": 8,
+                "fields": [
+                    {"name": "data_format", "kind": "raw_bit_pattern", "bits": 6},
+                    {"name": "num_format", "kind": "raw_bit_pattern", "bits": 4},
+                    {"name": "num_conversion", "kind": "raw_bit_pattern", "bits": 3},
+                    {"name": "export_format", "kind": "raw_bit_pattern", "bits": 4},
+                    {
+                        "name": "swizzle",
+                        "kind": "enum_unsigned_integer_array",
+                        "bits": 8,
+                        "length": 4,
+                        "values": [0, 1, 4, 5, 6, 7],
+                    },
+                ],
+            },
         )
 
     def test_raw_domains_preserve_reserved_patterns(self):
@@ -110,7 +134,7 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
 
     def test_rejects_complete_field_without_established_rule(self):
         document = self.load()
-        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
         field["exact_canonicalization"] = "complete"
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
@@ -151,6 +175,37 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
             field for field in document["fields"] if field["name"] == "vertex_buffer_formats"
         )
         field["canonicalization"]["length"] = 31
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_color_buffer_length(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        field["canonicalization"]["length"] = 7
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_color_buffer_component_width(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        component = next(
+            component
+            for component in field["canonicalization"]["fields"]
+            if component["name"] == "num_conversion"
+        )
+        component["bits"] = 4
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_narrowed_color_buffer_swizzle_domain(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        swizzle = next(
+            component
+            for component in field["canonicalization"]["fields"]
+            if component["name"] == "swizzle"
+        )
+        swizzle["values"] = [0, 1, 4, 5, 6]
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
@@ -217,8 +272,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
 
     def test_rejects_rule_on_missing_field(self):
         document = self.load()
-        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
-        field["canonicalization"] = {"kind": "unsigned_integer", "bits": 64}
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"] = {"kind": "unsigned_integer", "bits": 32}
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
