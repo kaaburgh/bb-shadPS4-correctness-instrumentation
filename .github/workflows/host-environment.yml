@@ -1,5 +1,6 @@
 name: Host environment manifest
 
+# Intentionally unfiltered: this 3-OS workflow is the repository-wide full-suite gate.
 on:
   push:
   pull_request:
