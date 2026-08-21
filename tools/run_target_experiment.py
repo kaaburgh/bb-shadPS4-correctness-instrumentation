@@ -8,7 +8,6 @@ preserving the published v3 run-record shape for detached consumers.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import stat
@@ -22,14 +21,17 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import run_target_experiment_v3 as _legacy
+from tools.target_manifest_projection import (
+    package_target_manifest as _shared_package_target_manifest,
+)
 
 
 for _export_name in dir(_legacy):
     if not _export_name.startswith("__"):
         globals()[_export_name] = getattr(_legacy, _export_name)
 
-_LEGACY_PACKAGE_TARGET_MANIFEST = _legacy._package_target_manifest
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
+_package_target_manifest = _shared_package_target_manifest
 
 RUNNER_VERSION = "1.11.0"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
@@ -119,24 +121,6 @@ def _require_non_synthetic_evidence_contract(
     return pinned
 
 
-def _package_target_manifest(manifest: Mapping[str, Any]) -> bytes:
-    packaged = _legacy.loads_strict(_LEGACY_PACKAGE_TARGET_MANIFEST(manifest).decode("utf-8"))
-    packaged_dlc: dict[str, Any] = {}
-    for identifier, component in sorted(manifest["content"]["dlc"].items()):
-        safe_identifier = "dlc-sha256-" + hashlib.sha256(identifier.encode("utf-8")).hexdigest()
-        source_package = component["source_package"]
-        packaged_dlc[safe_identifier] = {
-            "version": None,
-            "source_package": None if source_package is None else _legacy._copy_exact_artifact(source_package),
-        }
-    packaged["content"]["dlc"] = packaged_dlc
-    try:
-        _legacy.bloodborne_target_manifest.validate_manifest(packaged)
-    except Exception as error:
-        raise TargetRunError(f"safe target-manifest projection is invalid: {error}") from error
-    return _legacy._json_bytes(packaged)
-
-
 def _require_regular_unlinked_file(path: Path, label: str) -> os.stat_result:
     try:
         info = path.lstat()
@@ -188,9 +172,18 @@ def _restore_original_command_identity(
     output_path: Path,
     run_manifest: dict[str, Any],
     original_command_raw: bytes,
+    packaged_target_raw: bytes | None = None,
+    publish_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Bind the detached record to the stable operator command, not the staging pathname."""
+    """Bind stable identities and atomically publish the supported artifact."""
     run_manifest["execution"]["command_argv_sha256"] = _legacy._sha256_bytes(original_command_raw)
+    if packaged_target_raw is not None:
+        run_manifest["target"]["packaged_manifest_sha256"] = _legacy._sha256_bytes(
+            packaged_target_raw
+        )
+        run_manifest["target"]["packaged_manifest_size_bytes"] = len(
+            packaged_target_raw
+        )
     _legacy.validate_run_manifest(run_manifest)
     if not output_path.exists():
         return run_manifest
@@ -198,9 +191,11 @@ def _restore_original_command_identity(
         with zipfile.ZipFile(output_path, "r") as archive:
             entries = {name: archive.read(name) for name in archive.namelist()}
     except (OSError, zipfile.BadZipFile) as error:
-        raise TargetRunError("unable to reopen run artifact for stable command identity") from error
+        raise TargetRunError("unable to reopen run artifact for stable identities") from error
+    if packaged_target_raw is not None:
+        entries["target-manifest.json"] = packaged_target_raw
     entries["run-manifest.json"] = _legacy._json_bytes(run_manifest)
-    _legacy._write_zip_atomic(output_path, entries)
+    _legacy._write_zip_atomic(publish_path or output_path, entries)
     return run_manifest
 
 
@@ -222,6 +217,7 @@ def run_experiment(
     emulator_config_path: Path | None = None,
 ) -> dict[str, Any]:
     target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
+    safe_target_raw = _package_target_manifest(target_manifest)
     scenario_raw, scenario = _legacy._load_json_file(scenario_path, maximum=_legacy.MAX_INPUT_BYTES, label="scenario")
     if not isinstance(scenario, Mapping):
         raise TargetRunError("scenario must be a JSON object")
@@ -232,7 +228,19 @@ def run_experiment(
     _legacy.validate_command(command)
 
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
+    target_root_resolved = _legacy._resolve_directory(target_root, "target_root")
     working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
+    if (
+        target_root_resolved == working_directory_resolved
+        or _legacy._is_under(working_directory_resolved, target_root_resolved)
+        or _legacy._is_under(target_root_resolved, working_directory_resolved)
+    ):
+        raise TargetRunError("target_root and working_directory must be separate trees")
+    output_resolved = output_path.resolve()
+    if _legacy._is_under(output_resolved, target_root_resolved) or _legacy._is_under(
+        output_resolved, working_directory_resolved
+    ):
+        raise TargetRunError("output artifact must be outside target_root and working_directory")
     snapshot_parent = working_directory_resolved if not synthetic_control else None
 
     with tempfile.TemporaryDirectory(
@@ -270,26 +278,36 @@ def run_experiment(
                 target_manifest, scenario, emulator_binary_path, emulator_binary_sha256
             )
 
-        manifest = _LEGACY_RUN_EXPERIMENT(
-            target_manifest_path=staged_target,
-            scenario_path=staged_scenario,
-            command_path=staged_command_path,
-            emulator_binary_path=staged_emulator_path,
-            emulator_binary_sha256=emulator_binary_sha256,
-            source_repository=source_repository,
-            source_commit=source_commit,
-            source_tree=source_tree,
-            patch_commits=patch_commits,
-            target_root=target_root,
-            working_directory=working_directory,
-            output_path=output_path,
-            graphics_backend=graphics_backend,
-            emulator_config_path=emulator_config_path,
-        )
-        return _restore_original_command_identity(output_path.resolve(), manifest, command_raw)
+        output_resolved.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix="bb-target-run-artifact-", dir=output_resolved.parent
+        ) as artifact_directory:
+            legacy_output = Path(artifact_directory) / "legacy-run.zip"
+            manifest = _LEGACY_RUN_EXPERIMENT(
+                target_manifest_path=staged_target,
+                scenario_path=staged_scenario,
+                command_path=staged_command_path,
+                emulator_binary_path=staged_emulator_path,
+                emulator_binary_sha256=emulator_binary_sha256,
+                source_repository=source_repository,
+                source_commit=source_commit,
+                source_tree=source_tree,
+                patch_commits=patch_commits,
+                target_root=target_root,
+                working_directory=working_directory,
+                output_path=legacy_output,
+                graphics_backend=graphics_backend,
+                emulator_config_path=emulator_config_path,
+            )
+            return _restore_original_command_identity(
+                legacy_output,
+                manifest,
+                command_raw,
+                packaged_target_raw=safe_target_raw,
+                publish_path=output_resolved,
+            )
 
 
-_legacy._package_target_manifest = _package_target_manifest
 _legacy.run_experiment = run_experiment
 
 globals()["RUNNER_VERSION"] = RUNNER_VERSION

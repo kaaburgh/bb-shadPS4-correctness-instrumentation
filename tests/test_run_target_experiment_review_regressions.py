@@ -181,6 +181,8 @@ class ReviewRegressionTests(unittest.TestCase):
             target_path = root / "target.json"
             scenario_path = root / "scenario.json"
             command_path = root / "command.json"
+            target_root = root / "unused-target"
+            target_root.mkdir()
             workdir = root / "work"
             workdir.mkdir()
             target_raw = runner._json_bytes(_manifest())
@@ -200,7 +202,7 @@ class ReviewRegressionTests(unittest.TestCase):
                 observed["scenario_raw"] = observed["scenario_path"].read_bytes()
                 return {"execution": {"command_argv_sha256": "sha256:" + "0" * 64}}
 
-            def keep_identity(_output, manifest, original):
+            def keep_identity(_output, manifest, original, **_kwargs):
                 observed["command_raw"] = original
                 return manifest
 
@@ -218,7 +220,7 @@ class ReviewRegressionTests(unittest.TestCase):
                     source_commit=runner.PINNED_SOURCE_COMMIT,
                     source_tree=runner.PINNED_SOURCE_TREE,
                     patch_commits=[],
-                    target_root=root / "unused-target",
+                    target_root=target_root,
                     working_directory=workdir,
                     output_path=root / "output.zip",
                 )
