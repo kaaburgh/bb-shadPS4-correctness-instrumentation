@@ -3,11 +3,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v7"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v8"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
     "path": "src/video_core/renderer_vulkan/vk_graphics_pipeline.h",
+}
+PINNED_DEPENDENCIES = {
+    "vulkan_headers": {
+        "repository": "https://github.com/KhronosGroup/Vulkan-Headers",
+        "commit": "ee3b5caaa7e372715873c7b9c390ee1c3ca5db25",
+        "path": "include/vulkan/vulkan_enums.hpp",
+        "relationship": "externals/vulkan-headers submodule at pinned BB-BL1 source",
+    }
 }
 PINNED_EQUALITY = {"operator": "memcmp", "extent": "sizeof(GraphicsPipelineKey)"}
 EXPECTED_FIELDS = (
@@ -36,6 +44,7 @@ EXPECTED_FIELDS = (
 FAMILY_RELATIONS = {"direct", "derived", "omitted"}
 CANONICALIZATION_STATES = {"missing", "complete"}
 EXPECTED_COMPLETE_CANONICALIZATIONS = {
+    "vertex_buffer_formats": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32},
     "patch_control_points": {"kind": "unsigned_integer", "bits": 32},
     "num_color_attachments": {"kind": "unsigned_integer", "bits": 32},
     "write_masks": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
@@ -61,12 +70,24 @@ class PipelineKeySurfaceError(ValueError):
 
 
 def validate(document: dict) -> dict:
-    if not isinstance(document, dict) or set(document) != {"schema_version", "source", "equality", "fields"}:
-        raise PipelineKeySurfaceError("document must contain exactly schema_version, source, equality, fields")
+    if not isinstance(document, dict) or set(document) != {
+        "schema_version",
+        "source",
+        "dependencies",
+        "equality",
+        "fields",
+    }:
+        raise PipelineKeySurfaceError(
+            "document must contain exactly schema_version, source, dependencies, equality, fields"
+        )
     if document["schema_version"] != SCHEMA_VERSION:
         raise PipelineKeySurfaceError("unsupported schema_version")
     if document["source"] != PINNED_SOURCE:
         raise PipelineKeySurfaceError("source must match the pinned BB-BL1 baseline and source path")
+    if document["dependencies"] != PINNED_DEPENDENCIES:
+        raise PipelineKeySurfaceError(
+            "dependencies must match the pinned BB-BL1 Vulkan-Headers submodule evidence"
+        )
     if document["equality"] != PINNED_EQUALITY:
         raise PipelineKeySurfaceError("equality must match pinned GraphicsPipelineKey bytewise equality")
 
@@ -79,7 +100,13 @@ def validate(document: dict) -> dict:
     for field in fields:
         if not isinstance(field, dict):
             raise PipelineKeySurfaceError("each field must be an object")
-        allowed_keys = {"name", "shape", "family_relation", "exact_canonicalization", "canonicalization"}
+        allowed_keys = {
+            "name",
+            "shape",
+            "family_relation",
+            "exact_canonicalization",
+            "canonicalization",
+        }
         if not set(field).issubset(allowed_keys):
             raise PipelineKeySurfaceError("field contains unsupported keys")
         required_keys = {"name", "shape", "family_relation", "exact_canonicalization"}
@@ -103,11 +130,17 @@ def validate(document: dict) -> dict:
         expected_rule = EXPECTED_COMPLETE_CANONICALIZATIONS.get(name)
         if canonicalization == "complete":
             if expected_rule is None:
-                raise PipelineKeySurfaceError(f"field {name} cannot be marked complete without an independently established rule")
+                raise PipelineKeySurfaceError(
+                    f"field {name} cannot be marked complete without an independently established rule"
+                )
             if rule != expected_rule:
-                raise PipelineKeySurfaceError(f"field {name} canonicalization does not match pinned declaration semantics")
+                raise PipelineKeySurfaceError(
+                    f"field {name} canonicalization does not match pinned declaration semantics"
+                )
         elif rule is not None:
-            raise PipelineKeySurfaceError(f"field {name} cannot carry a canonicalization rule while marked missing")
+            raise PipelineKeySurfaceError(
+                f"field {name} cannot carry a canonicalization rule while marked missing"
+            )
 
         names.append(name)
         relation_counts[relation] += 1
@@ -126,6 +159,7 @@ def validate(document: dict) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "source": PINNED_SOURCE,
+        "dependencies": PINNED_DEPENDENCIES,
         "equality": PINNED_EQUALITY,
         "field_count": total,
         "family_relation_counts": relation_counts,
