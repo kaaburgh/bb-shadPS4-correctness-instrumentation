@@ -1,9 +1,17 @@
 {
-  "schema_version": "bb-graphics-pipeline-key-surface/v7",
+  "schema_version": "bb-graphics-pipeline-key-surface/v8",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
     "path": "src/video_core/renderer_vulkan/vk_graphics_pipeline.h"
+  },
+  "dependencies": {
+    "vulkan_headers": {
+      "repository": "https://github.com/KhronosGroup/Vulkan-Headers",
+      "commit": "ee3b5caaa7e372715873c7b9c390ee1c3ca5db25",
+      "path": "include/vulkan/vulkan_enums.hpp",
+      "relationship": "externals/vulkan-headers submodule at pinned BB-BL1 source"
+    }
   },
   "equality": {
     "operator": "memcmp",
@@ -11,7 +19,7 @@
   },
   "fields": [
     {"name": "stage_hashes", "shape": "array[MaxShaderStages]<size_t>", "family_relation": "derived", "exact_canonicalization": "missing"},
-    {"name": "vertex_buffer_formats", "shape": "array[32]<vk::Format>", "family_relation": "omitted", "exact_canonicalization": "missing"},
+    {"name": "vertex_buffer_formats", "shape": "array[32]<vk::Format>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32}},
     {"name": "patch_control_points", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
     {"name": "num_color_attachments", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
     {"name": "color_buffers", "shape": "array[8]<Shader::PsColorBuffer>", "family_relation": "derived", "exact_canonicalization": "missing"},
