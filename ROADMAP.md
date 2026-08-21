@@ -45,7 +45,7 @@ Items со статусом `Open` или `Partially implemented` готовы �
 
 # Milestone 0 — Reproducible baseline
 
-Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы between runs.
+Outcome: source/target/host identities, target-execution feasibility, minimal scenarios и baseline captures сравнимы между runs.
 
 ### BB-BL1 — Pin shadPS4 source baseline and integration model
 - **Status / priority / execution:** Completed / Critical / CLOUD RESEARCH
