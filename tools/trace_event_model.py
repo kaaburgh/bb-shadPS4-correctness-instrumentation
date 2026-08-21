@@ -9,6 +9,13 @@ ROOT = Path(__file__).parents[1]
 TRACE_SCHEMA_PATH = ROOT / "schemas" / "trace-event.schema.json"
 SCHEMA_VERSION = "bb-trace-events/v1"
 CATEGORIES = {"resource", "access", "sync", "graphics", "timing"}
+CATEGORY_KINDS = {
+    "resource": {"create", "destroy"},
+    "access": {"guest_cpu", "host_gpu"},
+    "sync": {"barrier", "fence", "submit"},
+    "graphics": {"draw", "dispatch", "present"},
+    "timing": {"cpu_span", "gpu_span"},
+}
 
 
 class TraceContractError(ValueError):
@@ -85,6 +92,33 @@ def _validate_bound_provenance(material) -> None:
         )
 
 
+def _validate_event_contract(event) -> None:
+    category = event["category"]
+    kind = event["kind"]
+    legal_kinds = CATEGORY_KINDS.get(category)
+    if legal_kinds is None or kind not in legal_kinds:
+        raise TraceContractError(f"event kind {kind!r} is invalid for category {category!r}")
+
+    if category == "access":
+        if "access" not in event or "coverage" not in event:
+            raise TraceContractError("access events require access and coverage")
+    else:
+        if "access" in event or "coverage" in event:
+            raise TraceContractError("access and coverage are only valid on access events")
+
+    if category == "timing":
+        if "duration_ns" not in event:
+            raise TraceContractError("timing events require duration_ns")
+    elif "duration_ns" in event:
+        raise TraceContractError("duration_ns is only valid on timing events")
+
+    if kind == "create":
+        if "size_bytes" not in event:
+            raise TraceContractError("resource create events require size_bytes")
+    elif "size_bytes" in event:
+        raise TraceContractError("size_bytes is only valid on resource create events")
+
+
 def validate_semantics(document, *, expected_baseline_id: str | None = None):
     if document.get("schema_version") != SCHEMA_VERSION:
         raise TraceContractError("unsupported schema_version")
@@ -114,6 +148,7 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
     for event in events:
         if event["category"] not in CATEGORIES or event["category"] not in allowed:
             raise TraceContractError("event category is not enabled by capture filter")
+        _validate_event_contract(event)
         if event["seq"] != previous_seq + 1:
             raise TraceContractError("event seq must be contiguous from zero")
         if event["timestamp_ns"] < previous_timestamp:

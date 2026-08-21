@@ -67,6 +67,42 @@ class TraceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "schema validation failed"):
             trace_event_model.validate_schema(document)
 
+    def test_category_kind_mismatch_is_rejected(self):
+        document = copy.deepcopy(self.document)
+        document["events"][2]["kind"] = "guest_cpu"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "invalid for category"):
+            trace_event_model.validate_semantics(document)
+
+    def test_access_fields_are_rejected_on_non_access_events(self):
+        document = copy.deepcopy(self.document)
+        document["events"][2]["access"] = "write"
+        document["events"][2]["coverage"] = "observed"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "only valid on access events"):
+            trace_event_model.validate_semantics(document)
+
+    def test_access_events_require_access_and_coverage(self):
+        document = copy.deepcopy(self.document)
+        del document["events"][1]["coverage"]
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "require access and coverage"):
+            trace_event_model.validate_semantics(document)
+
+    def test_timing_duration_is_required_and_category_scoped(self):
+        missing = copy.deepcopy(self.document)
+        del missing["events"][4]["duration_ns"]
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "timing events require"):
+            trace_event_model.validate_semantics(missing)
+
+        misplaced = copy.deepcopy(self.document)
+        misplaced["events"][3]["duration_ns"] = 1
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "only valid on timing events"):
+            trace_event_model.validate_semantics(misplaced)
+
+    def test_size_bytes_is_create_only(self):
+        document = copy.deepcopy(self.document)
+        document["events"][0]["kind"] = "destroy"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "only valid on resource create"):
+            trace_event_model.validate_semantics(document)
+
     def test_event_count_is_bounded(self):
         document = copy.deepcopy(self.document)
         document["capture"]["limits"]["max_events"] = 4
