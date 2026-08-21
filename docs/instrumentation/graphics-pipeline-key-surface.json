@@ -1,5 +1,5 @@
 {
-  "schema_version": "bb-graphics-pipeline-key-surface/v8",
+  "schema_version": "bb-graphics-pipeline-key-surface/v9",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -18,7 +18,7 @@
     "extent": "sizeof(GraphicsPipelineKey)"
   },
   "fields": [
-    {"name": "stage_hashes", "shape": "array[MaxShaderStages]<size_t>", "family_relation": "derived", "exact_canonicalization": "missing"},
+    {"name": "stage_hashes", "shape": "array[MaxShaderStages]<size_t>", "family_relation": "derived", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer_array", "bits": 64, "length": 6}},
     {"name": "vertex_buffer_formats", "shape": "array[32]<vk::Format>", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "enum_signed_integer_array", "bits": 32, "length": 32}},
     {"name": "patch_control_points", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
     {"name": "num_color_attachments", "shape": "u32", "family_relation": "omitted", "exact_canonicalization": "complete", "canonicalization": {"kind": "unsigned_integer", "bits": 32}},
