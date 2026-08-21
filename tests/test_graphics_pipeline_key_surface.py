@@ -16,8 +16,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_current_surface_tracks_partial_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 18)
-        self.assertEqual(summary["exact_missing_fields"], 3)
+        self.assertEqual(summary["exact_canonicalized_fields"], 19)
+        self.assertEqual(summary["exact_missing_fields"], 2)
         self.assertFalse(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
@@ -34,6 +34,14 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
                 "path": "include/vulkan/vulkan_enums.hpp",
                 "relationship": "externals/vulkan-headers submodule at pinned BB-BL1 source",
             },
+        )
+
+    def test_stage_hashes_preserve_six_u64_program_hashes(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "stage_hashes")
+        self.assertEqual(
+            field["canonicalization"],
+            {"kind": "unsigned_integer_array", "bits": 64, "length": 6},
         )
 
     def test_vertex_buffer_formats_preserve_scoped_enum_integer_values(self):
@@ -102,7 +110,8 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
 
     def test_rejects_complete_field_without_established_rule(self):
         document = self.load()
-        document["fields"][0]["exact_canonicalization"] = "complete"
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
+        field["exact_canonicalization"] = "complete"
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
@@ -110,6 +119,20 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "num_samples")
         field["canonicalization"]["bits"] = 16
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_stage_hash_width(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "stage_hashes")
+        field["canonicalization"]["bits"] = 32
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_stage_hash_length(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "stage_hashes")
+        field["canonicalization"]["length"] = 5
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
@@ -194,7 +217,7 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
 
     def test_rejects_rule_on_missing_field(self):
         document = self.load()
-        field = next(field for field in document["fields"] if field["name"] == "stage_hashes")
+        field = next(field for field in document["fields"] if field["name"] == "color_buffers")
         field["canonicalization"] = {"kind": "unsigned_integer", "bits": 64}
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
