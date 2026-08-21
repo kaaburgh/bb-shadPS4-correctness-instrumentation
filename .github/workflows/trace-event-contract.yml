@@ -5,7 +5,16 @@ on:
     paths:
       - '.github/workflows/trace-event-contract.yml'
       - 'schemas/trace-event.schema.json'
-      - 'tools/trace_event_model.py'
+      - 'tools/**'
+      - 'tests/test_trace_event_model.py'
+      - 'docs/instrumentation/schema.md'
+      - 'docs/instrumentation/examples/trace-events.synthetic.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trace-event-contract.yml'
+      - 'schemas/trace-event.schema.json'
+      - 'tools/**'
       - 'tests/test_trace_event_model.py'
       - 'docs/instrumentation/schema.md'
       - 'docs/instrumentation/examples/trace-events.synthetic.json'

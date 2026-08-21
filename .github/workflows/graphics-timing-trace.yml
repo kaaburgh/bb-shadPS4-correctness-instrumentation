@@ -3,8 +3,7 @@ name: Graphics timing trace contract
 on:
   pull_request:
     paths:
-      - 'tools/graphics_timing_trace.py'
-      - 'tools/trace_event_model.py'
+      - 'tools/**'
       - 'schemas/trace-event.schema.json'
       - 'docs/instrumentation/graphics-timing.md'
       - 'docs/instrumentation/examples/graphics-timing.synthetic.json'
@@ -13,8 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'tools/graphics_timing_trace.py'
-      - 'tools/trace_event_model.py'
+      - 'tools/**'
       - 'schemas/trace-event.schema.json'
       - 'docs/instrumentation/graphics-timing.md'
       - 'docs/instrumentation/examples/graphics-timing.synthetic.json'
