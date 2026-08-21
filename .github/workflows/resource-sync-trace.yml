@@ -3,8 +3,7 @@ name: Resource sync trace contract
 on:
   pull_request:
     paths:
-      - 'tools/resource_sync_trace.py'
-      - 'tools/trace_event_model.py'
+      - 'tools/**'
       - 'schemas/trace-event.schema.json'
       - 'docs/instrumentation/resources-sync.md'
       - 'docs/instrumentation/examples/resource-sync.synthetic.json'
@@ -13,8 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'tools/resource_sync_trace.py'
-      - 'tools/trace_event_model.py'
+      - 'tools/**'
       - 'schemas/trace-event.schema.json'
       - 'docs/instrumentation/resources-sync.md'
       - 'docs/instrumentation/examples/resource-sync.synthetic.json'
