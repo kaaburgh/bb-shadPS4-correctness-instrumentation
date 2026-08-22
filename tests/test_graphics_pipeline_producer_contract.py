@@ -48,7 +48,14 @@ class GraphicsPipelineProducerContractTest(unittest.TestCase):
     def test_rejects_duplicate_sequence_numbers(self):
         document = self.fixture()
         document["observations"][1]["seq"] = document["observations"][0]["seq"]
-        with self.assertRaisesRegex(contract.PipelineProducerContractError, "must be unique"):
+        with self.assertRaisesRegex(contract.PipelineProducerContractError, "strictly increasing"):
+            contract.validate(document)
+
+    def test_rejects_decreasing_sequence_numbers(self):
+        document = self.fixture()
+        document["observations"][0]["seq"] = 10
+        document["observations"][1]["seq"] = 5
+        with self.assertRaisesRegex(contract.PipelineProducerContractError, "strictly increasing"):
             contract.validate(document)
 
     def test_rejects_unknown_result(self):
