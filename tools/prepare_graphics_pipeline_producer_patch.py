@@ -43,13 +43,13 @@ def verify_source_identity(
 
 
 def prepare_source(source: str) -> str:
+    if "SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE" in source:
+        raise PatchPreparationError("diagnostic seam already present")
     count = source.count(_NEEDLE)
     if count != 1:
         raise PatchPreparationError(
             f"expected exactly one pinned GetGraphicsPipeline seam, found {count}"
         )
-    if "SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE" in source:
-        raise PatchPreparationError("diagnostic seam already present")
     return source.replace(_NEEDLE, _INSERT, 1)
 
 
