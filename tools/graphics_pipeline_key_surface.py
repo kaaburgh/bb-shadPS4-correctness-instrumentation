@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v10"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v11"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -65,6 +65,7 @@ EXPECTED_COMPLETE_CANONICALIZATIONS = {
             },
         ],
     },
+    "blend_controls": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
     "write_masks": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
     "cb_shader_mask": {"kind": "raw_bit_pattern", "bits": 32},
     "logic_op": {"kind": "raw_bit_pattern", "bits": 8},
