@@ -194,6 +194,15 @@ class TraceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "coverage_oracle_sha256"):
             trace_event_model.validate_semantics(document)
 
+    def test_negative_validated_capability_rejects_reused_evidence_digest_as_oracle(self):
+        observer = _observer(write_state="negative_validated")
+        write = observer["capabilities"]["write"]
+        write["coverage_oracle_sha256"] = write["evidence_sha256"]
+        document = self._runtime_document(observer=observer)
+        document["events"][1]["coverage"] = "unobserved"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "distinct from evidence_sha256"):
+            trace_event_model.validate_semantics(document)
+
     def test_runtime_unobserved_rejects_observable_only_capability(self):
         document = self._runtime_document(observer=_observer())
         document["events"][1]["coverage"] = "unobserved"
