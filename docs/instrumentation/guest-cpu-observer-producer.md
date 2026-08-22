@@ -1,6 +1,6 @@
 # Guest-CPU observer producer boundary
 
-This document records a bounded BB-INS2 CLOUD RESEARCH design slice at the exact BB-BL1 shadPS4 baseline `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`.
+This document records the BB-INS2 CLOUD RESEARCH observer-provenance boundary at the exact BB-BL1 shadPS4 baseline `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`.
 
 It specifies where a future diagnostic producer may observe direct guest-CPU accesses and what evidence must exist before those observations can support resource classification. It does **not** implement a shadPS4 producer, execute Bloodborne, establish observer completeness, or justify a negative `GPU-only` claim.
 
@@ -24,7 +24,7 @@ A future diagnostic implementation should keep fault detection and evidence emis
 
 For the non-userfaultfd path, an accepted write maps to `access=write`, and an accepted read maps to `access=read`.
 
-For the userfaultfd path, an accepted write-protect fault maps to `access=write`. This design does not map absence of a userfaultfd read event to `unobserved`; direct-read coverage for that mechanism remains `unknown` until a separate read observer or independent coverage evidence exists.
+For the userfaultfd path, an accepted write-protect fault maps to `access=write`. Absence of a userfaultfd read event remains `unknown`; direct-read coverage for that mechanism is not admitted by observer provenance v1.
 
 ## Correlation requirement
 
@@ -32,36 +32,49 @@ A `guest_cpu` event is useful for BB-INS2 only when it can be correlated to the 
 
 If the lookup produces zero or multiple live resource candidates, the producer must not choose by ordering, nearest address, or another heuristic. The observation remains uncorrelated/ambiguous evidence until the event contract provides a representation that preserves that state safely.
 
-## Provenance requirement and current v1 gap
+## Versioned observer provenance
 
-`bb-trace-events/v1` binds the whole stream to exact source, target-manifest, host-manifest, scenario, emulator-config, producer, and schema digests. That is necessary but not sufficient for the BB-INS2 negative-access claim.
+`bb-trace-events/v1` now permits an optional `provenance.material.observer` record with its own compatibility version, currently `bb-guest-cpu-observer/v1`. The field is optional for synthetic/non-observer traces, but every **runtime** `guest_cpu` event requires a compatible observer record.
 
-The current event schema has no explicit observer/fault-mechanism field and its `guest_cpu` event shape does not require an observer identity. Consequently a consumer cannot determine from a v1 event alone whether it came from:
+The v1 observer record binds:
 
-- the non-userfaultfd read/write access-violation observer;
-- the userfaultfd write-protect observer; or
-- a future different observer with different coverage semantics.
+- `fault_mechanism`: `access_violation` or `userfaultfd_write_protect`;
+- `build_path`: respectively `non_userfaultfd` or `enable_userfaultfd`;
+- independent `read` and `write` capability records.
 
-This is a compatibility boundary, not a reason to smuggle the mechanism into a free-form ID. Before a runtime producer is admitted as evidence for observer coverage, the trace contract must gain a versioned, bounded way to bind observer mechanism/capability semantics to the stream or event. The representation must distinguish at least the exact build/configuration path and whether direct read and direct write observation are independently covered.
+Mechanism and build path must match. Observer v1 additionally fails closed if `userfaultfd_write_protect` claims any direct-read capability other than `unknown`, preserving the pinned static result rather than generalizing the non-userfaultfd read seam across builds.
 
-Until that versioned provenance exists, a prototype may be used only as diagnostic development output; it must not be consumed as evidence that a missing direct access was observed absent.
+Each direction has one of three capability states:
 
-## Coverage semantics
+- `unknown` — the run does not establish that this direction can be observed;
+- `observable` — a separate evidence artifact, bound by `evidence_sha256`, establishes the observation seam strongly enough to admit concrete `observed`/`ambiguous` events, but not absence as negative evidence;
+- `negative_validated` — the observation seam has `evidence_sha256` **and** a separate independent coverage-oracle artifact bound by `coverage_oracle_sha256`; only this state can admit runtime `coverage=unobserved` for that direction.
 
-The future producer/consumer contract must preserve these distinctions:
+A non-`unknown` capability without `evidence_sha256` fails closed. A `negative_validated` capability without `coverage_oracle_sha256` fails closed. Conversely, attaching a coverage-oracle digest to `unknown` or merely `observable` capability is rejected rather than silently upgrading its semantics.
 
-- `observed` — an accepted observer path emitted the concrete access and resource correlation is established;
-- `unknown` — the active build/fault mechanism has no independently established observer for that access direction, or observer provenance is missing/incompatible;
-- `ambiguous` — an access was observed but exact live resource correlation is not unique;
-- `unobserved` — admissible only after an independently exercised coverage oracle establishes that the exact observer path was active and capable of seeing the relevant access class, and the bounded capture actually observed none.
+For `access=read_write`, both direction capabilities must satisfy the event's coverage requirement.
 
-A successful process run, green synthetic CI, or absence of an event is not such an oracle.
+These digests bind the trace to evidence outside the event reconstruction. The contract does not prove that an arbitrary artifact is a valid independent oracle merely because its digest is present; review/producer admission must establish that relationship. This prevents the consumer from turning a self-asserted capability bit or absence of events into observer completeness.
+
+## Runtime coverage semantics
+
+The validator applies the observer record only to runtime `guest_cpu` events:
+
+- `observed` / `ambiguous` require `observable` or `negative_validated` capability for every relevant access direction;
+- `unknown` remains admissible with compatible versioned observer provenance because it makes no coverage claim;
+- `unobserved` requires `negative_validated` capability and its separate coverage-oracle digest for every relevant access direction.
+
+Synthetic fixtures may still use all coverage labels to test contract/consumer behavior without claiming target observation.
+
+The public resource-sync consumer validates this contract before reconstruction, so an unsupported runtime negative claim fails before it can become `guest_cpu_coverage_states` evidence.
 
 ## Independent coverage oracle
 
 Every observer path used for a negative claim needs a control that can fail independently of the event reconstruction. Acceptable future directions include a bounded known-access control that deliberately triggers the exact read/write path or a structural seam-coverage probe that proves the installed observer was reached for the relevant tracked range.
 
 The oracle result and its provenance must be separable from the event stream transformation it validates. Replaying producer-derived addresses back through the same mapping code is only internal consistency and cannot establish observer completeness.
+
+No current repository artifact upgrades either direct-access path to `negative_validated`. In particular, userfaultfd direct-read coverage remains `unknown` until a separate read observer is established and independently exercised.
 
 ## Hot-path and privacy constraints
 
@@ -71,4 +84,6 @@ BB-INS4 remains responsible for target tracing-off/on overhead measurement and r
 
 ## Result of this slice
 
-The direct page-fault seams are sufficient to specify where producer events belong, but `bb-trace-events/v1` is **not yet sufficient to represent the exact observer-mechanism provenance required for negative direct-access evidence**. The next implementation step is therefore to version the trace/producer provenance boundary first, including fail-closed read/write capability semantics, and then implement the bounded producer against that contract. This avoids producing runtime traces whose missing events are semantically indistinguishable across host/build fault mechanisms.
+The compatibility gap identified by the earlier design slice is now represented fail-closed: runtime `guest_cpu` traces must identify their observer mechanism/build path, concrete observations must be backed by direction capability evidence, and negative coverage additionally requires a separately bound coverage oracle. The contract deliberately leaves userfaultfd read capability `unknown` and does not itself establish a real producer or any negative target evidence.
+
+The next BB-INS2 implementation step is the bounded diagnostic producer at the accepted page-fault/rasterizer seam, together with independent exercise of every capability it wants to promote. A producer must emit truthful `unknown` rather than claiming completeness for an unvalidated direction.
