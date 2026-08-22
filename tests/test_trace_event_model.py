@@ -9,9 +9,51 @@ ROOT = Path(__file__).parents[1]
 EXAMPLE = ROOT / "docs" / "instrumentation" / "examples" / "trace-events.synthetic.json"
 
 
+def _capability(state: str):
+    result = {"state": state}
+    if state != "unknown":
+        result["evidence_sha256"] = "5" * 64
+    if state == "negative_validated":
+        result["coverage_oracle_sha256"] = "6" * 64
+    return result
+
+
+def _observer(
+    *,
+    mechanism: str = "access_violation",
+    read_state: str = "observable",
+    write_state: str = "observable",
+):
+    build_path = (
+        "enable_userfaultfd"
+        if mechanism == "userfaultfd_write_protect"
+        else "non_userfaultfd"
+    )
+    return {
+        "schema_version": trace_event_model.OBSERVER_SCHEMA_VERSION,
+        "fault_mechanism": mechanism,
+        "build_path": build_path,
+        "capabilities": {
+            "read": _capability(read_state),
+            "write": _capability(write_state),
+        },
+    }
+
+
 class TraceEventContractTests(unittest.TestCase):
     def setUp(self):
         self.document = trace_event_model.load_strict(EXAMPLE)
+
+    def _runtime_document(self, *, observer=None):
+        document = copy.deepcopy(self.document)
+        material = document["provenance"]["material"]
+        material["evidence_class"] = "runtime"
+        material["producer"]["producer_id"] = "shadps4-bb-instrumentation"
+        material["producer"]["producer_sha256"] = "7" * 64
+        if observer is not None:
+            material["observer"] = observer
+        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+        return document
 
     def test_synthetic_fixture_validates(self):
         trace_event_model.validate_schema(self.document)
@@ -127,14 +169,82 @@ class TraceEventContractTests(unittest.TestCase):
         with self.assertRaisesRegex(trace_event_model.TraceContractError, "not enabled"):
             trace_event_model.validate_semantics(document)
 
-    def test_runtime_guest_cpu_unobserved_requires_observer_provenance(self):
-        document = copy.deepcopy(self.document)
-        material = document["provenance"]["material"]
-        material["evidence_class"] = "runtime"
-        material["producer"]["producer_id"] = "shadps4-bb-instrumentation"
-        document["provenance"]["baseline_id"] = trace_event_model.baseline_id_for(material)
+    def test_runtime_guest_cpu_event_requires_observer_provenance(self):
+        document = self._runtime_document()
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "versioned observer provenance"):
+            trace_event_model.validate_semantics(document)
+
+    def test_runtime_observed_write_accepts_observable_capability(self):
+        document = self._runtime_document(observer=_observer())
+        trace_event_model.validate_schema(document)
+        trace_event_model.validate_semantics(document)
+
+    def test_observable_capability_requires_independent_evidence_digest(self):
+        observer = _observer()
+        del observer["capabilities"]["write"]["evidence_sha256"]
+        document = self._runtime_document(observer=observer)
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "independent evidence_sha256"):
+            trace_event_model.validate_semantics(document)
+
+    def test_negative_validated_capability_requires_separate_coverage_oracle(self):
+        observer = _observer(write_state="negative_validated")
+        del observer["capabilities"]["write"]["coverage_oracle_sha256"]
+        document = self._runtime_document(observer=observer)
         document["events"][1]["coverage"] = "unobserved"
-        with self.assertRaisesRegex(trace_event_model.TraceContractError, "observer provenance"):
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "coverage_oracle_sha256"):
+            trace_event_model.validate_semantics(document)
+
+    def test_runtime_unobserved_rejects_observable_only_capability(self):
+        document = self._runtime_document(observer=_observer())
+        document["events"][1]["coverage"] = "unobserved"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "negative_validated write"):
+            trace_event_model.validate_semantics(document)
+
+    def test_runtime_unobserved_accepts_negative_validated_capability(self):
+        document = self._runtime_document(
+            observer=_observer(write_state="negative_validated")
+        )
+        document["events"][1]["coverage"] = "unobserved"
+        trace_event_model.validate_semantics(document)
+
+    def test_userfaultfd_direct_read_capability_remains_unknown(self):
+        document = self._runtime_document(
+            observer=_observer(
+                mechanism="userfaultfd_write_protect",
+                read_state="observable",
+                write_state="observable",
+            )
+        )
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "direct-read capability remains unknown"):
+            trace_event_model.validate_semantics(document)
+
+    def test_userfaultfd_observed_write_is_compatible_with_unknown_read(self):
+        document = self._runtime_document(
+            observer=_observer(
+                mechanism="userfaultfd_write_protect",
+                read_state="unknown",
+                write_state="observable",
+            )
+        )
+        trace_event_model.validate_semantics(document)
+
+    def test_userfaultfd_observed_read_fails_closed(self):
+        document = self._runtime_document(
+            observer=_observer(
+                mechanism="userfaultfd_write_protect",
+                read_state="unknown",
+                write_state="observable",
+            )
+        )
+        document["events"][1]["access"] = "read"
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "observable read capability"):
+            trace_event_model.validate_semantics(document)
+
+    def test_observer_fault_mechanism_must_match_build_path(self):
+        observer = _observer()
+        observer["build_path"] = "enable_userfaultfd"
+        document = self._runtime_document(observer=observer)
+        with self.assertRaisesRegex(trace_event_model.TraceContractError, "mechanism/build path mismatch"):
             trace_event_model.validate_semantics(document)
 
     def test_synthetic_guest_cpu_unobserved_remains_contract_testable(self):
