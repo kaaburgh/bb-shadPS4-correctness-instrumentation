@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v10"
+SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v12"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
@@ -63,6 +63,23 @@ EXPECTED_COMPLETE_CANONICALIZATIONS = {
                 "length": 4,
                 "values": [0, 1, 4, 5, 6, 7],
             },
+        ],
+    },
+    "blend_controls": {
+        "kind": "record_array",
+        "length": 8,
+        "assignment": "memberwise_into_zeroed_destination",
+        "unassigned_bits": "canonical_zero",
+        "fields": [
+            {"name": "color_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+            {"name": "color_func", "kind": "raw_bit_pattern", "bits": 3},
+            {"name": "color_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+            {"name": "alpha_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+            {"name": "alpha_func", "kind": "raw_bit_pattern", "bits": 3},
+            {"name": "alpha_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+            {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
+            {"name": "enable", "kind": "unsigned_integer", "bits": 1},
+            {"name": "disable_rop3", "kind": "unsigned_integer", "bits": 1},
         ],
     },
     "write_masks": {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},

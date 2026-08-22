@@ -13,12 +13,12 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def load(self):
         return json.loads(SURFACE.read_text(encoding="utf-8"))
 
-    def test_current_surface_tracks_partial_exact_canonicalization(self):
+    def test_current_surface_tracks_complete_exact_canonicalization(self):
         summary = graphics_pipeline_key_surface.validate(self.load())
         self.assertEqual(summary["field_count"], 21)
-        self.assertEqual(summary["exact_canonicalized_fields"], 20)
-        self.assertEqual(summary["exact_missing_fields"], 1)
-        self.assertFalse(summary["pipeline_identity_ready"])
+        self.assertEqual(summary["exact_canonicalized_fields"], 21)
+        self.assertEqual(summary["exact_missing_fields"], 0)
+        self.assertTrue(summary["pipeline_identity_ready"])
         self.assertEqual(
             summary["family_relation_counts"],
             {"derived": 3, "direct": 6, "omitted": 12},
@@ -78,6 +78,30 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
             },
         )
 
+    def test_blend_controls_preserve_memberwise_zero_initialized_destination(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        self.assertEqual(
+            field["canonicalization"],
+            {
+                "kind": "record_array",
+                "length": 8,
+                "assignment": "memberwise_into_zeroed_destination",
+                "unassigned_bits": "canonical_zero",
+                "fields": [
+                    {"name": "color_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "color_func", "kind": "raw_bit_pattern", "bits": 3},
+                    {"name": "color_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "alpha_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "alpha_func", "kind": "raw_bit_pattern", "bits": 3},
+                    {"name": "alpha_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
+                    {"name": "enable", "kind": "unsigned_integer", "bits": 1},
+                    {"name": "disable_rop3", "kind": "unsigned_integer", "bits": 1},
+                ],
+            },
+        )
+
     def test_raw_domains_preserve_reserved_patterns(self):
         document = self.load()
         write_masks = next(field for field in document["fields"] if field["name"] == "write_masks")
@@ -129,13 +153,6 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
     def test_rejects_wrong_equality_semantics(self):
         document = self.load()
         document["equality"]["operator"] = "fieldwise"
-        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
-            graphics_pipeline_key_surface.validate(document)
-
-    def test_rejects_complete_field_without_established_rule(self):
-        document = self.load()
-        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
-        field["exact_canonicalization"] = "complete"
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
@@ -209,6 +226,53 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
+    def test_rejects_raw_source_word_blend_control_rule(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"] = {
+            "kind": "raw_bit_pattern_array",
+            "bits": 32,
+            "length": 8,
+        }
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_incomplete_blend_control_member_rule(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"]["fields"] = [
+            {"name": "enable", "kind": "unsigned_integer", "bits": 1},
+            {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
+        ]
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_blend_control_member_width(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        component = next(
+            component
+            for component in field["canonicalization"]["fields"]
+            if component["name"] == "color_dst_factor"
+        )
+        component["bits"] = 4
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_blend_control_length(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"]["length"] = 7
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_nonzero_unassigned_blend_bits_policy(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"]["unassigned_bits"] = "preserve_source"
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
     def test_rejects_named_enum_domain_for_raw_field(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "logic_op")
@@ -267,13 +331,6 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "write_masks")
         field["canonicalization"]["length"] = 7
-        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
-            graphics_pipeline_key_surface.validate(document)
-
-    def test_rejects_rule_on_missing_field(self):
-        document = self.load()
-        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
-        field["canonicalization"] = {"kind": "unsigned_integer", "bits": 32}
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
