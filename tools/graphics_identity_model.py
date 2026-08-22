@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
-MODEL_VERSION = "bb-graphics-identity/v1"
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools import graphics_pipeline_key_surface
+
+MODEL_VERSION = "bb-graphics-identity/v2"
 PINNED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
 }
+PIPELINE_KEY_SURFACE = Path("docs/instrumentation/graphics-pipeline-key-surface.json")
 LOGICAL_STAGES = {
     "vertex",
     "tessellation_control",
@@ -18,8 +25,6 @@ LOGICAL_STAGES = {
     "compute",
 }
 ATTACHMENT_ROLES = {"color", "depth", "stencil"}
-# This is deliberately a bounded semantic projection, not the complete upstream
-# GraphicsPipelineKey. Callers must not use its digest as an exact pipeline ID.
 PIPELINE_FAMILY_STATE_KEYS = {
     "primitive_type",
     "polygon_mode",
@@ -62,8 +67,88 @@ def _require_text(value, field: str) -> None:
         raise GraphicsIdentityError(f"{field} must be a bounded non-empty string")
 
 
+def _require_integer(value, *, bits: int, signed: bool, field: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise GraphicsIdentityError(f"{field} must be an integer")
+    if signed:
+        minimum = -(1 << (bits - 1))
+        maximum = (1 << (bits - 1)) - 1
+    else:
+        minimum = 0
+        maximum = (1 << bits) - 1
+    if value < minimum or value > maximum:
+        raise GraphicsIdentityError(f"{field} is outside its {bits}-bit canonical domain")
+
+
+def _validate_canonical_value(value, rule: dict, field: str) -> None:
+    kind = rule["kind"]
+    if kind in {"unsigned_integer", "raw_bit_pattern", "enum_unsigned_integer"}:
+        _require_integer(value, bits=rule["bits"], signed=False, field=field)
+        if "values" in rule and value not in rule["values"]:
+            raise GraphicsIdentityError(f"{field} is outside the canonical enum domain")
+        return
+    if kind == "enum_signed_integer_array":
+        if not isinstance(value, list) or len(value) != rule["length"]:
+            raise GraphicsIdentityError(f"{field} must contain exactly {rule['length']} entries")
+        for index, item in enumerate(value):
+            _require_integer(item, bits=rule["bits"], signed=True, field=f"{field}[{index}]")
+        return
+    if kind in {"unsigned_integer_array", "raw_bit_pattern_array", "enum_unsigned_integer_array"}:
+        if not isinstance(value, list) or len(value) != rule["length"]:
+            raise GraphicsIdentityError(f"{field} must contain exactly {rule['length']} entries")
+        for index, item in enumerate(value):
+            _require_integer(item, bits=rule["bits"], signed=False, field=f"{field}[{index}]")
+            if "values" in rule and item not in rule["values"]:
+                raise GraphicsIdentityError(f"{field}[{index}] is outside the canonical enum domain")
+        return
+    if kind == "record_array":
+        if not isinstance(value, list) or len(value) != rule["length"]:
+            raise GraphicsIdentityError(f"{field} must contain exactly {rule['length']} records")
+        expected = {component["name"] for component in rule["fields"]}
+        for index, record in enumerate(value):
+            _require_exact_keys(record, expected)
+            for component in rule["fields"]:
+                _validate_canonical_value(
+                    record[component["name"]],
+                    component,
+                    f"{field}[{index}].{component['name']}",
+                )
+        return
+    raise GraphicsIdentityError(f"unsupported canonicalization kind for {field}: {kind}")
+
+
+def _load_pipeline_surface() -> tuple[dict, str]:
+    try:
+        document = json.loads(PIPELINE_KEY_SURFACE.read_text(encoding="utf-8"))
+        summary = graphics_pipeline_key_surface.validate(document)
+    except (OSError, json.JSONDecodeError, graphics_pipeline_key_surface.PipelineKeySurfaceError) as exc:
+        raise GraphicsIdentityError(f"canonical pipeline key surface is unavailable or invalid: {exc}") from exc
+    if not summary["pipeline_identity_ready"]:
+        raise GraphicsIdentityError("canonical pipeline identity surface is incomplete")
+    digest = hashlib.sha256(_canonical(document)).hexdigest()
+    return document, f"sha256:{digest}"
+
+
+def _validate_pipeline_key(pipeline_key: dict, surface_document: dict) -> dict:
+    fields = surface_document["fields"]
+    expected_names = tuple(field["name"] for field in fields)
+    _require_exact_keys(pipeline_key, set(expected_names))
+    for field in fields:
+        if field["exact_canonicalization"] != "complete" or "canonicalization" not in field:
+            raise GraphicsIdentityError(f"canonical pipeline identity is not ready for field {field['name']}")
+        _validate_canonical_value(
+            pipeline_key[field["name"]],
+            field["canonicalization"],
+            f"pipeline_key.{field['name']}",
+        )
+    return {name: pipeline_key[name] for name in expected_names}
+
+
 def derive(document: dict) -> dict:
-    _require_exact_keys(document, {"model_version", "source", "shaders", "pipeline_state", "render_state"})
+    _require_exact_keys(
+        document,
+        {"model_version", "source", "shaders", "pipeline_state", "pipeline_key", "render_state"},
+    )
     if document["model_version"] != MODEL_VERSION:
         raise GraphicsIdentityError("unsupported model_version")
     if document["source"] != PINNED_SOURCE:
@@ -112,6 +197,15 @@ def derive(document: dict) -> dict:
         "source": PINNED_SOURCE,
         "shader_identities": [item["shader_identity"] for item in normalized_shaders],
         "state_projection": pipeline_state,
+    }
+
+    surface_document, surface_digest = _load_pipeline_surface()
+    canonical_pipeline_key = _validate_pipeline_key(document["pipeline_key"], surface_document)
+    pipeline_semantic = {
+        "source": PINNED_SOURCE,
+        "key_surface_version": surface_document["schema_version"],
+        "key_surface_sha256": surface_digest,
+        "canonical_key": canonical_pipeline_key,
     }
 
     render_state = document["render_state"]
@@ -170,8 +264,12 @@ def derive(document: dict) -> dict:
         "source": PINNED_SOURCE,
         "shaders": normalized_shaders,
         "pipeline_family_identity": _identity("pipeline-family", pipeline_family_semantic),
+        "pipeline_identity": _identity("pipeline", pipeline_semantic),
+        "pipeline_key_surface_version": surface_document["schema_version"],
+        "pipeline_key_surface_sha256": surface_digest,
         "render_identity": _identity("render", render_semantic),
         "pipeline_state": pipeline_state,
+        "pipeline_key": canonical_pipeline_key,
         "render_state": {**render_state, "attachments": normalized_attachments},
     }
 

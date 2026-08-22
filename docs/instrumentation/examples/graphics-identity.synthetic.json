@@ -1,5 +1,5 @@
 {
-  "model_version": "bb-graphics-identity/v1",
+  "model_version": "bb-graphics-identity/v2",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
     "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
@@ -17,6 +17,47 @@
     "color_formats": ["r8g8b8a8_unorm"],
     "depth_format": "d32_sfloat",
     "stencil_format": "invalid"
+  },
+  "pipeline_key": {
+    "stage_hashes": [1229782938247303441, 0, 0, 0, 2459565876494606882, 0],
+    "vertex_buffer_formats": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "patch_control_points": 0,
+    "num_color_attachments": 1,
+    "color_buffers": [
+      {"data_format": 1, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [4, 5, 6, 7]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]},
+      {"data_format": 0, "num_format": 0, "num_conversion": 0, "export_format": 0, "swizzle": [0, 0, 0, 0]}
+    ],
+    "blend_controls": [
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0},
+      {"color_src_factor": 0, "color_func": 0, "color_dst_factor": 0, "alpha_src_factor": 0, "alpha_func": 0, "alpha_dst_factor": 0, "separate_alpha_blend": 0, "enable": 0, "disable_rop3": 0}
+    ],
+    "write_masks": [15, 0, 0, 0, 0, 0, 0, 0],
+    "cb_shader_mask": 15,
+    "logic_op": 0,
+    "num_samples": 1,
+    "depth_samples": 1,
+    "color_samples": [1, 0, 0, 0, 0, 0, 0, 0],
+    "mrt_mask": 1,
+    "z_format": 0,
+    "stencil_format": 0,
+    "depth_clamp_enable": 0,
+    "prim_type": 3,
+    "polygon_mode": 0,
+    "clip_space": 0,
+    "provoking_vtx_last": 0,
+    "depth_clip_enable": 1
   },
   "render_state": {
     "width": 1920,
