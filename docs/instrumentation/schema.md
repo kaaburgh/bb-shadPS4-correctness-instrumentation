@@ -14,15 +14,19 @@ Correlation identifiers are typed generated ordinals with fixed forms such as `r
 
 The stream is deliberately reconstructable rather than verbose: lifecycle/access/synchronization/graphics/timing consumers share stable IDs and timestamps. Missing observation coverage is represented explicitly with `observed`, `unobserved`, `unknown`, or `ambiguous`; absence of an event is not by itself a negative semantic claim.
 
-For `guest_cpu` events, `bb-trace-events/v1` does not encode the observer/fault mechanism or independently established read/write capability coverage. Consequently a **runtime** `guest_cpu` event with `coverage=unobserved` is semantically inadmissible under v1 and the validator fails closed on it. Synthetic fixtures may still use `unobserved` to exercise consumer behavior, but runtime negative direct-access evidence requires a versioned observer-provenance boundary first. Runtime `unknown`/`ambiguous` remain the truthful representations when observer completeness is not established.
+For runtime `guest_cpu` events, `provenance.material.observer` provides a separately versioned `bb-guest-cpu-observer/v1` compatibility boundary. It binds the active fault mechanism/build path and independent read/write capability records. `observed` or `ambiguous` requires the relevant direction to be `observable` or `negative_validated`; `unobserved` additionally requires `negative_validated` and a separately bound `coverage_oracle_sha256`. A non-unknown capability is also bound to its own `evidence_sha256`. Runtime `guest_cpu` events without compatible observer provenance fail closed.
+
+Observer v1 recognizes the pinned static distinction between `access_violation`/`non_userfaultfd` and `userfaultfd_write_protect`/`enable_userfaultfd`. The userfaultfd mechanism cannot claim direct-read capability under v1; its read state must remain `unknown`. Synthetic fixtures may omit observer provenance and may still use `unobserved` to exercise contract/consumer behavior without promoting runtime evidence.
 
 ## Provenance and stale-evidence rejection
 
-Every detached stream carries `provenance.material` for all material baseline inputs: the exact shadPS4 repository/commit and patch-set digest, Bloodborne target-manifest digest, host-manifest digest, scenario digest, emulator-config digest, producer identity/digest, and schema digest. `evidence_class` distinguishes `synthetic` from `runtime`.
+Every detached stream carries `provenance.material` for all material baseline inputs: the exact shadPS4 repository/commit and patch-set digest, Bloodborne target-manifest digest, host-manifest digest, scenario digest, emulator-config digest, producer identity/digest, and schema digest. `evidence_class` distinguishes `synthetic` from `runtime`. When runtime guest-CPU observations are present, the versioned observer record is part of the same material and therefore also contributes to baseline identity.
 
 `provenance.baseline_id` is SHA-256 of canonical JSON for `provenance.material` (`sort_keys=true`, separators `,`/`:`, ASCII encoding). The validator recomputes it and fails closed if any material identity changes without a corresponding baseline id. Consumers comparing or joining detached traces should additionally supply the expected baseline id and reject a mismatch rather than mixing stale or cross-baseline evidence.
 
-The committed fixture uses synthetic placeholder manifest/config digests and therefore remains only contract evidence even though it references the pinned BB-BL1 shadPS4 commit. It is not a record of a Bloodborne run.
+The committed fixtures use synthetic placeholder manifest/config digests and therefore remain only contract evidence even though they reference the pinned BB-BL1 shadPS4 commit. They are not records of a Bloodborne run.
+
+The observer capability digests bind claims to evidence outside the event stream transformation. Presence of a digest does not by itself prove that the referenced artifact is an independent coverage oracle; that relationship must be established when a runtime producer/capture is admitted. This contract only ensures that a consumer cannot accept a negative runtime coverage claim without a separately identified oracle artifact.
 
 ## Bounds and backpressure
 
@@ -46,8 +50,8 @@ python tools/trace_event_model.py docs/instrumentation/examples/trace-events.syn
 
 To fail closed when consuming a trace for an already selected baseline, add `--expected-baseline-id <64-hex-id>`.
 
-Validation checks schema shape plus semantic invariants that JSON Schema alone does not express: provenance digest binding, optional exact-baseline matching, category↔kind and kind-specific payload coupling, contiguous sequence numbers, monotonic timestamps, filter enforcement, configured event/buffer bounds, sampling consistency, exact recorded-event accounting, and rejection of runtime `guest_cpu coverage=unobserved` until observer provenance is versioned. Regression tests also reject representative private/token-like identifier values and verify that resource-sync and graphics-timing consumers reject invalid category/kind pairs before reconstruction.
+Validation checks schema shape plus semantic invariants that JSON Schema alone does not express: provenance digest binding, optional exact-baseline matching, category↔kind and kind-specific payload coupling, contiguous sequence numbers, monotonic timestamps, filter enforcement, configured event/buffer bounds, sampling consistency, exact recorded-event accounting, observer mechanism/build-path compatibility, direction-specific capability evidence, and independent-oracle binding for runtime negative `guest_cpu` coverage. Regression tests also preserve the userfaultfd direct-read `unknown` boundary and verify that resource-sync fails closed on unsupported runtime negative coverage before reconstruction.
 
 ## Evidence boundary
 
-Evidence for BB-INS1 is `synthetic`/contract-only. No proprietary target bytes are inputs, no runtime is launched, and no claim is made that current shadPS4 source already exposes these events. BB-INS2/BB-INS3 must identify and implement actual source seams; BB-INS4 must independently establish target coverage and overhead.
+Evidence for BB-INS1/BB-INS2 contract behavior remains `synthetic` plus the separately documented BB-INS2 static source seams. No proprietary target bytes are inputs, no runtime is launched, and no claim is made that current shadPS4 source already emits these events. BB-INS2 must still implement and independently exercise the actual producer; BB-INS4 must independently establish target coverage and overhead.
