@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/graphics-pipeline-producer.schema.json",
+  "title": "BB graphics pipeline producer admission record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source", "seam", "identity_contract", "producer", "observations"],
+  "properties": {
+    "schema_version": {"const": "bb-graphics-pipeline-producer/v1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit"],
+      "properties": {
+        "repository": {"const": "https://github.com/shadps4-emu/shadPS4"},
+        "commit": {"const": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"}
+      }
+    },
+    "seam": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "symbol", "observation_point"],
+      "properties": {
+        "path": {"const": "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp"},
+        "symbol": {"const": "VideoCore::PipelineCache::GetGraphicsPipeline"},
+        "observation_point": {"const": "post_lookup_result"}
+      }
+    },
+    "identity_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_version", "key_surface_version"],
+      "properties": {
+        "model_version": {"const": "bb-graphics-identity/v2"},
+        "key_surface_version": {"const": "bb-graphics-pipeline-key-surface/v12"}
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer_id", "producer_sha256"],
+      "properties": {
+        "producer_id": {"const": "shadps4-bb-pipeline-observer"},
+        "producer_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "observations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seq", "pipeline_identity", "result"],
+        "properties": {
+          "seq": {"type": "integer", "minimum": 0},
+          "pipeline_identity": {"type": "string", "pattern": "^pipeline:sha256:[0-9a-f]{64}$"},
+          "result": {"enum": ["created", "cache_hit"]}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

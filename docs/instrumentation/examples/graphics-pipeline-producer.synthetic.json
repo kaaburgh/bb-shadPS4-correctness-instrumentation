@@ -1,0 +1,37 @@
+{
+  "schema_version": "bb-graphics-pipeline-producer/v1",
+  "source": {
+    "repository": "https://github.com/shadps4-emu/shadPS4",
+    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+  },
+  "seam": {
+    "path": "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
+    "symbol": "VideoCore::PipelineCache::GetGraphicsPipeline",
+    "observation_point": "post_lookup_result"
+  },
+  "identity_contract": {
+    "model_version": "bb-graphics-identity/v2",
+    "key_surface_version": "bb-graphics-pipeline-key-surface/v12"
+  },
+  "producer": {
+    "producer_id": "shadps4-bb-pipeline-observer",
+    "producer_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "observations": [
+    {
+      "seq": 0,
+      "pipeline_identity": "pipeline:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "result": "created"
+    },
+    {
+      "seq": 1,
+      "pipeline_identity": "pipeline:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "result": "cache_hit"
+    },
+    {
+      "seq": 2,
+      "pipeline_identity": "pipeline:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result": "created"
+    }
+  ]
+}
