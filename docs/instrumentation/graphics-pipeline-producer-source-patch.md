@@ -9,9 +9,10 @@ The preparer accepts only:
 - repository: `shadps4-emu/shadPS4`;
 - commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`;
 - file: `src/video_core/renderer_vulkan/vk_pipeline_cache.cpp`;
+- Git blob SHA: `b39f1c30bfb00d1f21a082da48369ba95ce31368`;
 - seam: immediately after `graphics_pipelines.try_emplace(graphics_key)`, where the returned `is_new` value distinguishes the lookup result before the existing creation branch runs.
 
-The source context must match exactly once. Zero or multiple matches fail closed instead of guessing a location.
+Both the caller-supplied commit and the actual source bytes are verified. The source context must then match exactly once. Wrong bytes, zero matches, or multiple matches fail closed instead of guessing a location.
 
 ## Prepared hook
 
@@ -42,4 +43,4 @@ The output is a deterministic unified diff targeting only the pinned source path
 
 ## Evidence boundary
 
-Tests and CI establish static source-context matching, deterministic patch construction, placement after the lookup result, compile-time-off-by-default gating, and fail-closed drift rejection. They do not compile shadPS4 with an enabled diagnostic hook, produce runtime records, validate `created` versus `cache_hit` on a running emulator, execute Bloodborne, establish target coverage, or measure instrumentation overhead.
+Tests and CI establish exact source-blob identity, static source-context matching, deterministic patch construction, placement after the lookup result, compile-time-off-by-default gating, and fail-closed drift rejection. They do not compile shadPS4 with an enabled diagnostic hook, produce runtime records, validate `created` versus `cache_hit` on a running emulator, execute Bloodborne, establish target coverage, or measure instrumentation overhead.
