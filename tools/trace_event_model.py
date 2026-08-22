@@ -120,6 +120,10 @@ def _validate_observer_capability(capability, direction: str) -> None:
             raise TraceContractError(
                 f"{direction} negative_validated observer capability requires coverage_oracle_sha256"
             )
+        if coverage_oracle_sha256 == evidence_sha256:
+            raise TraceContractError(
+                f"{direction} negative_validated observer capability requires a coverage oracle distinct from evidence_sha256"
+            )
     elif coverage_oracle_sha256 is not None:
         raise TraceContractError(
             f"{direction} coverage_oracle_sha256 is only valid for negative_validated capability"
