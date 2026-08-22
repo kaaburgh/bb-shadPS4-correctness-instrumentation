@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 TRACE_SCHEMA_PATH = ROOT / "schemas" / "trace-event.schema.json"
 SCHEMA_VERSION = "bb-trace-events/v1"
+OBSERVER_SCHEMA_VERSION = "bb-guest-cpu-observer/v1"
 CATEGORIES = {"resource", "access", "sync", "graphics", "timing"}
 CATEGORY_KINDS = {
     "resource": {"create", "destroy"},
@@ -16,6 +17,11 @@ CATEGORY_KINDS = {
     "graphics": {"draw", "dispatch", "present"},
     "timing": {"cpu_span", "gpu_span"},
 }
+OBSERVER_MECHANISM_BUILD_PATHS = {
+    "access_violation": "non_userfaultfd",
+    "userfaultfd_write_protect": "enable_userfaultfd",
+}
+OBSERVABLE_CAPABILITY_STATES = {"observable", "negative_validated"}
 
 
 class TraceContractError(ValueError):
@@ -92,6 +98,106 @@ def _validate_bound_provenance(material) -> None:
         )
 
 
+def _validate_observer_capability(capability, direction: str) -> None:
+    state = capability["state"]
+    evidence_sha256 = capability.get("evidence_sha256")
+    coverage_oracle_sha256 = capability.get("coverage_oracle_sha256")
+
+    if state == "unknown":
+        if coverage_oracle_sha256 is not None:
+            raise TraceContractError(
+                f"{direction} observer capability cannot bind a coverage oracle while state is unknown"
+            )
+        return
+
+    if evidence_sha256 is None:
+        raise TraceContractError(
+            f"{direction} observer capability {state!r} requires independent evidence_sha256"
+        )
+
+    if state == "negative_validated":
+        if coverage_oracle_sha256 is None:
+            raise TraceContractError(
+                f"{direction} negative_validated observer capability requires coverage_oracle_sha256"
+            )
+    elif coverage_oracle_sha256 is not None:
+        raise TraceContractError(
+            f"{direction} coverage_oracle_sha256 is only valid for negative_validated capability"
+        )
+
+
+def _validate_observer_provenance(material):
+    observer = material.get("observer")
+    if observer is None:
+        return None
+
+    if observer["schema_version"] != OBSERVER_SCHEMA_VERSION:
+        raise TraceContractError("unsupported guest CPU observer schema_version")
+
+    mechanism = observer["fault_mechanism"]
+    expected_build_path = OBSERVER_MECHANISM_BUILD_PATHS.get(mechanism)
+    if observer["build_path"] != expected_build_path:
+        raise TraceContractError("guest CPU observer fault mechanism/build path mismatch")
+
+    capabilities = observer["capabilities"]
+    _validate_observer_capability(capabilities["read"], "read")
+    _validate_observer_capability(capabilities["write"], "write")
+
+    if (
+        mechanism == "userfaultfd_write_protect"
+        and capabilities["read"]["state"] != "unknown"
+    ):
+        raise TraceContractError(
+            "userfaultfd_write_protect direct-read capability remains unknown in observer v1"
+        )
+
+    return observer
+
+
+def _required_access_directions(access: str) -> tuple[str, ...]:
+    if access == "read":
+        return ("read",)
+    if access == "write":
+        return ("write",)
+    if access == "read_write":
+        return ("read", "write")
+    raise TraceContractError(f"unsupported guest CPU access direction: {access!r}")
+
+
+def _validate_runtime_guest_cpu_event(event, observer) -> None:
+    if observer is None:
+        raise TraceContractError(
+            "runtime guest_cpu events require versioned observer provenance"
+        )
+
+    coverage = event["coverage"]
+    if coverage == "unknown":
+        return
+
+    capabilities = observer["capabilities"]
+    directions = _required_access_directions(event["access"])
+
+    if coverage in {"observed", "ambiguous"}:
+        for direction in directions:
+            if capabilities[direction]["state"] not in OBSERVABLE_CAPABILITY_STATES:
+                raise TraceContractError(
+                    f"runtime guest_cpu {coverage} requires observable {direction} capability"
+                )
+        return
+
+    if coverage == "unobserved":
+        for direction in directions:
+            capability = capabilities[direction]
+            if capability["state"] != "negative_validated":
+                raise TraceContractError(
+                    f"runtime guest_cpu coverage=unobserved requires negative_validated {direction} capability"
+                )
+            if capability.get("coverage_oracle_sha256") is None:
+                raise TraceContractError(
+                    f"runtime guest_cpu coverage=unobserved requires {direction} coverage oracle"
+                )
+
+
 def _validate_event_contract(event) -> None:
     category = event["category"]
     kind = event["kind"]
@@ -131,6 +237,7 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
     if expected_baseline_id is not None and actual_baseline_id != expected_baseline_id:
         raise TraceContractError("trace baseline does not match expected baseline")
     _validate_bound_provenance(material)
+    observer = _validate_observer_provenance(material)
 
     capture = document["capture"]
     limits = capture["limits"]
@@ -153,14 +260,8 @@ def validate_semantics(document, *, expected_baseline_id: str | None = None):
             raise TraceContractError("event seq must be contiguous from zero")
         if event["timestamp_ns"] < previous_timestamp:
             raise TraceContractError("timestamps must be monotonic")
-        if (
-            material["evidence_class"] == "runtime"
-            and event["kind"] == "guest_cpu"
-            and event.get("coverage") == "unobserved"
-        ):
-            raise TraceContractError(
-                "runtime guest_cpu coverage=unobserved requires versioned observer provenance"
-            )
+        if material["evidence_class"] == "runtime" and event["kind"] == "guest_cpu":
+            _validate_runtime_guest_cpu_event(event, observer)
         previous_seq = event["seq"]
         previous_timestamp = event["timestamp_ns"]
 
