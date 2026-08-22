@@ -1,0 +1,44 @@
+name: Graphics pipeline producer patch
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/graphics-pipeline-producer-patch.yml'
+      - 'tools/prepare_graphics_pipeline_producer_patch.py'
+      - 'tests/test_prepare_graphics_pipeline_producer_patch.py'
+      - 'docs/instrumentation/graphics-pipeline-producer-source-patch.md'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/graphics-pipeline-producer-patch.yml'
+      - 'tools/prepare_graphics_pipeline_producer_patch.py'
+      - 'tests/test_prepare_graphics_pipeline_producer_patch.py'
+      - 'docs/instrumentation/graphics-pipeline-producer-source-patch.md'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run patch-preparer regressions
+        run: python -m unittest tests.test_prepare_graphics_pipeline_producer_patch -v
+      - name: Fetch exact pinned upstream source
+        run: |
+          python - <<'PY'
+          import urllib.request
+          url = 'https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/renderer_vulkan/vk_pipeline_cache.cpp'
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data = response.read()
+          open('vk_pipeline_cache.cpp', 'wb').write(data)
+          PY
+      - name: Prepare patch against exact upstream source
+        run: |
+          python tools/prepare_graphics_pipeline_producer_patch.py \
+            vk_pipeline_cache.cpp \
+            --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
+            --output graphics-pipeline-producer.patch
+          grep -F 'SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(graphics_key, is_new)' graphics-pipeline-producer.patch
+          test "$(grep -c '^@@' graphics-pipeline-producer.patch)" -eq 1
