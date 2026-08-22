@@ -78,29 +78,38 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
             },
         )
 
-    def test_blend_controls_preserve_eight_raw_register_words(self):
+    def test_blend_controls_preserve_memberwise_zero_initialized_destination(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "blend_controls")
         self.assertEqual(
             field["canonicalization"],
-            {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
+            {
+                "kind": "record_array",
+                "length": 8,
+                "assignment": "memberwise_into_zeroed_destination",
+                "unassigned_bits": "canonical_zero",
+                "fields": [
+                    {"name": "color_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "color_func", "kind": "raw_bit_pattern", "bits": 3},
+                    {"name": "color_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "alpha_src_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "alpha_func", "kind": "raw_bit_pattern", "bits": 3},
+                    {"name": "alpha_dst_factor", "kind": "raw_bit_pattern", "bits": 5},
+                    {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
+                    {"name": "enable", "kind": "unsigned_integer", "bits": 1},
+                    {"name": "disable_rop3", "kind": "unsigned_integer", "bits": 1},
+                ],
+            },
         )
 
     def test_raw_domains_preserve_reserved_patterns(self):
         document = self.load()
-        blend_controls = next(
-            field for field in document["fields"] if field["name"] == "blend_controls"
-        )
         write_masks = next(field for field in document["fields"] if field["name"] == "write_masks")
         cb_shader_mask = next(field for field in document["fields"] if field["name"] == "cb_shader_mask")
         logic_op = next(field for field in document["fields"] if field["name"] == "logic_op")
         z_format = next(field for field in document["fields"] if field["name"] == "z_format")
         prim_type = next(field for field in document["fields"] if field["name"] == "prim_type")
         polygon_mode = next(field for field in document["fields"] if field["name"] == "polygon_mode")
-        self.assertEqual(
-            blend_controls["canonicalization"],
-            {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
-        )
         self.assertEqual(
             write_masks["canonicalization"],
             {"kind": "raw_bit_pattern_array", "bits": 32, "length": 8},
@@ -217,24 +226,36 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
-    def test_rejects_semantic_only_blend_control_rule(self):
+    def test_rejects_raw_source_word_blend_control_rule(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "blend_controls")
         field["canonicalization"] = {
-            "kind": "record_array",
+            "kind": "raw_bit_pattern_array",
+            "bits": 32,
             "length": 8,
-            "fields": [
-                {"name": "enable", "kind": "unsigned_integer", "bits": 1},
-                {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
-            ],
         }
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
-    def test_rejects_wrong_blend_control_width(self):
+    def test_rejects_incomplete_blend_control_member_rule(self):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "blend_controls")
-        field["canonicalization"]["bits"] = 29
+        field["canonicalization"]["fields"] = [
+            {"name": "enable", "kind": "unsigned_integer", "bits": 1},
+            {"name": "separate_alpha_blend", "kind": "unsigned_integer", "bits": 1},
+        ]
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_wrong_blend_control_member_width(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        component = next(
+            component
+            for component in field["canonicalization"]["fields"]
+            if component["name"] == "color_dst_factor"
+        )
+        component["bits"] = 4
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
@@ -242,6 +263,13 @@ class GraphicsPipelineKeySurfaceTests(unittest.TestCase):
         document = self.load()
         field = next(field for field in document["fields"] if field["name"] == "blend_controls")
         field["canonicalization"]["length"] = 7
+        with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
+            graphics_pipeline_key_surface.validate(document)
+
+    def test_rejects_nonzero_unassigned_blend_bits_policy(self):
+        document = self.load()
+        field = next(field for field in document["fields"] if field["name"] == "blend_controls")
+        field["canonicalization"]["unassigned_bits"] = "preserve_source"
         with self.assertRaises(graphics_pipeline_key_surface.PipelineKeySurfaceError):
             graphics_pipeline_key_surface.validate(document)
 
