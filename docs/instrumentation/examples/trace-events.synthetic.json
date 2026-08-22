@@ -1,7 +1,7 @@
 {
   "schema_version": "bb-trace-events/v1",
   "provenance": {
-    "baseline_id": "ac0c51360f3a9ce71e2523a588560aa36a523e091b1390145460d0953299304a",
+    "baseline_id": "fd16dca50856c9d379e1989fd286968d39c8cfcde9eda0cc010b720aff7add6e",
     "material": {
       "evidence_class": "synthetic",
       "source": {
@@ -15,8 +15,8 @@
       "emulator_config_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
       "producer": {
         "producer_id": "bb-trace-event-model",
-        "producer_sha256": "e339a6e8fcec5fd81e7b11bbc79c8ae46891f1ab5ac4b9ed6caffef410ec404e",
-        "schema_sha256": "d9377a3c6448ceb9bb1ebccefbecbb66e5d73e08ecc30ffa318e0e9b9facd7d0"
+        "producer_sha256": "3f92a708bb9763e441a2267138b6665c0229fc573e8c65602c92cd408b99c047",
+        "schema_sha256": "e01e2b07e65e1030b513bf51a36a35a1e6b63273faefdaae9312edee602f2e75"
       }
     }
   },

@@ -100,6 +100,9 @@
                   "$ref": "#/$defs/sha256"
                 }
               }
+            },
+            "observer": {
+              "$ref": "#/$defs/guest_cpu_observer"
             }
           }
         }
@@ -238,6 +241,71 @@
     "span_id": {
       "type": "string",
       "pattern": "^span:[0-9]{8}$"
+    },
+    "observer_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "unknown",
+            "observable",
+            "negative_validated"
+          ]
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "coverage_oracle_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "guest_cpu_observer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "fault_mechanism",
+        "build_path",
+        "capabilities"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "bb-guest-cpu-observer/v1"
+        },
+        "fault_mechanism": {
+          "enum": [
+            "access_violation",
+            "userfaultfd_write_protect"
+          ]
+        },
+        "build_path": {
+          "enum": [
+            "non_userfaultfd",
+            "enable_userfaultfd"
+          ]
+        },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "read",
+            "write"
+          ],
+          "properties": {
+            "read": {
+              "$ref": "#/$defs/observer_capability"
+            },
+            "write": {
+              "$ref": "#/$defs/observer_capability"
+            }
+          }
+        }
+      }
     },
     "event": {
       "type": "object",

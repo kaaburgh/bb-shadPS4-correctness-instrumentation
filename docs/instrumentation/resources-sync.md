@@ -27,7 +27,21 @@ On the normal access-violation path, `PageManager::GuestFaultSignalHandler` dist
 
 There is, however, a material compile/platform distinction. Under `ENABLE_USERFAULTFD`, the Linux implementation registers GPU mappings with `UFFDIO_REGISTER_MODE_WP` and its handler accepts write-protect faults, then calls `Rasterizer::InvalidateMemory`. Its `Protect` implementation toggles only userfaultfd write protection; static inspection does not establish an equivalent read-fault mechanism on that path. Therefore direct-write observation is statically established for the userfaultfd branch, while direct-read coverage remains unproven there. The non-userfaultfd access-violation path contains explicit read/write dispatch for both directions.
 
-This distinction prevents a repository-wide claim that every host/build observes direct guest-CPU reads and writes identically. Build configuration and host fault mechanism must be part of observer provenance, and missing direct-read events remain `unknown` unless the exact path used by the run has independent coverage evidence.
+This distinction prevents a repository-wide claim that every host/build observes direct guest-CPU reads and writes identically. Build configuration and host fault mechanism are now explicit observer provenance, and missing direct-read events remain `unknown` unless the exact path used by the run has independent coverage evidence.
+
+## Versioned observer capability boundary
+
+`bb-trace-events/v1` now admits a separately versioned `provenance.material.observer` record, currently `bb-guest-cpu-observer/v1`. Runtime `guest_cpu` events require that record; synthetic contract fixtures do not.
+
+The record distinguishes the two established mechanism/build pairs and carries independent read/write capability states:
+
+- `unknown` — no observation capability is established for the direction;
+- `observable` — a separately hashed evidence artifact establishes the concrete observation seam, sufficient for `observed`/`ambiguous` runtime events but not negative evidence;
+- `negative_validated` — the observation evidence is accompanied by a separately hashed independent coverage oracle, allowing `coverage=unobserved` for that direction.
+
+The validator rejects mechanism/build mismatches and keeps `userfaultfd_write_protect` direct-read capability `unknown` in observer v1. A negative runtime claim fails closed unless every relevant direction is `negative_validated` and supplies its `coverage_oracle_sha256`.
+
+The resource-sync consumer calls the shared trace validator before reconstruction, so unsupported runtime negative coverage cannot silently become resource classification evidence. The contract binds the oracle artifact identity but does not certify its independence or quality by digest alone; producer admission/BB-INS4 must establish that relationship.
 
 ## Synthetic reconstruction prototype
 
@@ -44,8 +58,10 @@ The fixture `docs/instrumentation/examples/resource-sync.synthetic.json` intenti
 5. a later guest-CPU read whose coverage is `ambiguous`;
 6. resource destruction.
 
-This demonstrates deterministic correlation and preserves uncertainty. It does not model or validate a real target observer.
+This demonstrates deterministic correlation and preserves uncertainty. It does not model or validate a real target observer. Focused regressions additionally construct runtime-classified documents in memory to prove that public reconstruction rejects `unobserved` for merely observable capability and accepts it only when the relevant direction is `negative_validated` with a separately bound oracle digest. Those are compatibility tests, not runtime evidence.
 
 ## Remaining BB-INS2 work
 
-BB-INS2 is not complete after this slice. The direct page-fault seam is now statically established, but completion still needs a bounded diagnostic producer design that emits `guest_cpu` access events at the fault/rasterizer boundary with exact host/build/fault-mechanism provenance. It also needs an independent known-access or structural seam-coverage oracle for every path used to support a negative direct-CPU-access claim, including explicit coverage of the userfaultfd read limitation or a separate read-observer mechanism. Target runtime validation and tracing overhead remain BB-INS4 work.
+BB-INS2 is not complete after this slice. The direct page-fault seams are statically established and the observer/fault-mechanism provenance compatibility boundary is now versioned and fail-closed. Completion still needs a bounded diagnostic producer that emits `guest_cpu` access events at the fault/rasterizer boundary with exact host/build/fault-mechanism provenance, deterministic live-resource correlation, and independently exercised coverage evidence for each promoted capability.
+
+The first implementation should keep userfaultfd direct-read capability `unknown` unless a separate read observer is established. Any transition to `negative_validated` requires a known-access or structural seam-coverage oracle independent of the event reconstruction. Target runtime validation and tracing overhead remain BB-INS4 work.
