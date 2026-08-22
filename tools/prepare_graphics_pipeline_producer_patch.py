@@ -12,7 +12,7 @@ PINNED_SOURCE_PATH = "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp"
 
 _NEEDLE = """    const auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);\n    if (is_new) {\n"""
 
-_INSERT = """    const auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);\n\n    // BB diagnostic integration seam. Off by default: an instrumentation build may define this\n    // macro to consume the exact GraphicsPipelineKey plus the post-lookup creation/cache result.\n#ifndef SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE\n#define SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(key, is_new) ((void)0)\n#endif\n    SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(graphics_key, is_new);\n\n    if (is_new) {\n"""
+_INSERT = """    const auto [it, is_new] = graphics_pipelines.try_emplace(graphics_key);\n\n    // BB diagnostic integration seam. Off by default: only an instrumentation build that\n    // explicitly defines the hook can consume the exact key plus post-lookup result.\n#ifdef SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE\n    SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(graphics_key, is_new);\n#endif\n\n    if (is_new) {\n"""
 
 
 class PatchPreparationError(ValueError):
