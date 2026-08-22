@@ -73,7 +73,7 @@ def validate(document: dict) -> dict:
     if not isinstance(observations, list) or not observations or len(observations) > MAX_OBSERVATIONS:
         raise PipelineProducerContractError("observations must contain between 1 and 1000000 entries")
 
-    seen_seq: set[int] = set()
+    previous_seq: int | None = None
     created = 0
     cache_hits = 0
     for index, observation in enumerate(observations):
@@ -81,9 +81,9 @@ def validate(document: dict) -> dict:
         seq = observation["seq"]
         if not isinstance(seq, int) or isinstance(seq, bool) or seq < 0:
             raise PipelineProducerContractError(f"observations[{index}].seq must be a non-negative integer")
-        if seq in seen_seq:
-            raise PipelineProducerContractError("observation seq values must be unique")
-        seen_seq.add(seq)
+        if previous_seq is not None and seq <= previous_seq:
+            raise PipelineProducerContractError("observation seq values must be strictly increasing")
+        previous_seq = seq
 
         identity = observation["pipeline_identity"]
         prefix = "pipeline:sha256:"
