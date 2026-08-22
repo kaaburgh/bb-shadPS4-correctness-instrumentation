@@ -25,11 +25,13 @@ class PrepareGraphicsPipelineProducerPatchTests(unittest.TestCase):
     def test_inserts_off_by_default_hook_at_post_lookup_result(self):
         patched = prepare_source(SOURCE, PINNED_SOURCE_COMMIT)
         lookup = patched.index("graphics_pipelines.try_emplace(graphics_key)")
+        guard = patched.index("#ifdef SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE")
         hook = patched.index("SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(graphics_key, is_new)")
         branch = patched.index("if (is_new)", hook)
-        self.assertLess(lookup, hook)
+        self.assertLess(lookup, guard)
+        self.assertLess(guard, hook)
         self.assertLess(hook, branch)
-        self.assertIn("#define SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE(key, is_new) ((void)0)", patched)
+        self.assertNotIn("#define SHADPS4_BB_GRAPHICS_PIPELINE_OBSERVE", patched)
 
     def test_patch_is_deterministic_and_targets_only_pinned_file(self):
         patched = prepare_source(SOURCE, PINNED_SOURCE_COMMIT)
