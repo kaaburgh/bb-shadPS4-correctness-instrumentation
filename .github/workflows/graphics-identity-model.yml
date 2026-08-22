@@ -4,15 +4,19 @@ on:
   pull_request:
     paths:
       - "tools/graphics_identity_model.py"
+      - "tools/graphics_pipeline_key_surface.py"
       - "tests/test_graphics_identity_model.py"
       - "docs/instrumentation/examples/graphics-identity.synthetic.json"
+      - "docs/instrumentation/graphics-pipeline-key-surface.json"
       - ".github/workflows/graphics-identity-model.yml"
   push:
     branches: [main]
     paths:
       - "tools/graphics_identity_model.py"
+      - "tools/graphics_pipeline_key_surface.py"
       - "tests/test_graphics_identity_model.py"
       - "docs/instrumentation/examples/graphics-identity.synthetic.json"
+      - "docs/instrumentation/graphics-pipeline-key-surface.json"
       - ".github/workflows/graphics-identity-model.yml"
 
 jobs:
