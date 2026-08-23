@@ -1,0 +1,41 @@
+name: Guest CPU accepted observer source patch
+
+on:
+  pull_request:
+    paths:
+      - 'tools/prepare_guest_cpu_accepted_observer_patch.py'
+      - 'tests/test_prepare_guest_cpu_accepted_observer_patch.py'
+      - 'docs/instrumentation/guest-cpu-accepted-observer-source-patch.md'
+      - '.github/workflows/guest-cpu-accepted-observer-patch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/prepare_guest_cpu_accepted_observer_patch.py'
+      - 'tests/test_prepare_guest_cpu_accepted_observer_patch.py'
+      - 'docs/instrumentation/guest-cpu-accepted-observer-source-patch.md'
+      - '.github/workflows/guest-cpu-accepted-observer-patch.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run focused regressions
+        run: python -m unittest tests.test_prepare_guest_cpu_accepted_observer_patch -v
+      - name: Fetch exact upstream source
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/renderer_vulkan/vk_rasterizer.cpp \
+            -o vk_rasterizer.cpp
+      - name: Prepare exact bounded patch
+        run: |
+          python tools/prepare_guest_cpu_accepted_observer_patch.py \
+            vk_rasterizer.cpp \
+            --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
+            --output guest-cpu-accepted-observer.patch
+          grep -F 'SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE(addr, size, true)' guest-cpu-accepted-observer.patch
+          grep -F 'SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE(addr, size, false)' guest-cpu-accepted-observer.patch
+          test "$(grep -c '^@@' guest-cpu-accepted-observer.patch)" -eq 2
