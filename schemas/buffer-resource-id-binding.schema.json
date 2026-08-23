@@ -10,7 +10,7 @@
     "complete": {"type": "boolean"},
     "events": {
       "type": "array",
-      "maxItems": 99999999,
+      "maxItems": 1000000,
       "items": {"$ref": "#/$defs/lifecycle_event"}
     }
   },
