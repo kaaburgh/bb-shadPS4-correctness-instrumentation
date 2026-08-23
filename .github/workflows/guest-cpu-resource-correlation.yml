@@ -1,0 +1,38 @@
+name: Guest CPU live-resource correlation
+
+on:
+  pull_request:
+    paths:
+      - 'schemas/guest-cpu-resource-correlation.schema.json'
+      - 'tools/guest_cpu_resource_correlation.py'
+      - 'tests/test_guest_cpu_resource_correlation.py'
+      - 'docs/instrumentation/guest-cpu-resource-correlation.md'
+      - 'docs/instrumentation/examples/guest-cpu-resource-correlation.synthetic.json'
+      - '.github/workflows/guest-cpu-resource-correlation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'schemas/guest-cpu-resource-correlation.schema.json'
+      - 'tools/guest_cpu_resource_correlation.py'
+      - 'tests/test_guest_cpu_resource_correlation.py'
+      - 'docs/instrumentation/guest-cpu-resource-correlation.md'
+      - 'docs/instrumentation/examples/guest-cpu-resource-correlation.synthetic.json'
+      - '.github/workflows/guest-cpu-resource-correlation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install validation dependency
+        run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
+      - name: Run focused regressions
+        run: python -m unittest tests.test_guest_cpu_resource_correlation -v
+      - name: Validate synthetic fixture through real CLI
+        run: python tools/guest_cpu_resource_correlation.py docs/instrumentation/examples/guest-cpu-resource-correlation.synthetic.json
+      - name: Validate published schema and fixture
+        run: |
+          python -c "import json; from jsonschema import Draft202012Validator, FormatChecker; schema=json.load(open('schemas/guest-cpu-resource-correlation.schema.json', encoding='utf-8')); fixture=json.load(open('docs/instrumentation/examples/guest-cpu-resource-correlation.synthetic.json', encoding='utf-8')); Draft202012Validator.check_schema(schema); Draft202012Validator(schema, format_checker=FormatChecker()).validate(fixture)"
