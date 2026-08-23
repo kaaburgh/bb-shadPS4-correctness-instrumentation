@@ -4,10 +4,15 @@
   "title": "BufferCache lifetime to durable trace resource identity binding",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "complete", "events"],
+  "required": ["schema_version", "complete", "first_resource_ordinal", "events"],
   "properties": {
     "schema_version": {"const": "bb-buffer-resource-id-binding/v1"},
     "complete": {"type": "boolean"},
+    "first_resource_ordinal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99999999
+    },
     "events": {
       "type": "array",
       "maxItems": 1000000,
