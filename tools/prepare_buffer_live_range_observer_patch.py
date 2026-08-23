@@ -66,8 +66,10 @@ def main() -> int:
     source = args.source.read_bytes()
     updated = prepare(source, args.source_commit)
     patch = unified_patch(source.decode("utf-8"), updated)
-    if patch.count("@@") != 4:
-        raise ValueError("expected exactly two patch hunks")
+    # Register/unregister statements are close enough that difflib deliberately
+    # emits one bounded hunk containing both lifecycle transitions.
+    if patch.count("@@") != 2:
+        raise ValueError("expected exactly one patch hunk")
     args.output.write_text(patch, encoding="utf-8")
     return 0
 
