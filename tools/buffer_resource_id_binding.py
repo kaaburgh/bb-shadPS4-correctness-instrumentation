@@ -8,7 +8,7 @@ from pathlib import Path
 SCHEMA_VERSION = "bb-buffer-resource-id-binding/v1"
 MAX_U64 = (1 << 64) - 1
 MAX_EVENTS = 1_000_000
-MAX_BINDINGS = 99_999_999
+MAX_RESOURCE_ORDINAL = 99_999_999
 
 
 class BindingError(ValueError):
@@ -48,6 +48,12 @@ def _u64(value, name: str, *, positive: bool = False) -> int:
     return value
 
 
+def _resource_ordinal(value) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_RESOURCE_ORDINAL:
+        raise BindingError("first_resource_ordinal outside trace resource-ID namespace")
+    return value
+
+
 def _buffer_id(value) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFF:
         raise BindingError("buffer_id outside unsigned 32-bit range")
@@ -62,11 +68,12 @@ def _checked_end(address: int, size: int, where: str) -> int:
 
 
 def bind_lifetimes(document: dict) -> dict:
-    _expect_exact_keys(document, {"schema_version", "complete", "events"}, "document")
+    _expect_exact_keys(document, {"schema_version", "complete", "first_resource_ordinal", "events"}, "document")
     if document["schema_version"] != SCHEMA_VERSION:
         raise BindingError(f"unsupported schema_version: {document['schema_version']!r}")
     if not isinstance(document["complete"], bool):
         raise BindingError("complete must be boolean")
+    next_resource_ordinal = _resource_ordinal(document["first_resource_ordinal"])
     events = document["events"]
     if not isinstance(events, list) or len(events) > MAX_EVENTS:
         raise BindingError("events must be a bounded array")
@@ -74,7 +81,6 @@ def bind_lifetimes(document: dict) -> dict:
     active: dict[int, dict] = {}
     bindings: list[dict] = []
     previous_seq = -1
-    next_resource_ordinal = 1
 
     for index, event in enumerate(events):
         if not isinstance(event, dict):
@@ -95,7 +101,7 @@ def bind_lifetimes(document: dict) -> dict:
         if live:
             if buffer_id in active:
                 raise BindingError(f"buffer_id {buffer_id} registered while already live")
-            if next_resource_ordinal > MAX_BINDINGS:
+            if next_resource_ordinal > MAX_RESOURCE_ORDINAL:
                 raise BindingError("resource_id namespace exhausted")
             binding = {
                 "buffer_id": buffer_id,
@@ -123,6 +129,7 @@ def bind_lifetimes(document: dict) -> dict:
     return {
         "schema_version": "bb-buffer-resource-id-bindings/v1",
         "complete": document["complete"],
+        "next_resource_ordinal": next_resource_ordinal,
         "bindings": bindings,
     }
 
