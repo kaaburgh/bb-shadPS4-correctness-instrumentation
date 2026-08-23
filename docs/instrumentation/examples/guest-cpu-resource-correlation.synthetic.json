@@ -1,0 +1,19 @@
+{
+  "schema_version": "bb-guest-cpu-resource-correlation/v1",
+  "live_resources": [
+    {
+      "resource_id": "res:00000001",
+      "guest_address": 4096,
+      "size_bytes": 4096
+    },
+    {
+      "resource_id": "res:00000002",
+      "guest_address": 12288,
+      "size_bytes": 4096
+    }
+  ],
+  "access": {
+    "guest_address": 4352,
+    "size_bytes": 8
+  }
+}
