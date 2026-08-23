@@ -27,7 +27,7 @@
     },
     "resource_id": {
       "type": "string",
-      "pattern": "^res:[0-9a-f]{8}$"
+      "pattern": "^res:[0-9]{8}$"
     },
     "resource_range": {
       "type": "object",
