@@ -7,6 +7,7 @@ from pathlib import Path
 
 SCHEMA_VERSION = "bb-buffer-resource-id-binding/v1"
 MAX_U64 = (1 << 64) - 1
+MAX_EVENTS = 1_000_000
 MAX_BINDINGS = 99_999_999
 
 
@@ -67,7 +68,7 @@ def bind_lifetimes(document: dict) -> dict:
     if not isinstance(document["complete"], bool):
         raise BindingError("complete must be boolean")
     events = document["events"]
-    if not isinstance(events, list) or len(events) > MAX_BINDINGS * 2:
+    if not isinstance(events, list) or len(events) > MAX_EVENTS:
         raise BindingError("events must be a bounded array")
 
     active: dict[int, dict] = {}
