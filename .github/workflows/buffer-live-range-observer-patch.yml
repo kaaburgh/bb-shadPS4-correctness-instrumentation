@@ -38,4 +38,4 @@ jobs:
             --output buffer-live-range-observer.patch
           grep -F 'SHADPS4_BB_BUFFER_LIVE_RANGE_OBSERVE(buffer_id, buffer.CpuAddr(), buffer.SizeBytes(), true)' buffer-live-range-observer.patch
           grep -F 'SHADPS4_BB_BUFFER_LIVE_RANGE_OBSERVE(buffer_id, buffer.CpuAddr(), buffer.SizeBytes(), false)' buffer-live-range-observer.patch
-          test "$(grep -c '^@@' buffer-live-range-observer.patch)" -eq 2
+          test "$(grep -c '^@@' buffer-live-range-observer.patch)" -eq 1
