@@ -127,7 +127,7 @@ def bind_lifetimes(document: dict) -> dict:
         raise BindingError(f"complete lifecycle stream ended with live buffer_ids: {sorted(active)}")
 
     return {
-        "schema_version": "bb-buffer-resource-id-bindings/v1",
+        "schema_version": SCHEMA_VERSION,
         "complete": document["complete"],
         "next_resource_ordinal": next_resource_ordinal,
         "bindings": bindings,
