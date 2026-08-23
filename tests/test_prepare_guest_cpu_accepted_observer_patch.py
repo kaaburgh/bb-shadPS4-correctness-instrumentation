@@ -13,16 +13,22 @@ class GuestCpuAcceptedObserverPatchTests(unittest.TestCase):
     def _source(self) -> bytes:
         # Unit tests exercise seam/cardinality semantics without pretending this fixture
         # is the pinned upstream blob; the exact blob path is exercised in CI.
-        return (WRITE_ANCHOR + "    texture_cache.InvalidateMemory(addr, size);\n    return true;\n}\n\n" + READ_ANCHOR + "    return true;\n}\n").encode()
+        return (
+            WRITE_ANCHOR
+            + "    texture_cache.InvalidateMemory(addr, size);\n    return true;\n}\n\n"
+            + READ_ANCHOR
+            + "    return true;\n}\n"
+        ).encode()
 
-    def _prepare_unpinned_fixture(self, source: bytes) -> str:
+    def _prepare_unpinned_fixture(self, source: bytes, commit: str = SOURCE_COMMIT) -> str:
         # Preserve the production transformation semantics while bypassing only the
         # exact-upstream blob assertion in this isolated synthetic fixture.
         import tools.prepare_guest_cpu_accepted_observer_patch as mod
+
         original = mod.SOURCE_GIT_BLOB
         try:
             mod.SOURCE_GIT_BLOB = mod.git_blob_sha(source)
-            return prepare(source, SOURCE_COMMIT)
+            return prepare(source, commit)
         finally:
             mod.SOURCE_GIT_BLOB = original
 
@@ -34,7 +40,7 @@ class GuestCpuAcceptedObserverPatchTests(unittest.TestCase):
 
     def test_wrong_commit_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "source commit"):
-            self._prepare_unpinned_fixture.__wrapped__  # type: ignore[attr-defined]
+            self._prepare_unpinned_fixture(self._source(), "0" * 40)
 
     def test_missing_write_seam_fails_closed(self):
         source = self._source().replace(WRITE_ANCHOR.encode(), b"")
@@ -49,6 +55,7 @@ class GuestCpuAcceptedObserverPatchTests(unittest.TestCase):
     def test_repeated_application_fails_closed(self):
         first = self._prepare_unpinned_fixture(self._source()).encode()
         import tools.prepare_guest_cpu_accepted_observer_patch as mod
+
         original = mod.SOURCE_GIT_BLOB
         try:
             mod.SOURCE_GIT_BLOB = mod.git_blob_sha(first)
