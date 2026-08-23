@@ -14,10 +14,11 @@ def event(seq, buffer_id, address, size, live):
 
 
 class BufferResourceIdBindingTests(unittest.TestCase):
-    def bind(self, events, complete=True):
+    def bind(self, events, complete=True, first_resource_ordinal=1):
         return bind_lifetimes({
             "schema_version": "bb-buffer-resource-id-binding/v1",
             "complete": complete,
+            "first_resource_ordinal": first_resource_ordinal,
             "events": events,
         })
 
@@ -29,16 +30,22 @@ class BufferResourceIdBindingTests(unittest.TestCase):
             event(40, 7, 0x2000, 0x80, False),
         ])
         self.assertEqual([b["resource_id"] for b in result["bindings"]], ["res:00000001", "res:00000002"])
+        self.assertEqual(result["next_resource_ordinal"], 3)
         self.assertEqual([b["end_seq"] for b in result["bindings"]], [20, 40])
 
-    def test_ids_follow_registration_order_not_buffer_id(self):
+    def test_consumes_caller_owned_resource_namespace(self):
         result = self.bind([
             event(1, 99, 0x1000, 0x10, True),
             event(2, 3, 0x2000, 0x10, True),
             event(3, 99, 0x1000, 0x10, False),
             event(4, 3, 0x2000, 0x10, False),
-        ])
-        self.assertEqual([b["resource_id"] for b in result["bindings"]], ["res:00000001", "res:00000002"])
+        ], first_resource_ordinal=41)
+        self.assertEqual([b["resource_id"] for b in result["bindings"]], ["res:00000041", "res:00000042"])
+        self.assertEqual(result["next_resource_ordinal"], 43)
+
+    def test_rejects_invalid_resource_namespace_start(self):
+        with self.assertRaisesRegex(BindingError, "resource-ID namespace"):
+            self.bind([], first_resource_ordinal=0)
 
     def test_rejects_non_monotonic_sequence(self):
         with self.assertRaisesRegex(BindingError, "strictly increasing"):
@@ -72,6 +79,7 @@ class BufferResourceIdBindingTests(unittest.TestCase):
         document = {
             "schema_version": "bb-buffer-resource-id-binding/v1",
             "complete": True,
+            "first_resource_ordinal": 1,
             "events": [],
             "unexpected": True,
         }
