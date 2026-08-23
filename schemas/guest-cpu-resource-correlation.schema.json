@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/guest-cpu-resource-correlation.schema.json",
+  "title": "Guest CPU accepted-access live-resource correlation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "live_resources", "access"],
+  "properties": {
+    "schema_version": {"const": "bb-guest-cpu-resource-correlation/v1"},
+    "live_resources": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/resource_range"}
+    },
+    "access": {"$ref": "#/$defs/access_range"}
+  },
+  "$defs": {
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "positive_u64": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^res:[0-9a-f]{8}$"
+    },
+    "resource_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_id", "guest_address", "size_bytes"],
+      "properties": {
+        "resource_id": {"$ref": "#/$defs/resource_id"},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"}
+      }
+    },
+    "access_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["guest_address", "size_bytes"],
+      "properties": {
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"}
+      }
+    }
+  }
+}
