@@ -1,6 +1,7 @@
 {
   "schema_version": "bb-buffer-resource-id-binding/v1",
   "complete": true,
+  "first_resource_ordinal": 41,
   "events": [
     {"seq": 10, "buffer_id": 7, "guest_address": 4096, "size_bytes": 256, "live": true},
     {"seq": 20, "buffer_id": 7, "guest_address": 4096, "size_bytes": 256, "live": false},
