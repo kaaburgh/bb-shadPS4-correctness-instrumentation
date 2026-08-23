@@ -1,7 +1,14 @@
 import copy
+import json
+from pathlib import Path
 import unittest
 
 from tools.guest_cpu_resource_correlation import CorrelationError, MAX_U64, correlate
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+CORRELATION_SCHEMA = REPOSITORY_ROOT / "schemas" / "guest-cpu-resource-correlation.schema.json"
+TRACE_SCHEMA = REPOSITORY_ROOT / "schemas" / "trace-event.schema.json"
 
 
 class GuestCpuResourceCorrelationTests(unittest.TestCase):
@@ -20,6 +27,20 @@ class GuestCpuResourceCorrelationTests(unittest.TestCase):
         self.assertEqual("unique", result["status"])
         self.assertEqual("res:00000001", result["resource_id"])
         self.assertEqual(["res:00000001"], result["candidate_resource_ids"])
+
+    def test_resource_id_contract_matches_trace_contract(self):
+        correlation_schema = json.loads(CORRELATION_SCHEMA.read_text(encoding="utf-8"))
+        trace_schema = json.loads(TRACE_SCHEMA.read_text(encoding="utf-8"))
+        self.assertEqual(
+            trace_schema["$defs"]["resource_id"],
+            correlation_schema["$defs"]["resource_id"],
+        )
+
+    def test_hex_resource_id_fails_closed(self):
+        document = self.fixture()
+        document["live_resources"][0]["resource_id"] = "res:deadbeef"
+        with self.assertRaisesRegex(CorrelationError, "schema validation failed"):
+            correlate(document)
 
     def test_overlapping_live_ranges_preserve_ambiguity(self):
         document = self.fixture()
