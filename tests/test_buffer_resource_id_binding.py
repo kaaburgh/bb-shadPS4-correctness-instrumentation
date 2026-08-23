@@ -22,6 +22,9 @@ class BufferResourceIdBindingTests(unittest.TestCase):
             "events": events,
         })
 
+    def test_output_uses_documented_contract_schema_version(self):
+        self.assertEqual(self.bind([])["schema_version"], "bb-buffer-resource-id-binding/v1")
+
     def test_assigns_fresh_durable_id_on_buffer_id_reuse(self):
         result = self.bind([
             event(10, 7, 0x1000, 0x100, True),
