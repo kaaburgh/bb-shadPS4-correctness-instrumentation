@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/buffer-guest-cpu-diagnostic.schema.json",
+  "title": "Bounded buffer-backed guest-CPU diagnostic producer contract",
+  "oneOf": [
+    {"$ref": "#/$defs/input"},
+    {"$ref": "#/$defs/output"}
+  ],
+  "$defs": {
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "positive_u64": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^res:[0-9]{8}$"
+    },
+    "lifecycle_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "buffer_id", "guest_address", "size_bytes", "live"],
+      "properties": {
+        "seq": {"$ref": "#/$defs/u64"},
+        "buffer_id": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"},
+        "live": {"type": "boolean"}
+      }
+    },
+    "accepted_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "timestamp_ns", "guest_address", "size_bytes", "access"],
+      "properties": {
+        "seq": {"$ref": "#/$defs/u64"},
+        "timestamp_ns": {"$ref": "#/$defs/u64"},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"},
+        "access": {"enum": ["read", "write"]}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buffer_id", "resource_id", "guest_address", "size_bytes", "start_seq", "end_seq"],
+      "properties": {
+        "buffer_id": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+        "resource_id": {"$ref": "#/$defs/resource_id"},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"},
+        "start_seq": {"$ref": "#/$defs/u64"},
+        "end_seq": {
+          "anyOf": [
+            {"$ref": "#/$defs/u64"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "guest_cpu_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "timestamp_ns", "category", "kind", "correlation", "access", "coverage"],
+      "properties": {
+        "seq": {"$ref": "#/$defs/u64"},
+        "timestamp_ns": {"$ref": "#/$defs/u64"},
+        "category": {"const": "access"},
+        "kind": {"const": "guest_cpu"},
+        "correlation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resource_id"],
+          "properties": {
+            "resource_id": {"$ref": "#/$defs/resource_id"}
+          }
+        },
+        "access": {"enum": ["read", "write"]},
+        "coverage": {"const": "observed"}
+      }
+    },
+    "event_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trace_seq", "source_seq"],
+      "properties": {
+        "trace_seq": {"$ref": "#/$defs/u64"},
+        "source_seq": {"$ref": "#/$defs/u64"}
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "timestamp_ns", "guest_address", "size_bytes", "access", "status", "candidate_resource_ids"],
+      "properties": {
+        "seq": {"$ref": "#/$defs/u64"},
+        "timestamp_ns": {"$ref": "#/$defs/u64"},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"},
+        "access": {"enum": ["read", "write"]},
+        "status": {"enum": ["unmapped", "ambiguous"]},
+        "candidate_resource_ids": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/resource_id"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted_accesses", "emitted_events", "unmapped", "ambiguous"],
+      "properties": {
+        "accepted_accesses": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "emitted_events": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "unmapped": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "ambiguous": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "document_kind", "complete_lifecycle", "first_resource_ordinal", "lifecycle_events", "accepted_accesses"],
+      "properties": {
+        "schema_version": {"const": "bb-buffer-guest-cpu-diagnostic/v1"},
+        "document_kind": {"const": "input"},
+        "complete_lifecycle": {"type": "boolean"},
+        "first_resource_ordinal": {"type": "integer", "minimum": 1, "maximum": 99999999},
+        "lifecycle_events": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/lifecycle_event"}
+        },
+        "accepted_accesses": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/accepted_access"}
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "document_kind", "complete_lifecycle", "next_resource_ordinal", "resource_bindings", "events", "event_sources", "diagnostics", "summary"],
+      "properties": {
+        "schema_version": {"const": "bb-buffer-guest-cpu-diagnostic/v1"},
+        "document_kind": {"const": "output"},
+        "complete_lifecycle": {"type": "boolean"},
+        "next_resource_ordinal": {"type": "integer", "minimum": 1, "maximum": 100000000},
+        "resource_bindings": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/binding"}
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/guest_cpu_event"}
+        },
+        "event_sources": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/event_source"}
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/diagnostic"}
+        },
+        "summary": {"$ref": "#/$defs/summary"}
+      }
+    }
+  }
+}
