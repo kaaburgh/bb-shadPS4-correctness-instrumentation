@@ -41,6 +41,7 @@ class GraphicsPipelineCppIdentityConformanceTests(unittest.TestCase):
         )
         cls.lines = completed.stdout.splitlines()
         cls.vector = json.loads(VECTOR.read_text(encoding="utf-8"))
+        cls.source_text = SOURCE.read_text(encoding="utf-8")
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -52,6 +53,15 @@ class GraphicsPipelineCppIdentityConformanceTests(unittest.TestCase):
 
     def test_computes_expected_pipeline_identity_in_cpp(self) -> None:
         self.assertEqual(self.lines[1], self.vector["expected_pipeline_identity"])
+
+    def test_canonical_key_values_are_typed_not_pre_serialized_fragments(self) -> None:
+        self.assertIn("struct CanonicalPipelineKey", self.source_text)
+        self.assertIn("std::array<std::uint64_t, 6> stage_hashes", self.source_text)
+        self.assertIn("std::array<ColorBuffer, 8> color_buffers", self.source_text)
+        self.assertIn("append_number_array(out, key.stage_hashes)", self.source_text)
+        self.assertNotIn('\\"stage_hashes\\":[1229782938247303441', self.source_text)
+        self.assertNotIn('\\"color_samples\\":[1,0,0,0,0,0,0,0]', self.source_text)
+        self.assertNotIn('\\"write_masks\\":[15,0,0,0,0,0,0,0]', self.source_text)
 
 
 if __name__ == "__main__":
