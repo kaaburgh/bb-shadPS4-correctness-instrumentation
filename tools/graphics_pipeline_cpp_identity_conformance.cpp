@@ -85,36 +85,152 @@ struct Sha256 {
     }
 };
 
-void append_zero_blend(std::string& out) {
-    out += "{\"alpha_dst_factor\":0,\"alpha_func\":0,\"alpha_src_factor\":0,\"color_dst_factor\":0,\"color_func\":0,\"color_src_factor\":0,\"disable_rop3\":0,\"enable\":0,\"separate_alpha_blend\":0}";
+struct BlendControl {
+    std::uint32_t alpha_dst_factor = 0;
+    std::uint32_t alpha_func = 0;
+    std::uint32_t alpha_src_factor = 0;
+    std::uint32_t color_dst_factor = 0;
+    std::uint32_t color_func = 0;
+    std::uint32_t color_src_factor = 0;
+    std::uint32_t disable_rop3 = 0;
+    std::uint32_t enable = 0;
+    std::uint32_t separate_alpha_blend = 0;
+};
+
+struct ColorBuffer {
+    std::uint32_t data_format = 0;
+    std::uint32_t export_format = 0;
+    std::uint32_t num_conversion = 0;
+    std::uint32_t num_format = 0;
+    std::array<std::uint32_t, 4> swizzle{};
+};
+
+struct CanonicalPipelineKey {
+    std::array<BlendControl, 8> blend_controls{};
+    std::uint32_t cb_shader_mask = 0;
+    std::uint32_t clip_space = 0;
+    std::array<ColorBuffer, 8> color_buffers{};
+    std::array<std::uint32_t, 8> color_samples{};
+    std::uint32_t depth_clamp_enable = 0;
+    std::uint32_t depth_clip_enable = 0;
+    std::uint32_t depth_samples = 0;
+    std::uint32_t logic_op = 0;
+    std::uint32_t mrt_mask = 0;
+    std::uint32_t num_color_attachments = 0;
+    std::uint32_t num_samples = 0;
+    std::uint32_t patch_control_points = 0;
+    std::uint32_t polygon_mode = 0;
+    std::uint32_t prim_type = 0;
+    std::uint32_t provoking_vtx_last = 0;
+    std::array<std::uint64_t, 6> stage_hashes{};
+    std::uint32_t stencil_format = 0;
+    std::array<std::uint32_t, 32> vertex_buffer_formats{};
+    std::array<std::uint32_t, 8> write_masks{};
+    std::uint32_t z_format = 0;
+};
+
+CanonicalPipelineKey fixture_key() {
+    CanonicalPipelineKey key{};
+    key.cb_shader_mask = 15;
+    key.color_buffers[0] = ColorBuffer{1, 0, 0, 0, {4, 5, 6, 7}};
+    key.color_samples[0] = 1;
+    key.depth_clip_enable = 1;
+    key.depth_samples = 1;
+    key.mrt_mask = 1;
+    key.num_color_attachments = 1;
+    key.num_samples = 1;
+    key.prim_type = 3;
+    key.stage_hashes[0] = 0x1111111111111111ULL;
+    key.stage_hashes[4] = 0x2222222222222222ULL;
+    key.write_masks[0] = 15;
+    return key;
 }
 
-void append_color_buffer(std::string& out, int data_format, const std::array<int,4>& swizzle) {
-    out += "{\"data_format\":" + std::to_string(data_format) + ",\"export_format\":0,\"num_conversion\":0,\"num_format\":0,\"swizzle\":[";
-    for (std::size_t i=0;i<swizzle.size();++i) { if (i) out.push_back(','); out += std::to_string(swizzle[i]); }
-    out += "]}";
+template <typename T, std::size_t N>
+void append_number_array(std::string& out, const std::array<T, N>& values) {
+    out.push_back('[');
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (i != 0) out.push_back(',');
+        out += std::to_string(values[i]);
+    }
+    out.push_back(']');
 }
 
-std::string canonical_payload() {
+void append_blend_control(std::string& out, const BlendControl& value) {
+    out += "{\"alpha_dst_factor\":" + std::to_string(value.alpha_dst_factor);
+    out += ",\"alpha_func\":" + std::to_string(value.alpha_func);
+    out += ",\"alpha_src_factor\":" + std::to_string(value.alpha_src_factor);
+    out += ",\"color_dst_factor\":" + std::to_string(value.color_dst_factor);
+    out += ",\"color_func\":" + std::to_string(value.color_func);
+    out += ",\"color_src_factor\":" + std::to_string(value.color_src_factor);
+    out += ",\"disable_rop3\":" + std::to_string(value.disable_rop3);
+    out += ",\"enable\":" + std::to_string(value.enable);
+    out += ",\"separate_alpha_blend\":" + std::to_string(value.separate_alpha_blend) + "}";
+}
+
+void append_color_buffer(std::string& out, const ColorBuffer& value) {
+    out += "{\"data_format\":" + std::to_string(value.data_format);
+    out += ",\"export_format\":" + std::to_string(value.export_format);
+    out += ",\"num_conversion\":" + std::to_string(value.num_conversion);
+    out += ",\"num_format\":" + std::to_string(value.num_format);
+    out += ",\"swizzle\":";
+    append_number_array(out, value.swizzle);
+    out.push_back('}');
+}
+
+std::string canonical_payload(const CanonicalPipelineKey& key) {
     std::string out;
     out.reserve(5000);
     out += "{\"kind\":\"pipeline\",\"value\":{\"canonical_key\":{";
+
     out += "\"blend_controls\":[";
-    for (int i=0;i<8;++i) { if (i) out.push_back(','); append_zero_blend(out); }
-    out += "],\"cb_shader_mask\":15,\"clip_space\":0,\"color_buffers\":[";
-    append_color_buffer(out, 1, {4,5,6,7});
-    for (int i=1;i<8;++i) { out.push_back(','); append_color_buffer(out, 0, {0,0,0,0}); }
-    out += "],\"color_samples\":[1,0,0,0,0,0,0,0],\"depth_clamp_enable\":0,\"depth_clip_enable\":1,\"depth_samples\":1,\"logic_op\":0,\"mrt_mask\":1,\"num_color_attachments\":1,\"num_samples\":1,\"patch_control_points\":0,\"polygon_mode\":0,\"prim_type\":3,\"provoking_vtx_last\":0,\"stage_hashes\":[1229782938247303441,0,0,0,2459565876494606882,0],\"stencil_format\":0,\"vertex_buffer_formats\":[";
-    for (int i=0;i<32;++i) { if (i) out.push_back(','); out.push_back('0'); }
-    out += "],\"write_masks\":[15,0,0,0,0,0,0,0],\"z_format\":0},";
-    out += "\"key_surface_sha256\":\"" + std::string(kSurfaceDigest) + "\",\"key_surface_version\":\"" + std::string(kSurfaceVersion) + "\",\"source\":{\"commit\":\"" + std::string(kCommit) + "\",\"repository\":\"" + std::string(kRepository) + "\"}}}";
+    for (std::size_t i = 0; i < key.blend_controls.size(); ++i) {
+        if (i != 0) out.push_back(',');
+        append_blend_control(out, key.blend_controls[i]);
+    }
+
+    out += "],\"cb_shader_mask\":" + std::to_string(key.cb_shader_mask);
+    out += ",\"clip_space\":" + std::to_string(key.clip_space);
+    out += ",\"color_buffers\":[";
+    for (std::size_t i = 0; i < key.color_buffers.size(); ++i) {
+        if (i != 0) out.push_back(',');
+        append_color_buffer(out, key.color_buffers[i]);
+    }
+
+    out += "],\"color_samples\":";
+    append_number_array(out, key.color_samples);
+    out += ",\"depth_clamp_enable\":" + std::to_string(key.depth_clamp_enable);
+    out += ",\"depth_clip_enable\":" + std::to_string(key.depth_clip_enable);
+    out += ",\"depth_samples\":" + std::to_string(key.depth_samples);
+    out += ",\"logic_op\":" + std::to_string(key.logic_op);
+    out += ",\"mrt_mask\":" + std::to_string(key.mrt_mask);
+    out += ",\"num_color_attachments\":" + std::to_string(key.num_color_attachments);
+    out += ",\"num_samples\":" + std::to_string(key.num_samples);
+    out += ",\"patch_control_points\":" + std::to_string(key.patch_control_points);
+    out += ",\"polygon_mode\":" + std::to_string(key.polygon_mode);
+    out += ",\"prim_type\":" + std::to_string(key.prim_type);
+    out += ",\"provoking_vtx_last\":" + std::to_string(key.provoking_vtx_last);
+    out += ",\"stage_hashes\":";
+    append_number_array(out, key.stage_hashes);
+    out += ",\"stencil_format\":" + std::to_string(key.stencil_format);
+    out += ",\"vertex_buffer_formats\":";
+    append_number_array(out, key.vertex_buffer_formats);
+    out += ",\"write_masks\":";
+    append_number_array(out, key.write_masks);
+    out += ",\"z_format\":" + std::to_string(key.z_format) + "},";
+
+    out += "\"key_surface_sha256\":\"" + std::string(kSurfaceDigest) + "\",";
+    out += "\"key_surface_version\":\"" + std::string(kSurfaceVersion) + "\",";
+    out += "\"source\":{\"commit\":\"" + std::string(kCommit) + "\",";
+    out += "\"repository\":\"" + std::string(kRepository) + "\"}}}";
     return out;
 }
 
 } // namespace
 
 int main() {
-    const std::string payload = canonical_payload();
+    const CanonicalPipelineKey key = fixture_key();
+    const std::string payload = canonical_payload(key);
     Sha256 hash;
     hash.update(payload);
     const std::string identity = "pipeline:sha256:" + hash.finish_hex();
