@@ -1,0 +1,59 @@
+{
+  "schema_version": "bb-buffer-guest-cpu-diagnostic/v1",
+  "document_kind": "input",
+  "complete_lifecycle": true,
+  "first_resource_ordinal": 1,
+  "lifecycle_events": [
+    {
+      "seq": 1,
+      "buffer_id": 7,
+      "guest_address": 4096,
+      "size_bytes": 256,
+      "live": true
+    },
+    {
+      "seq": 2,
+      "buffer_id": 8,
+      "guest_address": 4224,
+      "size_bytes": 256,
+      "live": true
+    },
+    {
+      "seq": 6,
+      "buffer_id": 7,
+      "guest_address": 4096,
+      "size_bytes": 256,
+      "live": false
+    },
+    {
+      "seq": 7,
+      "buffer_id": 8,
+      "guest_address": 4224,
+      "size_bytes": 256,
+      "live": false
+    }
+  ],
+  "accepted_accesses": [
+    {
+      "seq": 3,
+      "timestamp_ns": 3000,
+      "guest_address": 4112,
+      "size_bytes": 16,
+      "access": "read"
+    },
+    {
+      "seq": 4,
+      "timestamp_ns": 4000,
+      "guest_address": 4256,
+      "size_bytes": 16,
+      "access": "write"
+    },
+    {
+      "seq": 5,
+      "timestamp_ns": 5000,
+      "guest_address": 8192,
+      "size_bytes": 16,
+      "access": "read"
+    }
+  ]
+}
