@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/buffer-resource-id-binding.schema.json",
+  "title": "BufferCache lifetime to durable trace resource identity binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "complete", "first_resource_ordinal", "events"],
+  "properties": {
+    "schema_version": {"const": "bb-buffer-resource-id-binding/v1"},
+    "complete": {"type": "boolean"},
+    "first_resource_ordinal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 99999999
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {"$ref": "#/$defs/lifecycle_event"}
+    }
+  },
+  "$defs": {
+    "u64": {"type": "integer", "minimum": 0, "maximum": 18446744073709551615},
+    "positive_u64": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "cache_local_buffer_id": {"type": "integer", "minimum": 0, "maximum": 4294967295},
+    "lifecycle_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "buffer_id", "guest_address", "size_bytes", "live"],
+      "properties": {
+        "seq": {"$ref": "#/$defs/u64"},
+        "buffer_id": {"$ref": "#/$defs/cache_local_buffer_id"},
+        "guest_address": {"$ref": "#/$defs/u64"},
+        "size_bytes": {"$ref": "#/$defs/positive_u64"},
+        "live": {"type": "boolean"}
+      }
+    }
+  }
+}

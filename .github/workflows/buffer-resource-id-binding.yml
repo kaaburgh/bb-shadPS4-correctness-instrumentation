@@ -1,0 +1,47 @@
+name: Buffer resource ID binding contract
+
+on:
+  pull_request:
+    paths:
+      - 'schemas/buffer-resource-id-binding.schema.json'
+      - 'tools/buffer_resource_id_binding.py'
+      - 'tests/test_buffer_resource_id_binding.py'
+      - 'docs/instrumentation/buffer-resource-id-binding.md'
+      - 'docs/instrumentation/examples/buffer-resource-id-binding.synthetic.json'
+      - 'schemas/trace-event.schema.json'
+      - '.github/workflows/buffer-resource-id-binding.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'schemas/buffer-resource-id-binding.schema.json'
+      - 'tools/buffer_resource_id_binding.py'
+      - 'tests/test_buffer_resource_id_binding.py'
+      - 'docs/instrumentation/buffer-resource-id-binding.md'
+      - 'docs/instrumentation/examples/buffer-resource-id-binding.synthetic.json'
+      - 'schemas/trace-event.schema.json'
+      - '.github/workflows/buffer-resource-id-binding.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
+      - run: python -m unittest tests.test_buffer_resource_id_binding -v
+      - run: python tools/buffer_resource_id_binding.py docs/instrumentation/examples/buffer-resource-id-binding.synthetic.json
+      - name: Validate published schema and trace resource-ID compatibility
+        run: |
+          python - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator, FormatChecker
+
+          binding = json.load(open('schemas/buffer-resource-id-binding.schema.json', encoding='utf-8'))
+          fixture = json.load(open('docs/instrumentation/examples/buffer-resource-id-binding.synthetic.json', encoding='utf-8'))
+          trace = json.load(open('schemas/trace-event.schema.json', encoding='utf-8'))
+          Draft202012Validator.check_schema(binding)
+          Draft202012Validator(binding, format_checker=FormatChecker()).validate(fixture)
+          assert trace['$defs']['resource_id']['pattern'] == '^res:[0-9]{8}$'
+          PY
