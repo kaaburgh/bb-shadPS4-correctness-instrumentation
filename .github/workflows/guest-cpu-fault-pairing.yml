@@ -46,12 +46,21 @@ jobs:
           fixture = json.load(open('docs/instrumentation/examples/guest-cpu-fault-pairing.synthetic.json', encoding='utf-8'))
 
           Draft202012Validator.check_schema(pairing_schema)
-          Draft202012Validator(pairing_schema, format_checker=FormatChecker()).validate(fixture)
+          Draft202012Validator.check_schema(diagnostic_schema)
+          pairing_validator = Draft202012Validator(pairing_schema, format_checker=FormatChecker())
+          pairing_validator.validate(fixture)
           output = reconstruct(fixture)
-          Draft202012Validator(pairing_schema, format_checker=FormatChecker()).validate(output)
+          pairing_validator.validate(output)
 
-          accepted_schema = diagnostic_schema['$defs']['accepted_access']
-          validator = Draft202012Validator(accepted_schema, format_checker=FormatChecker())
-          for accepted in output['paired_accesses']:
-              validator.validate(accepted)
+          diagnostic_input = {
+              'schema_version': 'bb-buffer-guest-cpu-diagnostic/v1',
+              'document_kind': 'input',
+              'complete_lifecycle': False,
+              'first_resource_ordinal': 1,
+              'lifecycle_events': [],
+              'accepted_accesses': output['paired_accesses'],
+          }
+          Draft202012Validator(
+              diagnostic_schema, format_checker=FormatChecker()
+          ).validate(diagnostic_input)
           PY
