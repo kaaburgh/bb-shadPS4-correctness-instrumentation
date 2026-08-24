@@ -20,6 +20,8 @@
 - Каждый **GATED** target-run item должен прямо зависеть от **BB-ENV1**. Он не стартует, пока feasibility item не зафиксировал конкретный execution route и handoff.
 - Gated run должен быть one-shot и выдавать safe self-contained artifact; proprietary executables/assets/private dumps не коммитить.
 - Runtime claims фиксируют shadPS4 repo+exact commit+patches, Bloodborne build/content/update/config, host OS/CPU/GPU/driver/backend/config, scenario и tool version.
+- Current **BB-ENV1** records cannot independently bind the emulator configuration actually consumed by shadPS4: `emulator.config_sha256` remains `null` and explicit `--emulator-config` fails closed. Until a separate provenance mechanism binds the consumed configuration, any **GATED** config-sensitive claim must preserve that unknown and cannot attribute an observed difference to emulator configuration or backend from the operator-supplied label alone.
+- Current **BB-ENV1** non-synthetic execution accepts only the exact unpatched BB-BL1 build and rejects non-empty `--patch-commit`. Target validation of a correction build in **BB-FIX2**, **BB-FIX4** or **BB-FIX6** therefore remains blocked until a separate patched-build provenance path binds the exact source/patch/build/binary relationship.
 - Correctness evidence precedes optimization profiling/specialization. До completed **BB-COR7** разрешены reproducibility baseline и bounded diagnostic measurements, необходимые для correctness/instrumentation (например **BB-BL6** и **BB-INS4**); optimization-ranking datasets и post-correctness corpora (**BB-SHD2**, **BB-RES2**, **BB-PERF2**) до gate не собираются.
 - Изменение shadPS4 source/target/config baseline correctness-fix'ом инвалидирует затронутые downstream baseline/corpus/performance evidence. Такой PR обязан явно reopen/reconcile нужные capture items вместо сравнения stale datasets; shared provenance не делает unaffected artifact classes stale автоматически.
 - Опровергнутые hypotheses и superseded directions сохраняются.
@@ -76,6 +78,7 @@ Outcome: source/target/host identities, target-execution feasibility, minimal sc
 - **Question:** Может ли required Bloodborne target execution быть воспроизводимо выполнен в доступной cloud infrastructure; если нет, какой минимальный target-machine handoff объективно необходим?
 - **Evidence / result:** Static repository review established that the cloud checkout contains only a synthetic target identity and cannot safely execute the proprietary target. The selected concrete route is a `GATED` target-machine run; this is not a claim that the target is `LOCAL ONLY` or that runtime behavior was observed. The route implementation and contract have synthetic/non-synthetic-classified stand-in coverage, but no target-owning machine has yet produced a bounded run record through it.
 - **Handoff / next experiment:** Execute one bounded `process-exit` scenario on a target-owning machine through `tools/run_target_experiment.py` only and retain the resulting safe ZIP/run record as the validation evidence for this item. Non-synthetic execution is limited to the exact independently observed unpatched BB-BL1 CI artifact for the host; the runner copies the selected regular non-link executable into private per-run staging, verifies staged digest/size against the pinned artifact and caller-supplied digest, rewrites the snapshotted `argv[0]` to that staged path, then delegates to the normal bounded compatibility-engine executor. Direct execution of `tools/run_target_experiment_v3.py` fails closed. The handoff rejects explicit `--emulator-config`, non-empty `--patch-commit`, non-synthetic file oracles, and non-synthetic declared artifacts until those provenance relationships can be independently attested. Analyze only the resulting safe ZIP.
+- **Provenance follow-up:** Two separate bounded capabilities remain required after route validation: independently bind the emulator configuration actually consumed by shadPS4 to the run record, and independently bind patched-build provenance (source baseline + patch commits + resulting binary identity) before relaxing the current unpatched-build-only target policy.
 - **Acceptance / artifacts:** `docs/experiments/target-execution-feasibility.md` records the route, exact upstream build artifact identities, immutable input snapshots, supported entrypoint, private staged executable provenance checks, oracle/artifact restrictions, isolation rules, unsupported claims, and operator procedure. `schemas/target-run.schema.json` v3, `tools/run_target_experiment.py`, the internal compatibility engine, the v3 synthetic scenario, and tests define and validate the bounded run record while preventing the internal engine from being used as an ungated CLI. `Completed and verified` is reserved for a successful bounded target-machine run record produced through the supported entrypoint with the required source/target/host provenance and termination result.
 - **Validation:** Exact-head CI for #62 exercised strict finite JSON parsing; exact BB-BL2 target-tree and direct-emulator argv binding; fail-closed unpatched-source/config provenance; exact official CI-produced executable identity; single-snapshot target/scenario/command inputs; private executable staging with pre-delegation digest/size verification and Linux non-synthetic-classified stand-in execution; fail-closed direct compatibility-engine invocation; non-synthetic oracle/artifact producer gating; safe target/scenario/DLC projections and packaged digests; stale-output rejection; process-tree containment and exception-safe teardown. `bb-target-runner/1.11.0` identifies this mechanism. This is contract/synthetic capability evidence only: no Bloodborne target-machine run record exists yet, so BB-ENV1 validation remains incomplete.
 - **Scope:** Medium
@@ -127,6 +130,7 @@ Outcome: каждый актуальный symptom class воспроизвод�
 - **Depends on:** BB-ENV1, BB-BL6, BB-COR1
 - **Question:** Какие rendering/shadow/depth/shader/pipeline symptoms актуальны и при каких resource/state conditions?
 - **Next experiment / information gain:** Bounded descriptors/state/events/ID capture, различающий guest semantics, backend translation, sync и stale reports.
+- **Compatibility / provenance:** Config/backend-sensitive reproduction requires independently bound consumed emulator configuration. Current BB-ENV1 records leave `emulator.config_sha256=null`, so such attribution remains blocked unless equivalent separate config provenance is captured.
 - **Acceptance / artifacts:** `docs/experiments/correctness-graphics/` фиксирует reproduced/not-reproduced status, evidence, negative results и next semantic question; proprietary shader payload не коммитится.
 - **Scope:** Medium
 
@@ -135,6 +139,7 @@ Outcome: каждый актуальный symptom class воспроизвод�
 - **Depends on:** BB-ENV1, BB-BL6, BB-COR1
 - **Question:** Есть ли anomalous lifetime/VRAM growth и какие resources/allocations его объясняют?
 - **Next experiment / information gain:** Bounded lifetime/allocation capture, различающий leak, delayed destruction, cache/residency, aliasing/reuse и expected workload.
+- **Compatibility / provenance:** Config-sensitive lifetime/resource conclusions require independently bound consumed emulator configuration; current BB-ENV1 records cannot provide that identity, so configuration-dependent attribution remains explicit unknown evidence.
 - **Acceptance / artifacts:** `docs/experiments/correctness-resource-lifetime/` содержит timeline/summary и classification confirmed/not reproduced/expected/unknown.
 - **Scope:** Medium
 
@@ -143,6 +148,7 @@ Outcome: каждый актуальный symptom class воспроизвод�
 - **Depends on:** BB-ENV1, BB-BL6, BB-COR1
 - **Question:** Какие CPU↔GPU waits/readbacks/barriers коррелируют с correctness symptoms или stalls?
 - **Next experiment / information gain:** Capture bounded event sequence с resource IDs/timestamps, separating required guest ordering from host over-sync/missing hazards.
+- **Compatibility / provenance:** Config-sensitive synchronization/readback conclusions require independently bound consumed emulator configuration; current BB-ENV1 records cannot provide that identity, so configuration-dependent attribution remains explicit unknown evidence.
 - **Acceptance / artifacts:** `docs/experiments/correctness-sync-readback/` документирует sequence, affected resources, waits и competing hypotheses.
 - **Scope:** Medium
 
@@ -151,6 +157,7 @@ Outcome: каждый актуальный symptom class воспроизвод�
 - **Depends on:** BB-ENV1, BB-BL6, BB-COR1
 - **Question:** Какие reported crashes/backend/hardware failures ещё актуальны и какие environment dimensions меняют result?
 - **Next experiment / information gain:** Minimal matrix только для concrete reproduced symptom; classify generic/backend/driver/resource-pressure/stale.
+- **Compatibility / provenance:** Backend/config attribution additionally requires independently bound consumed emulator configuration; the current operator `--backend` label plus `emulator.config_sha256=null` is insufficient to establish which backend/config the emulator actually consumed.
 - **Acceptance / artifacts:** `docs/experiments/correctness-compatibility/` фиксирует confirmed/not reproduced/stale/environment-specific cases без broad hardware claims.
 - **Scope:** Small
 
@@ -182,7 +189,7 @@ Outcome: priority defects исправляются только после ус�
 - **Status / priority / execution:** Blocked / Critical / GATED
 - **Depends on:** BB-ENV1, BB-FIX1
 - **Question:** Если BB-FIX1 установил generic defect — реализовать minimal generic correction и проверить target behavior; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — проверить guarded workaround с documented tradeoff; если premise rejected — закрыть correction path без speculative patch.
-- **Next experiment / information gain:** Synthetic regression first; target validation only for established behavior change, using BB-ENV1 route.
+- **Next experiment / information gain:** Synthetic regression first. Before any correction target validation, establish/use a BB-ENV1 provenance path that independently binds the consumed emulator config and the exact patched build; the current route rejects non-empty `--patch-commit` and `--emulator-config`, so it cannot validate a correction build.
 - **Acceptance / artifacts:** Valid outcomes: (a) tests + objective target evidence подтверждают generic correction без new lifetime/VRAM regression и upstreamability documented; (b) tests + objective target evidence подтверждают guarded title-specific workaround, а item фиксирует evidence genuine title-specific behavior либо why generic solution impractical/disproportionate, explicit guard/validated scope, tradeoff и handoff к `BB-SPEC1`; либо (c) item marked Superseded/Not applicable с ссылкой на negative seam evidence. Любое изменение source/config baseline явно invalidates/reopens affected BB-BL6/BB-INS4/BB-SHD2/BB-RES2/BB-PERF2 evidence.
 - **Scope:** Medium
 
@@ -198,7 +205,7 @@ Outcome: priority defects исправляются только после ус�
 - **Status / priority / execution:** Blocked / Critical / GATED
 - **Depends on:** BB-ENV1, BB-FIX3
 - **Question:** Если established generic correction существует — реализовать и проверить ordering/data visibility; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — проверить guarded workaround с documented tradeoff; иначе закрыть path evidence-backed negative result.
-- **Next experiment / information gain:** Synthetic regression + target event/correctness capture only after seam established.
+- **Next experiment / information gain:** Synthetic regression first. Before target event/correctness validation, establish/use a BB-ENV1 provenance path that independently binds the consumed emulator config and exact patched build; current non-empty `--patch-commit` / `--emulator-config` inputs fail closed.
 - **Acceptance / artifacts:** Valid outcomes: (a) generic correction implemented and validated без unexplained hazards/waits/correctness-for-performance trade; (b) synthetic regression + target event/correctness evidence validates a guarded title-specific workaround with documented rationale, tradeoff, explicit guard/validated scope и handoff к `BB-SPEC1`; либо (c) Superseded/Not applicable по evidence. Baseline-changing correction reopens affected downstream capture items.
 - **Scope:** Medium
 
@@ -214,7 +221,7 @@ Outcome: priority defects исправляются только после ус�
 - **Status / priority / execution:** Blocked / High / GATED
 - **Depends on:** BB-ENV1, BB-FIX5
 - **Question:** Если established generic graphics/shader defect существует — исправить его и объективно проверить; если evidence показывает genuine title-specific behavior или impractical/disproportionate generic solution — объективно проверить guarded title-specific workaround; иначе закрыть correction path evidence-backed negative result.
-- **Next experiment / information gain:** Synthetic state/translation regression + objective target capture only after seam established.
+- **Next experiment / information gain:** Synthetic state/translation regression first. Before objective target validation, establish/use a BB-ENV1 provenance path that independently binds the consumed emulator config and exact patched build; current non-empty `--patch-commit` / `--emulator-config` inputs fail closed.
 - **Acceptance / artifacts:** Valid outcomes: (a) tests + target pixel/state/event evidence prove generic correction with relevant formats/layouts/barriers/variants considered and upstreamability documented; (b) tests + target pixel/state/event evidence validate a guarded title-specific workaround, with evidence-backed rationale, explicit guard/validated scope, tradeoff, no title/resource/shader-ID hardcoding и handoff к `BB-SPEC1`; либо (c) Superseded/Not applicable по negative evidence. Baseline-changing correction reopens affected downstream capture items.
 - **Scope:** Medium
 
@@ -266,6 +273,7 @@ Outcome: bounded tracing восстанавливает resource/access/sync/gra
 - **Depends on:** BB-ENV1, BB-BL4, BB-INS2, BB-INS3
 - **Question:** Достаточны ли events для reconstruction, независимо подтверждена ли полнота direct guest CPU coverage, и каков measured overhead on representative scenarios?
 - **Next experiment / information gain:** Tracing off/on one-shot captures with bounded event volume using BB-ENV1 route, plus a bounded known-access control or structural seam-coverage oracle for every claimed direct-access path so missed probes are distinguishable from true no-access.
+- **Compatibility / provenance:** Overhead and coverage comparisons require the exact consumed emulator/instrumentation configuration to be bound across tracing-off/on runs. Current BB-ENV1 records do not bind consumed emulator config, so config-sensitive attribution remains blocked until equivalent provenance is added.
 - **Acceptance / artifacts:** `docs/experiments/instrumentation-validation/` records correlation completeness, overhead distribution, missing probes, and the independent coverage-oracle result/provenance; any uncovered observer path remains explicit and blocks negative `GPU-only` classification. Large raw captures are externalized.
 - **Scope:** Medium
 
@@ -348,6 +356,7 @@ Outcome: cost attribution rank-ит 3–5 real opportunities с explicit uncerta
 - **Depends on:** BB-ENV1, BB-COR7, BB-PERF1, BB-INS4
 - **Question:** Каковы repeated timing distributions across selected scenarios/warm-cold states на correctness-approved exact baseline?
 - **Next experiment / information gain:** Prepared repeated target captures using BB-PERF1 accounting inputs and BB-ENV1 execution route; timing may be co-captured with BB-SHD2/BB-RES2, but does not wait for BB-SHD3/BB-RES3.
+- **Compatibility / provenance:** Timing distributions and attribution require independently bound consumed emulator configuration for every compared run. Current BB-ENV1 records leave that configuration unbound, so config-sensitive performance conclusions cannot be accepted from the current run record alone.
 - **Acceptance / artifacts:** `docs/experiments/performance-datasets/` contains safe derived datasets with exact post-BB-COR7 provenance, variance, instrumentation overhead and missing/unattributed data. Co-captured timings are accepted only when instrumentation remains attribution-safe; otherwise they are recaptured separately. If baseline or relevant instrumentation changed after COR7/corpus capture, stale dependencies are recaptured before completion.
 - **Scope:** Medium
 
