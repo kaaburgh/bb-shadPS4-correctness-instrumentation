@@ -1,0 +1,57 @@
+name: Guest CPU fault pairing contract
+
+on:
+  pull_request:
+    paths:
+      - 'tools/guest_cpu_fault_pairing.py'
+      - 'tests/test_guest_cpu_fault_pairing.py'
+      - 'schemas/guest-cpu-fault-pairing.schema.json'
+      - 'schemas/buffer-guest-cpu-diagnostic.schema.json'
+      - 'docs/instrumentation/guest-cpu-fault-pairing.md'
+      - 'docs/instrumentation/examples/guest-cpu-fault-pairing.synthetic.json'
+      - 'ROADMAP.md'
+      - '.github/workflows/guest-cpu-fault-pairing.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/guest_cpu_fault_pairing.py'
+      - 'tests/test_guest_cpu_fault_pairing.py'
+      - 'schemas/guest-cpu-fault-pairing.schema.json'
+      - 'schemas/buffer-guest-cpu-diagnostic.schema.json'
+      - 'docs/instrumentation/guest-cpu-fault-pairing.md'
+      - 'docs/instrumentation/examples/guest-cpu-fault-pairing.synthetic.json'
+      - 'ROADMAP.md'
+      - '.github/workflows/guest-cpu-fault-pairing.yml'
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
+      - run: python -m unittest tests.test_guest_cpu_fault_pairing -v
+      - run: python tools/guest_cpu_fault_pairing.py docs/instrumentation/examples/guest-cpu-fault-pairing.synthetic.json
+      - name: Validate published schemas and cross-contract accepted-access shape
+        run: |
+          python - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator, FormatChecker
+          from tools.guest_cpu_fault_pairing import reconstruct
+
+          pairing_schema = json.load(open('schemas/guest-cpu-fault-pairing.schema.json', encoding='utf-8'))
+          diagnostic_schema = json.load(open('schemas/buffer-guest-cpu-diagnostic.schema.json', encoding='utf-8'))
+          fixture = json.load(open('docs/instrumentation/examples/guest-cpu-fault-pairing.synthetic.json', encoding='utf-8'))
+
+          Draft202012Validator.check_schema(pairing_schema)
+          Draft202012Validator(pairing_schema, format_checker=FormatChecker()).validate(fixture)
+          output = reconstruct(fixture)
+          Draft202012Validator(pairing_schema, format_checker=FormatChecker()).validate(output)
+
+          accepted_schema = diagnostic_schema['$defs']['accepted_access']
+          validator = Draft202012Validator(accepted_schema, format_checker=FormatChecker())
+          for accepted in output['paired_accesses']:
+              validator.validate(accepted)
+          PY
