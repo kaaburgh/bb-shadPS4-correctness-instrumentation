@@ -46,7 +46,7 @@ class BufferGuestCpuDiagnosticTests(unittest.TestCase):
             "ambiguous": 1,
         })
         self.assertEqual(result["events"], [{
-            "seq": 3,
+            "seq": 0,
             "timestamp_ns": 30,
             "category": "access",
             "kind": "guest_cpu",
@@ -54,6 +54,7 @@ class BufferGuestCpuDiagnosticTests(unittest.TestCase):
             "access": "read",
             "coverage": "observed",
         }])
+        self.assertEqual(result["event_sources"], [{"trace_seq": 0, "source_seq": 3}])
         self.assertEqual(result["diagnostics"][0]["status"], "ambiguous")
         self.assertEqual(
             result["diagnostics"][0]["candidate_resource_ids"],
@@ -71,6 +72,23 @@ class BufferGuestCpuDiagnosticTests(unittest.TestCase):
             "$ref": "#/$defs/event",
         }
         Draft202012Validator(event_schema).validate(event)
+
+    def test_emitted_trace_seq_is_contiguous_and_source_mapping_is_preserved(self):
+        document = base_document()
+        document["lifecycle_events"] = [
+            {"seq": 1, "buffer_id": 7, "guest_address": 1000, "size_bytes": 100, "live": True},
+            {"seq": 5, "buffer_id": 7, "guest_address": 1000, "size_bytes": 100, "live": False},
+        ]
+        document["accepted_accesses"] = [
+            {"seq": 2, "timestamp_ns": 20, "guest_address": 1000, "size_bytes": 1, "access": "read"},
+            {"seq": 4, "timestamp_ns": 40, "guest_address": 1001, "size_bytes": 1, "access": "write"},
+        ]
+        result = produce(document)
+        self.assertEqual([event["seq"] for event in result["events"]], [0, 1])
+        self.assertEqual(result["event_sources"], [
+            {"trace_seq": 0, "source_seq": 2},
+            {"trace_seq": 1, "source_seq": 4},
+        ])
 
     def test_reused_buffer_id_gets_fresh_resource_identity(self):
         document = base_document()
@@ -103,6 +121,12 @@ class BufferGuestCpuDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(DiagnosticError, "accepted-access seq must be strictly increasing"):
             produce(document)
 
+    def test_accepted_access_timestamps_must_be_monotonic(self):
+        document = base_document()
+        document["accepted_accesses"][1]["timestamp_ns"] = 29
+        with self.assertRaisesRegex(DiagnosticError, "accepted-access timestamps must be monotonic"):
+            produce(document)
+
     def test_lifecycle_misuse_fails_closed(self):
         document = base_document()
         document["lifecycle_events"][1] = {
@@ -133,6 +157,7 @@ class BufferGuestCpuDiagnosticTests(unittest.TestCase):
         ]
         result = produce(document)
         self.assertEqual(result["events"], [])
+        self.assertEqual(result["event_sources"], [])
         self.assertEqual(result["diagnostics"][0]["status"], "unmapped")
 
     def test_unknown_input_fields_fail_schema_validation(self):
