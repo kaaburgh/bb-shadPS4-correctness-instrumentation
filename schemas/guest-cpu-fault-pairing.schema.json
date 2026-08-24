@@ -1,0 +1,355 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kaaburgh.github.io/bb-shadPS4-correctness-instrumentation/schemas/guest-cpu-fault-pairing.schema.json",
+  "title": "Guest CPU raw-fault to GPU-mapped acceptance pairing contract",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/input"
+    },
+    {
+      "$ref": "#/$defs/output"
+    }
+  ],
+  "$defs": {
+    "u64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "positive_u64": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615
+    },
+    "thread_id": {
+      "type": "string",
+      "pattern": "^thread:[0-9]{8}$"
+    },
+    "access": {
+      "enum": [
+        "read",
+        "write"
+      ]
+    },
+    "raw_fault": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "seq",
+        "timestamp_ns",
+        "thread_id",
+        "guest_address",
+        "access"
+      ],
+      "properties": {
+        "type": {
+          "const": "raw_fault"
+        },
+        "seq": {
+          "$ref": "#/$defs/u64"
+        },
+        "timestamp_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/thread_id"
+        },
+        "guest_address": {
+          "$ref": "#/$defs/u64"
+        },
+        "access": {
+          "$ref": "#/$defs/access"
+        }
+      }
+    },
+    "accepted_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "seq",
+        "timestamp_ns",
+        "thread_id",
+        "guest_address",
+        "size_bytes",
+        "access"
+      ],
+      "properties": {
+        "type": {
+          "const": "accepted_access"
+        },
+        "seq": {
+          "$ref": "#/$defs/u64"
+        },
+        "timestamp_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "thread_id": {
+          "$ref": "#/$defs/thread_id"
+        },
+        "guest_address": {
+          "$ref": "#/$defs/u64"
+        },
+        "size_bytes": {
+          "$ref": "#/$defs/positive_u64"
+        },
+        "access": {
+          "$ref": "#/$defs/access"
+        }
+      }
+    },
+    "paired_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "timestamp_ns",
+        "guest_address",
+        "size_bytes",
+        "access"
+      ],
+      "properties": {
+        "seq": {
+          "$ref": "#/$defs/u64"
+        },
+        "timestamp_ns": {
+          "$ref": "#/$defs/u64"
+        },
+        "guest_address": {
+          "$ref": "#/$defs/u64"
+        },
+        "size_bytes": {
+          "$ref": "#/$defs/positive_u64"
+        },
+        "access": {
+          "$ref": "#/$defs/access"
+        }
+      }
+    },
+    "pairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted_seq",
+        "status"
+      ],
+      "properties": {
+        "accepted_seq": {
+          "$ref": "#/$defs/u64"
+        },
+        "status": {
+          "enum": [
+            "paired",
+            "unmatched",
+            "ambiguous"
+          ]
+        },
+        "raw_seq": {
+          "$ref": "#/$defs/u64"
+        },
+        "candidate_raw_seqs": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/u64"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "paired"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "raw_seq"
+            ],
+            "not": {
+              "required": [
+                "candidate_raw_seqs"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ambiguous"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "candidate_raw_seqs"
+            ],
+            "not": {
+              "required": [
+                "raw_seq"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unmatched"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "raw_seq"
+                  ]
+                },
+                {
+                  "required": [
+                    "candidate_raw_seqs"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_faults",
+        "accepted_accesses",
+        "paired",
+        "unmatched",
+        "ambiguous",
+        "unpaired_raw_faults"
+      ],
+      "properties": {
+        "raw_faults": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "accepted_accesses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "paired": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "unmatched": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "ambiguous": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "unpaired_raw_faults": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "document_kind",
+        "complete",
+        "observations"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "bb-guest-cpu-fault-pairing/v1"
+        },
+        "document_kind": {
+          "const": "input"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "observations": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/raw_fault"
+              },
+              {
+                "$ref": "#/$defs/accepted_access"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "document_kind",
+        "complete",
+        "pairings",
+        "paired_accesses",
+        "unpaired_raw_seqs",
+        "summary"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "bb-guest-cpu-fault-pairing/v1"
+        },
+        "document_kind": {
+          "const": "output"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "pairings": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {
+            "$ref": "#/$defs/pairing"
+          }
+        },
+        "paired_accesses": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {
+            "$ref": "#/$defs/paired_access"
+          }
+        },
+        "unpaired_raw_seqs": {
+          "type": "array",
+          "maxItems": 1000000,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/u64"
+          }
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        }
+      }
+    }
+  }
+}

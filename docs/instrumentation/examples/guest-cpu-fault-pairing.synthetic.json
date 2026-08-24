@@ -1,0 +1,58 @@
+{
+  "schema_version": "bb-guest-cpu-fault-pairing/v1",
+  "document_kind": "input",
+  "complete": true,
+  "observations": [
+    {
+      "type": "raw_fault",
+      "seq": 10,
+      "timestamp_ns": 100,
+      "thread_id": "thread:00000001",
+      "guest_address": 4096,
+      "access": "write"
+    },
+    {
+      "type": "accepted_access",
+      "seq": 11,
+      "timestamp_ns": 101,
+      "thread_id": "thread:00000001",
+      "guest_address": 4096,
+      "size_bytes": 8,
+      "access": "write"
+    },
+    {
+      "type": "accepted_access",
+      "seq": 12,
+      "timestamp_ns": 102,
+      "thread_id": "thread:00000002",
+      "guest_address": 8192,
+      "size_bytes": 8,
+      "access": "read"
+    },
+    {
+      "type": "raw_fault",
+      "seq": 13,
+      "timestamp_ns": 103,
+      "thread_id": "thread:00000003",
+      "guest_address": 12288,
+      "access": "read"
+    },
+    {
+      "type": "raw_fault",
+      "seq": 14,
+      "timestamp_ns": 104,
+      "thread_id": "thread:00000003",
+      "guest_address": 12288,
+      "access": "read"
+    },
+    {
+      "type": "accepted_access",
+      "seq": 15,
+      "timestamp_ns": 105,
+      "thread_id": "thread:00000003",
+      "guest_address": 12288,
+      "size_bytes": 8,
+      "access": "read"
+    }
+  ]
+}
