@@ -88,11 +88,15 @@ def _validate_sequence_domain(document) -> None:
         raise DiagnosticError("lifecycle sequence values must be unique")
 
     previous_access_seq = -1
+    previous_timestamp = -1
     for index, access in enumerate(document["accepted_accesses"]):
         seq = access["seq"]
         if seq <= previous_access_seq:
             raise DiagnosticError("accepted-access seq must be strictly increasing")
         previous_access_seq = seq
+        if access["timestamp_ns"] < previous_timestamp:
+            raise DiagnosticError("accepted-access timestamps must be monotonic")
+        previous_timestamp = access["timestamp_ns"]
         if seq in lifecycle_seqs:
             raise DiagnosticError(
                 f"shared sequence domain collision at accepted_accesses[{index}].seq={seq}"
@@ -151,6 +155,7 @@ def produce(document: dict) -> dict:
 
     trace_validator = _trace_event_validator()
     events = []
+    event_sources = []
     diagnostics = []
     unmapped = 0
     ambiguous = 0
@@ -170,8 +175,9 @@ def produce(document: dict) -> dict:
             raise DiagnosticError(f"accepted-access correlation failed at seq {access['seq']}: {exc}") from exc
 
         if result["status"] == "unique":
+            trace_seq = len(events)
             event = {
-                "seq": access["seq"],
+                "seq": trace_seq,
                 "timestamp_ns": access["timestamp_ns"],
                 "category": "access",
                 "kind": "guest_cpu",
@@ -181,6 +187,7 @@ def produce(document: dict) -> dict:
             }
             _validate_trace_event(event, trace_validator)
             events.append(event)
+            event_sources.append({"trace_seq": trace_seq, "source_seq": access["seq"]})
             continue
 
         if result["status"] == "unmapped":
@@ -202,6 +209,18 @@ def produce(document: dict) -> dict:
             }
         )
 
+    if any(event["seq"] != index for index, event in enumerate(events)):
+        raise DiagnosticError("emitted trace event seq must be contiguous from zero")
+    if any(
+        events[index]["timestamp_ns"] < events[index - 1]["timestamp_ns"]
+        for index in range(1, len(events))
+    ):
+        raise DiagnosticError("emitted trace event timestamps must be monotonic")
+    if len(event_sources) != len(events) or any(
+        source["trace_seq"] != index for index, source in enumerate(event_sources)
+    ):
+        raise DiagnosticError("event source mapping does not match emitted trace sequence")
+
     output = {
         "schema_version": SCHEMA_VERSION,
         "document_kind": "output",
@@ -209,6 +228,7 @@ def produce(document: dict) -> dict:
         "next_resource_ordinal": bound["next_resource_ordinal"],
         "resource_bindings": bound["bindings"],
         "events": events,
+        "event_sources": event_sources,
         "diagnostics": diagnostics,
         "summary": {
             "accepted_accesses": len(document["accepted_accesses"]),
