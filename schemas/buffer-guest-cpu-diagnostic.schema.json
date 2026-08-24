@@ -84,6 +84,15 @@
         "coverage": {"const": "observed"}
       }
     },
+    "event_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trace_seq", "source_seq"],
+      "properties": {
+        "trace_seq": {"$ref": "#/$defs/u64"},
+        "source_seq": {"$ref": "#/$defs/u64"}
+      }
+    },
     "diagnostic": {
       "type": "object",
       "additionalProperties": false,
@@ -138,7 +147,7 @@
     "output": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "document_kind", "complete_lifecycle", "next_resource_ordinal", "resource_bindings", "events", "diagnostics", "summary"],
+      "required": ["schema_version", "document_kind", "complete_lifecycle", "next_resource_ordinal", "resource_bindings", "events", "event_sources", "diagnostics", "summary"],
       "properties": {
         "schema_version": {"const": "bb-buffer-guest-cpu-diagnostic/v1"},
         "document_kind": {"const": "output"},
@@ -153,6 +162,11 @@
           "type": "array",
           "maxItems": 1000000,
           "items": {"$ref": "#/$defs/guest_cpu_event"}
+        },
+        "event_sources": {
+          "type": "array",
+          "maxItems": 1000000,
+          "items": {"$ref": "#/$defs/event_source"}
         },
         "diagnostics": {
           "type": "array",
