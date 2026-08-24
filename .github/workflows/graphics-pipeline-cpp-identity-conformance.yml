@@ -1,0 +1,24 @@
+name: Graphics pipeline C++ identity conformance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/graphics-pipeline-cpp-identity-conformance.yml'
+      - 'docs/instrumentation/examples/graphics-pipeline-cpp-identity-vector.synthetic.json'
+      - 'tests/test_graphics_pipeline_cpp_identity_conformance.py'
+      - 'tools/graphics_pipeline_cpp_identity_conformance.cpp'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/graphics-pipeline-cpp-identity-conformance.yml'
+      - 'docs/instrumentation/examples/graphics-pipeline-cpp-identity-vector.synthetic.json'
+      - 'tests/test_graphics_pipeline_cpp_identity_conformance.py'
+      - 'tools/graphics_pipeline_cpp_identity_conformance.cpp'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run independent C++ conformance implementation
+        run: python -m unittest tests.test_graphics_pipeline_cpp_identity_conformance -v
