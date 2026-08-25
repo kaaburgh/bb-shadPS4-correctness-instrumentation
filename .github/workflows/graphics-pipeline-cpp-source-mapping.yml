@@ -1,0 +1,49 @@
+name: Graphics pipeline C++ source mapping
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/graphics-pipeline-cpp-source-mapping.yml'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.json'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.md'
+      - 'docs/instrumentation/graphics-pipeline-key-surface.json'
+      - 'tools/graphics_pipeline_cpp_source_mapping.py'
+      - 'tests/test_graphics_pipeline_cpp_source_mapping.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/graphics-pipeline-cpp-source-mapping.yml'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.json'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.md'
+      - 'docs/instrumentation/graphics-pipeline-key-surface.json'
+      - 'tools/graphics_pipeline_cpp_source_mapping.py'
+      - 'tests/test_graphics_pipeline_cpp_source_mapping.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest tests.test_graphics_pipeline_cpp_source_mapping -v
+      - name: Fetch exact BB-BL1 source headers
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/renderer_vulkan/vk_graphics_pipeline.h \
+            -o "$RUNNER_TEMP/vk_graphics_pipeline.h"
+          curl -fsSL \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/shader_recompiler/runtime_info.h \
+            -o "$RUNNER_TEMP/runtime_info.h"
+          curl -fsSL \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/amdgpu/regs_color.h \
+            -o "$RUNNER_TEMP/regs_color.h"
+      - name: Validate pinned source mapping
+        run: |
+          python tools/graphics_pipeline_cpp_source_mapping.py \
+            docs/instrumentation/graphics-pipeline-cpp-source-mapping.json \
+            --graphics-key-header "$RUNNER_TEMP/vk_graphics_pipeline.h" \
+            --runtime-info-header "$RUNNER_TEMP/runtime_info.h" \
+            --regs-color-header "$RUNNER_TEMP/regs_color.h"
