@@ -46,7 +46,10 @@ def validate_mapping(mapping: dict, surface: dict, graphics_header: str, runtime
         raise ValueError("canonical surface version mismatch")
     actual_surface_digest = "sha256:" + hashlib.sha256(surface_bytes).hexdigest()
     if canonical_surface.get("sha256") != actual_surface_digest:
-        raise ValueError("canonical surface digest mismatch")
+        raise ValueError(
+            f"canonical surface digest mismatch: expected {canonical_surface.get('sha256')}, "
+            f"actual {actual_surface_digest}"
+        )
     if surface.get("schema_version") != SURFACE_VERSION:
         raise ValueError("loaded canonical surface version mismatch")
     if surface.get("source", {}).get("commit") != SOURCE_COMMIT:
