@@ -7,8 +7,14 @@ import argparse
 import difflib
 import hashlib
 from pathlib import Path
+import sys
 
-SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+
+SOURCE_COMMIT = _PINNED_COMMIT
 SOURCE_GIT_BLOB = "68b85116029b6f05c45e9cc32be3ccf7de335bae"
 SOURCE_PATH = "src/video_core/buffer_cache/buffer_cache.cpp"
 HOOK = "SHADPS4_BB_BUFFER_LIVE_RANGE_OBSERVE"

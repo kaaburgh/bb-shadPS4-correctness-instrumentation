@@ -8,6 +8,16 @@ claim.
 
 ## Active baseline
 
+[`shadps4-source.json`](./shadps4-source.json) is the machine-readable declaration
+of this identity and the **only** place the repository, commit and tree are
+declared. Producers import it through
+[`tools/shadps4_source_baseline.py`](../../tools/shadps4_source_baseline.py) and CI
+resolves it at runtime, so no tool or workflow repeats the literal. The prose
+below, the provenance recorded in fixtures and derived mappings, and the upstream
+links in this repository stay literal on purpose — they record which baseline an
+artifact was produced against — and `python -m tools.shadps4_source_baseline check`
+fails closed when any of them disagrees with the declaration.
+
 - **Upstream repository:** <https://github.com/shadps4-emu/shadPS4>
 - **Upstream branch observed:** `main`
 - **Exact upstream commit:**
@@ -153,7 +163,16 @@ updated before its output is used as evidence.
 
 ## Baseline update policy
 
-The baseline never advances automatically. Updating it requires a focused PR that:
+The baseline never advances automatically.
+
+An update starts by editing [`shadps4-source.json`](./shadps4-source.json), the
+single declaration every producer and workflow resolves, and is not finished until
+every remaining literal reference has been reconciled and
+`python -m tools.shadps4_source_baseline check` passes again. That check is what
+makes a *partially* applied update fail, instead of leaving a workflow validating
+derived artifacts against the previous upstream sources.
+
+Updating the baseline requires a focused PR that:
 
 1. names the old and candidate upstream commits and links their immutable compare;
 2. reviews upstream and recursive-submodule changes relevant to this project;

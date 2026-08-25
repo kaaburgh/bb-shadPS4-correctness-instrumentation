@@ -7,8 +7,14 @@ import argparse
 import difflib
 import hashlib
 from pathlib import Path
+import sys
 
-PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+
+PINNED_SOURCE_COMMIT = _PINNED_COMMIT
 PINNED_SOURCE_PATH = "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp"
 PINNED_SOURCE_BLOB_SHA = "b39f1c30bfb00d1f21a082da48369ba95ce31368"
 

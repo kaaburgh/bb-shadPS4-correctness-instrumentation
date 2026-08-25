@@ -17,14 +17,18 @@ try:
     from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
     from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
     from tools.target_manifest_projection import TargetRunError, package_target_manifest
+    from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+    from tools.shadps4_source_baseline import REPOSITORY as _PINNED_REPOSITORY
 except ModuleNotFoundError:  # direct `python tools/capture_baseline.py`
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from tools.bloodborne_target_manifest import load_strict, validate_manifest as validate_target_manifest
     from tools.collect_host_environment import collect_manifest, validate_manifest as validate_host_manifest
     from tools.target_manifest_projection import TargetRunError, package_target_manifest
+    from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+    from tools.shadps4_source_baseline import REPOSITORY as _PINNED_REPOSITORY
 
-SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
-SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+SOURCE_REPOSITORY = _PINNED_REPOSITORY
+SOURCE_COMMIT = _PINNED_COMMIT
 FORMAT = "bb-baseline-capture/v1"
 MAX_TARGET_MANIFEST_BYTES = 4 * 1024 * 1024
 METRICS = ("fps", "frametime", "ram", "vram", "shader-compilation")

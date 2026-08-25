@@ -5,10 +5,17 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+from tools.shadps4_source_baseline import REPOSITORY as _PINNED_REPOSITORY
 
 SCHEMA_VERSION = "bb-graphics-pipeline-cpp-source-mapping/v1"
-SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
-SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+SOURCE_REPOSITORY = _PINNED_REPOSITORY
+SOURCE_COMMIT = _PINNED_COMMIT
 SURFACE_VERSION = "bb-graphics-pipeline-key-surface/v12"
 SURFACE_DIGEST_ENCODING = "utf-8-lf"
 

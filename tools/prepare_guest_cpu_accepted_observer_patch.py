@@ -6,8 +6,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 from pathlib import Path
+import sys
 
-SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+
+SOURCE_COMMIT = _PINNED_COMMIT
 SOURCE_GIT_BLOB = "e2b9ec75f88b632998e3cd15ddd6ca0a9cfd396c"
 HOOK = "SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE"
 
