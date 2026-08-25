@@ -248,14 +248,27 @@ def _check_text(path: Path, relative: str, findings: list[str]) -> None:
     carried: str | None = None
     for number, line in enumerate(text.splitlines(), start=1):
         if derived:
-            # A resolving location must carry no pinned literal at all, however
-            # it is spelled -- URL, argument, or an inline assertion.
+            # A resolving location must carry no pinned baseline literal at all.
+            # Canonical values are rejected directly; stale values must also be
+            # rejected whenever their syntax identifies them as shadPS4 baseline
+            # references, otherwise a partial baseline update could keep fetching
+            # or validating the previous upstream revision while this check stays
+            # green. Unrelated 40-hex values (for example Action pins) remain out
+            # of scope because they match neither condition.
             for match in _ANY_GIT_SHA.finditer(line):
                 if match.group(0) in _CANONICAL_SHAS:
                     findings.append(
                         f"{relative}:{number}: resolves the pinned baseline at runtime "
                         f"and must not embed the literal {match.group(0)}"
                     )
+            for pattern, kind in _REFERENCE_PATTERNS:
+                for match in pattern.finditer(line):
+                    sha = match.group("sha")
+                    if sha not in _CANONICAL_SHAS:
+                        findings.append(
+                            f"{relative}:{number}: resolves the pinned baseline at runtime "
+                            f"and must not embed shadPS4 source {kind} reference {sha}"
+                        )
             continue
         for pattern, kind in _REFERENCE_PATTERNS:
             for match in pattern.finditer(line):
