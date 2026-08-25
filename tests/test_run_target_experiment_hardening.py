@@ -72,13 +72,57 @@ class HardeningRegressionTests(unittest.TestCase):
             runner._require_attestable_emulator_config(Path("private-config.toml"))
         runner._require_attestable_emulator_config(None)
 
-    def test_patch_list_requires_independently_verified_build_provenance(self):
-        sha = "a" * 40
-        self.assertEqual(runner._normalize_patch_commits([]), [])
-        with self.assertRaisesRegex(runner.TargetRunError, "verified checkout/build provenance"):
-            runner._normalize_patch_commits([sha])
+    def test_patched_build_must_be_fully_identified(self):
+        """A patch stack is recorded only when the built tree can be reconstructed."""
+        head, tree = "a" * 40, "b" * 40
+        fork = "https://github.com/maintainer/shadPS4"
+
+        self.assertEqual(
+            runner._normalize_patched_source([], None, None, None), {"patch_commits": []}
+        )
+        self.assertEqual(
+            runner._normalize_patched_source([head], fork, head, tree),
+            {
+                "patch_commits": [head],
+                "patch_repository": fork,
+                "effective_head": head,
+                "effective_tree": tree,
+            },
+        )
+
         with self.assertRaisesRegex(runner.TargetRunError, "40-character"):
-            runner._normalize_patch_commits(["not-a-sha"])
+            runner._normalize_patched_source(["not-a-sha"], fork, head, tree)
+        with self.assertRaisesRegex(runner.TargetRunError, "must be unique"):
+            runner._normalize_patched_source([head, head], fork, head, tree)
+        for absent in ("patch_repository", "effective_head", "effective_tree"):
+            supplied = {
+                "patch_repository": fork,
+                "effective_head": head,
+                "effective_tree": tree,
+            }
+            supplied[absent] = None
+            with self.subTest(missing=absent):
+                with self.assertRaisesRegex(
+                    runner.TargetRunError, f"fully identified; missing {absent}"
+                ):
+                    runner._normalize_patched_source([head], **supplied)
+        with self.assertRaisesRegex(runner.TargetRunError, "must not declare"):
+            runner._normalize_patched_source([], fork, None, None)
+        with self.assertRaisesRegex(runner.TargetRunError, "https URL"):
+            runner._normalize_patched_source([head], "git@github.com:me/x", head, tree)
+
+    def test_a_patch_stack_that_changes_nothing_is_rejected(self):
+        """Baseline commit/tree in the effective slots means no patch was applied."""
+        head, tree = "a" * 40, "b" * 40
+        fork = "https://github.com/maintainer/shadPS4"
+        with self.assertRaisesRegex(runner.TargetRunError, "changes nothing"):
+            runner._normalize_patched_source(
+                [head], fork, runner.PINNED_SOURCE_COMMIT, tree
+            )
+        with self.assertRaisesRegex(runner.TargetRunError, "changes nothing"):
+            runner._normalize_patched_source(
+                [head], fork, head, runner.PINNED_SOURCE_TREE
+            )
 
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux subreaper regression")
     def test_strong_containment_reaps_detached_session_descendant(self):
@@ -175,8 +219,17 @@ class HardeningRegressionTests(unittest.TestCase):
         required = schema["properties"]["artifacts"]["items"]["required"]
         self.assertIn("packaged_sha256", required)
         self.assertIn("packaged_size_bytes", required)
-        patch_schema = schema["properties"]["emulator"]["properties"]["source"]["properties"]["patch_commits"]
-        self.assertEqual(patch_schema["maxItems"], 0)
+        source_schema = schema["properties"]["emulator"]["properties"]["source"]
+        self.assertEqual(source_schema["properties"]["patch_commits"]["uniqueItems"], True)
+        # A patched build is admissible, but only fully identified.
+        self.assertEqual(
+            source_schema["then"]["required"],
+            ["patch_repository", "effective_head", "effective_tree"],
+        )
+        self.assertEqual(
+            source_schema["else"]["properties"],
+            {"patch_repository": False, "effective_head": False, "effective_tree": False},
+        )
 
 
 if __name__ == "__main__":

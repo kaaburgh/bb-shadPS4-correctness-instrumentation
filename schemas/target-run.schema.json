@@ -156,11 +156,45 @@
             },
             "patch_commits": {
               "type": "array",
-              "maxItems": 0,
+              "maxItems": 64,
               "uniqueItems": true,
               "items": {
                 "$ref": "#/$defs/gitSha"
               }
+            },
+            "patch_repository": {
+              "type": "string",
+              "pattern": "^https://[^\\s]{1,240}$"
+            },
+            "effective_head": {
+              "$ref": "#/$defs/gitSha"
+            },
+            "effective_tree": {
+              "$ref": "#/$defs/gitSha"
+            }
+          },
+          "if": {
+            "properties": {
+              "patch_commits": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "patch_commits"
+            ]
+          },
+          "then": {
+            "required": [
+              "patch_repository",
+              "effective_head",
+              "effective_tree"
+            ]
+          },
+          "else": {
+            "properties": {
+              "patch_repository": false,
+              "effective_head": false,
+              "effective_tree": false
             }
           }
         },

@@ -87,7 +87,38 @@ python tools/run_target_experiment.py run \
   --output <safe-output-directory>/run-<scenario-id>.zip
 ```
 
-Do not pass `--patch-commit` or `--emulator-config`; both fail closed until their provenance can be independently bound.
+Do not pass `--emulator-config`; it fails closed until its provenance can be
+independently bound.
+
+To run a **patched** build instead, add the identity that
+[`docs/baseline/shadps4.md`](../baseline/shadps4.md) defines for a patched source
+state. `--source-commit`/`--source-tree` keep naming the pinned upstream *base*:
+
+```text
+  --patch-commit <ordered-full-sha>        # repeat, in application order
+  --patch-repository <fork-url>
+  --effective-head <full-sha>
+  --effective-tree <full-tree-sha>
+```
+
+All four are required together. A patched run whose fork URL, effective head or
+effective tree is missing is rejected rather than recorded, because a run whose
+built tree cannot be reconstructed is not evidence about that tree. Declaring an
+effective head or tree equal to the baseline is likewise rejected: the patch stack
+would change nothing. An unpatched run must not carry any of these fields.
+
+Only the *unpatched* route requires the exact upstream CI artifact. A patched
+build has no independently observable upstream artifact by construction, so for
+it the attesting party is the maintainer: the runner verifies the staged bytes
+against the digest they declare, and records the complete patched-state identity
+alongside it. This follows the same reasoning as the sealing removal above — the
+execution model has no adversary and the maintainer is present — and it is why
+the pin is relaxed for that route rather than everywhere.
+
+Note what this does *not* relax. Non-synthetic file oracles and declared
+artifacts remain gated for patched and unpatched runs alike; those concern the
+producer provenance of output files, which is a separate question from source
+identity.
 
 Validate a detached record with:
 

@@ -93,6 +93,8 @@ def _require_non_synthetic_evidence_contract(
     scenario: Mapping[str, Any],
     emulator_binary_path: Path,
     emulator_binary_sha256: str,
+    *,
+    patched: bool = False,
 ) -> Mapping[str, Any] | None:
     if _is_explicit_synthetic_control(target_manifest):
         return None
@@ -104,11 +106,24 @@ def _require_non_synthetic_evidence_contract(
         raise TargetRunError(
             "non-synthetic declared artifacts require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports declared artifacts only for synthetic controls"
         )
-    pinned = _pinned_build_for_host()
     actual_sha256, actual_size = _legacy._sha256_file(
         emulator_binary_path, label="staged emulator binary"
     )
     supplied_sha256 = f"sha256:{emulator_binary_sha256}"
+    if patched:
+        # A locally built patch has no independently observable upstream artifact
+        # by construction, so the pinned-artifact identity cannot apply. The
+        # attesting party is the maintainer, who declares the digest and the
+        # complete patched-state identity the runner records; what stays checked
+        # here is that the bytes about to run are the bytes they declared.
+        if actual_sha256 != supplied_sha256:
+            raise TargetRunError(
+                "staged patched emulator binary does not match the caller-supplied digest"
+            )
+        if actual_size <= 0:
+            raise TargetRunError("staged patched emulator binary is empty")
+        return None
+    pinned = _pinned_build_for_host()
     if (
         actual_sha256 != pinned["binary_sha256"]
         or actual_size != pinned["binary_size_bytes"]
@@ -236,7 +251,18 @@ def run_experiment(
     output_path: Path,
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
+    patch_repository: str | None = None,
+    effective_head: str | None = None,
+    effective_tree: str | None = None,
 ) -> dict[str, Any]:
+    # Validate the declared source state before any staging, so an incomplete or
+    # phantom patch identity reports itself rather than surfacing later as a
+    # pinned-artifact mismatch. The compatibility engine re-validates it.
+    patched = bool(
+        _legacy._normalize_patched_source(
+            patch_commits, patch_repository, effective_head, effective_tree
+        )["patch_commits"]
+    )
     target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
     safe_target_raw = _package_target_manifest(target_manifest)
     scenario_raw, scenario = _legacy._load_json_file(scenario_path, maximum=_legacy.MAX_INPUT_BYTES, label="scenario")
@@ -281,11 +307,20 @@ def run_experiment(
                 command, working_directory_resolved, emulator_binary_path
             )
             source_info = _require_regular_unlinked_file(original_binary, "emulator binary")
-            pinned = _pinned_build_for_host()
-            staged_emulator_path = snapshot_root / str(pinned["binary_name"])
+            if patched:
+                # No pinned artifact exists for a patched build, so the staged copy
+                # keeps the name of the binary the maintainer actually built.
+                staged_emulator_path = snapshot_root / original_binary.name
+            else:
+                pinned = _pinned_build_for_host()
+                staged_emulator_path = snapshot_root / str(pinned["binary_name"])
             _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
             _require_non_synthetic_evidence_contract(
-                target_manifest, scenario, staged_emulator_path, emulator_binary_sha256
+                target_manifest,
+                scenario,
+                staged_emulator_path,
+                emulator_binary_sha256,
+                patched=patched,
             )
             staged_command = dict(command)
             staged_argv = list(command["argv"])
@@ -296,7 +331,11 @@ def run_experiment(
             )
         else:
             _require_non_synthetic_evidence_contract(
-                target_manifest, scenario, emulator_binary_path, emulator_binary_sha256
+                target_manifest,
+                scenario,
+                emulator_binary_path,
+                emulator_binary_sha256,
+                patched=patched,
             )
 
         output_resolved.parent.mkdir(parents=True, exist_ok=True)
@@ -314,6 +353,9 @@ def run_experiment(
                 source_commit=source_commit,
                 source_tree=source_tree,
                 patch_commits=patch_commits,
+                patch_repository=patch_repository,
+                effective_head=effective_head,
+                effective_tree=effective_tree,
                 target_root=target_root,
                 working_directory=working_directory,
                 output_path=legacy_output,
