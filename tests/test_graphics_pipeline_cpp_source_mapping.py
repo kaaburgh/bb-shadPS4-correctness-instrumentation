@@ -48,6 +48,12 @@ class GraphicsPipelineCppSourceMappingTests(unittest.TestCase):
         self.assertEqual(result["field_count"], 21)
         self.assertEqual(set(result["field_names"]), {field["name"] for field in surface["fields"]})
 
+    def test_crlf_checkout_has_same_surface_identity(self):
+        mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
+        crlf_bytes = surface_bytes.replace(b"\n", b"\r\n")
+        result = validate_mapping(mapping, surface, graphics, runtime, blend, crlf_bytes)
+        self.assertTrue(result["source_mapping_ready"])
+
     def test_missing_top_level_field_fails_closed(self):
         mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
         mapping = copy.deepcopy(mapping)
