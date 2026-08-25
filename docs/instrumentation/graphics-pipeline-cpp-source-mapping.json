@@ -10,7 +10,7 @@
   "canonical_surface": {
     "schema_version": "bb-graphics-pipeline-key-surface/v12",
     "path": "docs/instrumentation/graphics-pipeline-key-surface.json",
-    "sha256": "sha256:21f03690ddfc424a1d4624eced6fb4d48cdc030df14d5e098e0d979d78191f6e"
+    "sha256": "sha256:26cbd58ec7f1198c5030f0eec02fcedfa45df8abdffb4e134e70d2689b47a1a0"
   },
   "fields": [
     {"name":"stage_hashes","mode":"array_unsigned_cast","expression":"static_cast<std::uint64_t>(key.stage_hashes[i])","source_declaration":"std::array<size_t, MaxShaderStages> stage_hashes;"},
