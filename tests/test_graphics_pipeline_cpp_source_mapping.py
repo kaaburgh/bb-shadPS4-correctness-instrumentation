@@ -68,12 +68,45 @@ class GraphicsPipelineCppSourceMappingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "patch_control_points"):
             validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
 
+    def test_wrong_top_level_expression_fails_closed(self):
+        mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
+        mapping = copy.deepcopy(mapping)
+        stage_hashes = next(field for field in mapping["fields"] if field["name"] == "stage_hashes")
+        stage_hashes["expression"] = "static_cast<std::uint64_t>(key.mrt_mask)"
+        with self.assertRaisesRegex(ValueError, "stage_hashes: mapping expression mismatch"):
+            validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
+
+    def test_wrong_mapping_mode_fails_closed(self):
+        mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
+        mapping = copy.deepcopy(mapping)
+        stage_hashes = next(field for field in mapping["fields"] if field["name"] == "stage_hashes")
+        stage_hashes["mode"] = "unsigned_cast"
+        with self.assertRaisesRegex(ValueError, "stage_hashes: mapping mode mismatch"):
+            validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
+
     def test_color_record_order_is_bound_to_surface(self):
         mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
         mapping = copy.deepcopy(mapping)
         color = next(field for field in mapping["fields"] if field["name"] == "color_buffers")
         color["record_fields"][0], color["record_fields"][1] = color["record_fields"][1], color["record_fields"][0]
         with self.assertRaisesRegex(ValueError, "color_buffers: record field order/name mismatch"):
+            validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
+
+    def test_wrong_record_expression_fails_closed(self):
+        mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
+        mapping = copy.deepcopy(mapping)
+        color = next(field for field in mapping["fields"] if field["name"] == "color_buffers")
+        data_format = next(field for field in color["record_fields"] if field["name"] == "data_format")
+        data_format["expression"] = "static_cast<std::uint32_t>(src.num_format)"
+        with self.assertRaisesRegex(ValueError, "color_buffers.data_format: record mapping expression mismatch"):
+            validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
+
+    def test_unexpected_mapping_key_fails_closed(self):
+        mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
+        mapping = copy.deepcopy(mapping)
+        stage_hashes = next(field for field in mapping["fields"] if field["name"] == "stage_hashes")
+        stage_hashes["fallback_expression"] = "static_cast<std::uint64_t>(key.mrt_mask)"
+        with self.assertRaisesRegex(ValueError, "stage_hashes: unexpected mapping keys"):
             validate_mapping(mapping, surface, graphics, runtime, blend, surface_bytes)
 
     def test_blend_unnamed_bits_are_bound_to_pinned_source(self):
