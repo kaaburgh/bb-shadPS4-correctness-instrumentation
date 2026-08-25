@@ -163,6 +163,104 @@ class DriftCheckTests(unittest.TestCase):
         )
         self.assertEqual(self._drift(), [])
 
+    def _edit_prose(self, locator: str, old: str, new: str) -> None:
+        """Rewrite the value that wraps onto the line after ``locator``."""
+        path = self.root / "docs" / "baseline" / "shadps4.md"
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            if locator in line:
+                self.assertIn(old, lines[index + 1])
+                lines[index + 1] = lines[index + 1].replace(old, new)
+                path.write_text("".join(lines), encoding="utf-8")
+                return
+        self.fail(f"locator not present in the baseline document: {locator}")
+
+    def test_wrapped_label_binds_the_value_on_the_next_line(self):
+        """The document spells longer entries as `label:` then the value."""
+        self._edit_prose("**Effective source commit:**", baseline.COMMIT, baseline.TREE)
+        self.assertTrue(
+            any(
+                "labelled as the shadPS4 source commit" in item
+                for item in self._drift()
+                if "shadps4.md" in item
+            )
+        )
+
+    def test_baseline_document_rejects_a_revision_that_is_neither_identity(self):
+        """Every revision this document names is about the baseline."""
+        self._edit_prose("git -C shadPS4 fetch origin", baseline.COMMIT, FOREIGN)
+        self.assertTrue(
+            any(
+                "neither the declared source commit nor tree" in item
+                for item in self._drift()
+                if "shadps4.md" in item
+            )
+        )
+
+    def test_commit_and_tree_identities_are_not_interchangeable(self):
+        """A field holding the *other* canonical SHA is a wrong identity."""
+        self._write("tools/swapped_commit.py", f'PINNED_SOURCE_COMMIT = "{baseline.TREE}"\n')
+        self._write("tools/swapped_tree.py", f'PINNED_SOURCE_TREE = "{baseline.COMMIT}"\n')
+        self._write(
+            "docs/re/swapped.md",
+            f"Static inspection is against `shadps4-emu/shadPS4@{baseline.TREE}`.\n",
+        )
+        self._write(
+            "docs/instrumentation/examples/swapped.json",
+            json.dumps(
+                {
+                    "source": {
+                        "repository": "shadps4-emu/shadPS4",
+                        "commit": baseline.TREE,
+                        "tree": baseline.COMMIT,
+                    }
+                },
+                indent=2,
+            ),
+        )
+        drift = self._drift()
+        for name in ("swapped_commit.py", "swapped_tree.py", "swapped.md", "swapped.json"):
+            with self.subTest(name=name):
+                self.assertTrue(any(name in item for item in drift))
+        with self.assertRaises(baseline.BaselineDriftError):
+            baseline.check_repository(self.root)
+
+    def test_each_identity_is_accepted_in_its_own_position(self):
+        """The stricter rule must not reject a correctly recorded pair."""
+        self._write(
+            "docs/re/correct.md",
+            f"Built from `shadps4-emu/shadPS4` commit `{baseline.COMMIT}` "
+            f"/ tree `{baseline.TREE}`.\n",
+        )
+        self._write(
+            "docs/instrumentation/examples/correct.json",
+            json.dumps(
+                {
+                    "source": {
+                        "repository": "shadps4-emu/shadPS4",
+                        "commit": baseline.COMMIT,
+                        "tree": baseline.TREE,
+                    }
+                },
+                indent=2,
+            ),
+        )
+        self.assertEqual(
+            [item for item in self._drift() if "correct." in item], []
+        )
+
+    def test_nearest_label_classifies_a_line_carrying_both(self):
+        """`commit <a> / tree <b>` must bind each value to its own label."""
+        self.assertEqual(baseline._labelled_kind("... commit `"), baseline.COMMIT_KIND)
+        self.assertEqual(
+            baseline._labelled_kind("... commit `<sha>` / tree `"), baseline.TREE_KIND
+        )
+        self.assertEqual(
+            baseline._labelled_kind("... tree `<sha>`, commit `"), baseline.COMMIT_KIND
+        )
+        self.assertIsNone(baseline._labelled_kind("- Git blob SHA-1: `"))
+        self.assertIsNone(baseline._labelled_kind("Exact-head Actions run at `"))
+
     def test_declared_baseline_file_is_not_self_flagged(self):
         document = _declared()
         document["commit"] = FOREIGN
