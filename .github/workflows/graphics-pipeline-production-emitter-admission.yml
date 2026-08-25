@@ -1,0 +1,41 @@
+name: Graphics pipeline production emitter admission
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/graphics-pipeline-production-emitter-admission.yml'
+      - 'docs/instrumentation/graphics-pipeline-production-emitter-admission.json'
+      - 'docs/instrumentation/graphics-pipeline-production-emitter-admission.md'
+      - 'schemas/graphics-pipeline-producer.schema.json'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.json'
+      - 'docs/instrumentation/graphics-pipeline-key-surface.json'
+      - 'tools/graphics_pipeline_cpp_identity_conformance.cpp'
+      - 'tools/graphics_pipeline_production_emitter_admission.py'
+      - 'tests/test_graphics_pipeline_production_emitter_admission.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/graphics-pipeline-production-emitter-admission.yml'
+      - 'docs/instrumentation/graphics-pipeline-production-emitter-admission.json'
+      - 'docs/instrumentation/graphics-pipeline-production-emitter-admission.md'
+      - 'schemas/graphics-pipeline-producer.schema.json'
+      - 'docs/instrumentation/graphics-pipeline-cpp-source-mapping.json'
+      - 'docs/instrumentation/graphics-pipeline-key-surface.json'
+      - 'tools/graphics_pipeline_cpp_identity_conformance.cpp'
+      - 'tools/graphics_pipeline_production_emitter_admission.py'
+      - 'tests/test_graphics_pipeline_production_emitter_admission.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests
+        run: python -m unittest tests.test_graphics_pipeline_production_emitter_admission -v
+      - name: Validate admission contract
+        run: |
+          python tools/graphics_pipeline_production_emitter_admission.py \
+            docs/instrumentation/graphics-pipeline-production-emitter-admission.json
