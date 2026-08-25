@@ -1,0 +1,63 @@
+{
+  "schema_version": "bb-graphics-pipeline-production-emitter-admission/v1",
+  "source": {
+    "repository": "https://github.com/shadps4-emu/shadPS4",
+    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "path": "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
+    "git_blob": "b39f1c30bfb00d1f21a082da48369ba95ce31368",
+    "function": "Vulkan::PipelineCache::GetGraphicsPipeline",
+    "lookup_expression": "graphics_pipelines.try_emplace(graphics_key)",
+    "classification_source": "is_new"
+  },
+  "dependencies": {
+    "producer_contract": {
+      "schema_version": "bb-graphics-pipeline-producer/v1",
+      "schema_path": "schemas/graphics-pipeline-producer.schema.json"
+    },
+    "source_mapping": {
+      "schema_version": "bb-graphics-pipeline-cpp-source-mapping/v1",
+      "path": "docs/instrumentation/graphics-pipeline-cpp-source-mapping.json",
+      "required_canonical_fields": 21
+    },
+    "cpp_identity_conformance": {
+      "path": "tools/graphics_pipeline_cpp_identity_conformance.cpp",
+      "required_identity_prefix": "pipeline:sha256:"
+    },
+    "canonical_surface": {
+      "schema_version": "bb-graphics-pipeline-key-surface/v12",
+      "path": "docs/instrumentation/graphics-pipeline-key-surface.json"
+    }
+  },
+  "integration": {
+    "gate_macro": "SHADPS4_BB_GRAPHICS_PIPELINE_EXACT_PRODUCER",
+    "normal_build_behavior": "no_runtime_work",
+    "key_input": "graphics_key",
+    "classification": {
+      "created_when": "is_new == true",
+      "cache_hit_when": "is_new == false"
+    },
+    "required_bundle_paths": [
+      "src/video_core/renderer_vulkan/bb_graphics_pipeline_exact_producer.h",
+      "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp"
+    ],
+    "required_symbols": [
+      "BbCanonicalPipelineKeyFromGraphicsPipelineKey",
+      "BbExactPipelineIdentity",
+      "BbObserveGraphicsPipeline"
+    ],
+    "forbidden_identity_sources": [
+      "std::hash<GraphicsPipelineKey>",
+      "object_bytes",
+      "memcmp_bytes"
+    ]
+  },
+  "evidence_boundary": {
+    "class": ["static", "synthetic"],
+    "runtime_emission_established": false,
+    "created_cache_hit_runtime_validated": false,
+    "bloodborne_executed": false,
+    "target_coverage_established": false,
+    "gpu_timing_semantics_established": false,
+    "instrumentation_overhead_measured": false
+  }
+}
