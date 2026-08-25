@@ -124,7 +124,7 @@ struct CanonicalPipelineKey {
     std::uint32_t provoking_vtx_last = 0;
     std::array<std::uint64_t, 6> stage_hashes{};
     std::uint32_t stencil_format = 0;
-    std::array<std::uint32_t, 32> vertex_buffer_formats{};
+    std::array<std::int32_t, 32> vertex_buffer_formats{};
     std::array<std::uint32_t, 8> write_masks{};
     std::uint32_t z_format = 0;
 };
@@ -226,6 +226,14 @@ std::string canonical_payload(const CanonicalPipelineKey& key) {
     return out;
 }
 
+bool signed_vertex_format_conformance() {
+    CanonicalPipelineKey key{};
+    key.vertex_buffer_formats[0] = -1;
+    const std::string payload = canonical_payload(key);
+    return payload.find("\"vertex_buffer_formats\":[-1,0") != std::string::npos &&
+           payload.find("4294967295") == std::string::npos;
+}
+
 } // namespace
 
 int main() {
@@ -235,5 +243,5 @@ int main() {
     hash.update(payload);
     const std::string identity = "pipeline:sha256:" + hash.finish_hex();
     std::cout << payload << '\n' << identity << '\n';
-    return identity == kExpectedIdentity ? 0 : 2;
+    return identity == kExpectedIdentity && signed_vertex_format_conformance() ? 0 : 2;
 }
