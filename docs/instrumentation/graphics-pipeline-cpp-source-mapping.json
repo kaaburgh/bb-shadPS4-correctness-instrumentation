@@ -10,6 +10,7 @@
   "canonical_surface": {
     "schema_version": "bb-graphics-pipeline-key-surface/v12",
     "path": "docs/instrumentation/graphics-pipeline-key-surface.json",
+    "digest_encoding": "utf-8-lf",
     "sha256": "sha256:26cbd58ec7f1198c5030f0eec02fcedfa45df8abdffb4e134e70d2689b47a1a0"
   },
   "fields": [
