@@ -10,6 +10,7 @@ SCHEMA_VERSION = "bb-graphics-pipeline-cpp-source-mapping/v1"
 SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
 SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
 SURFACE_VERSION = "bb-graphics-pipeline-key-surface/v12"
+SURFACE_DIGEST_ENCODING = "utf-8-lf"
 
 
 def _load(path: Path) -> dict:
@@ -28,6 +29,11 @@ def _names(items: list[dict], label: str) -> list[str]:
     return names
 
 
+def _canonical_text_bytes(data: bytes) -> bytes:
+    text = data.decode("utf-8")
+    return text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+
+
 def validate_mapping(mapping: dict, surface: dict, graphics_header: str, runtime_header: str, color_header: str, surface_bytes: bytes) -> dict:
     if mapping.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("unsupported mapping schema_version")
@@ -44,7 +50,9 @@ def validate_mapping(mapping: dict, surface: dict, graphics_header: str, runtime
     canonical_surface = mapping.get("canonical_surface", {})
     if canonical_surface.get("schema_version") != SURFACE_VERSION:
         raise ValueError("canonical surface version mismatch")
-    actual_surface_digest = "sha256:" + hashlib.sha256(surface_bytes).hexdigest()
+    if canonical_surface.get("digest_encoding") != SURFACE_DIGEST_ENCODING:
+        raise ValueError("canonical surface digest encoding mismatch")
+    actual_surface_digest = "sha256:" + hashlib.sha256(_canonical_text_bytes(surface_bytes)).hexdigest()
     if canonical_surface.get("sha256") != actual_surface_digest:
         raise ValueError(
             f"canonical surface digest mismatch: expected {canonical_surface.get('sha256')}, "
