@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tools" / "graphics_pipeline_cpp_identity_conformance.cpp"
 VECTOR = ROOT / "docs" / "instrumentation" / "examples" / "graphics-pipeline-cpp-identity-vector.synthetic.json"
+SURFACE = ROOT / "docs" / "instrumentation" / "graphics-pipeline-key-surface.json"
+MAPPING = ROOT / "docs" / "instrumentation" / "graphics-pipeline-cpp-source-mapping.json"
 
 
 class GraphicsPipelineCppIdentityConformanceTests(unittest.TestCase):
@@ -41,6 +43,8 @@ class GraphicsPipelineCppIdentityConformanceTests(unittest.TestCase):
         )
         cls.lines = completed.stdout.splitlines()
         cls.vector = json.loads(VECTOR.read_text(encoding="utf-8"))
+        cls.surface = json.loads(SURFACE.read_text(encoding="utf-8"))
+        cls.mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
         cls.source_text = SOURCE.read_text(encoding="utf-8")
 
     @classmethod
@@ -62,6 +66,17 @@ class GraphicsPipelineCppIdentityConformanceTests(unittest.TestCase):
         self.assertNotIn('\\"stage_hashes\\":[1229782938247303441', self.source_text)
         self.assertNotIn('\\"color_samples\\":[1,0,0,0,0,0,0,0]', self.source_text)
         self.assertNotIn('\\"write_masks\\":[15,0,0,0,0,0,0,0]', self.source_text)
+
+    def test_vertex_buffer_formats_preserve_signed_canonical_domain(self) -> None:
+        surface_field = next(field for field in self.surface["fields"] if field["name"] == "vertex_buffer_formats")
+        mapping_field = next(field for field in self.mapping["fields"] if field["name"] == "vertex_buffer_formats")
+        self.assertEqual(surface_field["canonicalization"]["kind"], "enum_signed_integer_array")
+        self.assertEqual(surface_field["canonicalization"]["bits"], 32)
+        self.assertEqual(mapping_field["mode"], "array_enum_signed_cast")
+        self.assertEqual(mapping_field["expression"], "static_cast<std::int32_t>(key.vertex_buffer_formats[i])")
+        self.assertIn("std::array<std::int32_t, 32> vertex_buffer_formats", self.source_text)
+        self.assertNotIn("std::array<std::uint32_t, 32> vertex_buffer_formats", self.source_text)
+        self.assertIn("signed_vertex_format_conformance", self.source_text)
 
 
 if __name__ == "__main__":
