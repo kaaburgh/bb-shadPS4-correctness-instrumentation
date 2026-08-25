@@ -301,6 +301,136 @@ class ReviewRegressionTests(unittest.TestCase):
             self.assertEqual(manifest["emulator"]["binary"]["sha256"], "sha256:" + standin_sha256)
             self.assertTrue(output.is_file())
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux patched-build regression")
+    def test_linux_patched_build_runs_and_records_its_identity(self):
+        """A maintainer-attested patched build is admissible when fully identified.
+
+        Note what is *not* mocked: the pinned upstream artifact table is left
+        alone. An unpatched run of this stand-in would be rejected by it, so the
+        run only completes because the declared patch stack moves the identity
+        off the pinned artifact.
+        """
+        head, effective_tree = "a" * 40, "b" * 40
+        fork = "https://github.com/maintainer/shadPS4"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target_root, target_manifest_path = _write_bound_target_fixture(
+                root, runtime_classified=True
+            )
+            workdir = root / "work"
+            workdir.mkdir()
+            output = root / "run.zip"
+
+            patched = root / "shadps4-patched"
+            patched.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
+            )
+            patched_sha256 = hashlib.sha256(patched.read_bytes()).hexdigest()
+
+            scenario_path = root / "scenario.json"
+            scenario_path.write_bytes(runner._json_bytes(_scenario()))
+            command_path = root / "command.json"
+            command_path.write_bytes(
+                runner._json_bytes(
+                    {
+                        "schema_id": runner.COMMAND_SCHEMA_ID,
+                        "schema_version": runner.COMMAND_SCHEMA_VERSION,
+                        "argv": [str(patched), str(target_root / "app")],
+                        "emulator_binary_index": 0,
+                        "target_path_index": 1,
+                    }
+                )
+            )
+
+            manifest = runner.run_experiment(
+                target_manifest_path=target_manifest_path,
+                scenario_path=scenario_path,
+                command_path=command_path,
+                emulator_binary_path=patched,
+                emulator_binary_sha256=patched_sha256,
+                source_repository=runner.PINNED_SOURCE_REPOSITORY,
+                source_commit=runner.PINNED_SOURCE_COMMIT,
+                source_tree=runner.PINNED_SOURCE_TREE,
+                patch_commits=[head],
+                patch_repository=fork,
+                effective_head=head,
+                effective_tree=effective_tree,
+                target_root=target_root,
+                working_directory=workdir,
+                output_path=output,
+                graphics_backend="synthetic",
+                emulator_config_path=None,
+            )
+
+            self.assertEqual(manifest["termination"]["state"], "completed")
+            self.assertEqual(manifest["oracle"]["state"], "passed")
+            source = manifest["emulator"]["source"]
+            self.assertEqual(source["commit"], runner.PINNED_SOURCE_COMMIT)
+            self.assertEqual(source["tree"], runner.PINNED_SOURCE_TREE)
+            self.assertEqual(source["patch_commits"], [head])
+            self.assertEqual(source["patch_repository"], fork)
+            self.assertEqual(source["effective_head"], head)
+            self.assertEqual(source["effective_tree"], effective_tree)
+
+            # The identity must survive into the published artifact, not just the
+            # in-memory manifest, and the artifact must still validate.
+            with zipfile.ZipFile(output, "r") as archive:
+                packaged = json.loads(archive.read("run-manifest.json"))
+            self.assertEqual(packaged["emulator"]["source"], source)
+            runner.validate_run_manifest(packaged)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux patched-build regression")
+    def test_linux_patched_build_still_requires_the_declared_digest(self):
+        """Dropping the pinned-artifact identity must not drop digest binding."""
+        head, effective_tree = "a" * 40, "b" * 40
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target_root, target_manifest_path = _write_bound_target_fixture(
+                root, runtime_classified=True
+            )
+            workdir = root / "work"
+            workdir.mkdir()
+
+            patched = root / "shadps4-patched"
+            patched.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8"
+            )
+            scenario_path = root / "scenario.json"
+            scenario_path.write_bytes(runner._json_bytes(_scenario()))
+            command_path = root / "command.json"
+            command_path.write_bytes(
+                runner._json_bytes(
+                    {
+                        "schema_id": runner.COMMAND_SCHEMA_ID,
+                        "schema_version": runner.COMMAND_SCHEMA_VERSION,
+                        "argv": [str(patched), str(target_root / "app")],
+                        "emulator_binary_index": 0,
+                        "target_path_index": 1,
+                    }
+                )
+            )
+
+            with self.assertRaises(runner.TargetRunError):
+                runner.run_experiment(
+                    target_manifest_path=target_manifest_path,
+                    scenario_path=scenario_path,
+                    command_path=command_path,
+                    emulator_binary_path=patched,
+                    emulator_binary_sha256="c" * 64,
+                    source_repository=runner.PINNED_SOURCE_REPOSITORY,
+                    source_commit=runner.PINNED_SOURCE_COMMIT,
+                    source_tree=runner.PINNED_SOURCE_TREE,
+                    patch_commits=[head],
+                    patch_repository="https://github.com/maintainer/shadPS4",
+                    effective_head=head,
+                    effective_tree=effective_tree,
+                    target_root=target_root,
+                    working_directory=workdir,
+                    output_path=root / "run.zip",
+                    graphics_backend="synthetic",
+                    emulator_config_path=None,
+                )
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
     def test_linux_non_synthetic_digest_mismatch_fails_before_delegation(self):
         with tempfile.TemporaryDirectory() as directory:

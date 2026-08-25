@@ -200,16 +200,76 @@ def _require_git_sha(value: Any, field: str) -> str:
     return value
 
 
-def _normalize_patch_commits(values: Sequence[str]) -> list[str]:
-    """Accept only the exact unpatched BB-BL1 baseline until patch provenance is attested."""
-    if values:
-        for value in values:
-            _require_git_sha(value, "patch_commit")
+#: Mirrors the ``repository`` pattern in ``schemas/target-run.schema.json`` so the
+#: runner rejects a malformed fork URL before it reaches the artifact.
+_HTTPS_URL = re.compile(r"https://[^\s]{1,240}")
+
+
+def _normalize_patched_source(
+    patch_commits: Sequence[str],
+    patch_repository: str | None,
+    effective_head: str | None,
+    effective_tree: str | None,
+) -> dict[str, Any]:
+    """Identify the built source state: the pinned baseline, or a complete patch stack.
+
+    A patched build is accepted only when it is fully identified.  ``docs/baseline
+    /shadps4.md`` defines that identity as the upstream base plus the patch
+    repository, the ordered patch commits, and the effective head and tree; a
+    partial answer is rejected rather than recorded, because a run whose exact
+    built tree cannot be reconstructed is not evidence about that tree.
+    """
+    extra = {
+        "patch_repository": patch_repository,
+        "effective_head": effective_head,
+        "effective_tree": effective_tree,
+    }
+    if not patch_commits:
+        named = sorted(field for field, value in extra.items() if value is not None)
+        if named:
+            raise TargetRunError(
+                "unpatched runs must not declare " + ", ".join(named)
+            )
+        return {"patch_commits": []}
+
+    normalized: list[str] = []
+    for value in patch_commits:
+        _require_git_sha(value, "patch_commit")
+        if value in normalized:
+            raise TargetRunError("patch_commits must be unique")
+        normalized.append(value)
+
+    missing = sorted(field for field, value in extra.items() if value is None)
+    if missing:
         raise TargetRunError(
-            "patch_commits require independently verified checkout/build provenance; "
-            "this runner currently accepts only the pinned unpatched BB-BL1 baseline"
+            "a patched build must be fully identified; missing " + ", ".join(missing)
         )
-    return []
+    _require_string(patch_repository, "patch_repository", maximum=256)
+    if not _HTTPS_URL.fullmatch(str(patch_repository)):
+        raise TargetRunError("patch_repository must be an https URL")
+    _require_git_sha(effective_head, "effective_head")
+    _require_git_sha(effective_tree, "effective_tree")
+    if effective_head == PINNED_SOURCE_COMMIT:
+        raise TargetRunError(
+            "effective_head equals the pinned baseline commit; the declared patch "
+            "stack changes nothing"
+        )
+    if effective_tree == PINNED_SOURCE_TREE:
+        raise TargetRunError(
+            "effective_tree equals the pinned baseline tree; the declared patch "
+            "stack changes nothing"
+        )
+    if effective_head in normalized[:-1]:
+        raise TargetRunError(
+            "effective_head names a patch commit that is not the tip; the patch "
+            "commits are out of application order"
+        )
+    return {
+        "patch_commits": normalized,
+        "patch_repository": patch_repository,
+        "effective_head": effective_head,
+        "effective_tree": effective_tree,
+    }
 
 
 def _require_attestable_emulator_config(path: Path | None) -> None:
@@ -1651,6 +1711,9 @@ def run_experiment(
     output_path: Path,
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
+    patch_repository: str | None = None,
+    effective_head: str | None = None,
+    effective_tree: str | None = None,
 ) -> dict[str, Any]:
     """Run and package one bounded target-machine experiment."""
     if re.fullmatch(r"[0-9a-f]{64}", emulator_binary_sha256) is None:
@@ -1659,14 +1722,16 @@ def run_experiment(
     _require_git_sha(source_commit, "source_commit")
     _require_git_sha(source_tree, "source_tree")
     _require_attestable_emulator_config(emulator_config_path)
-    normalized_patches = _normalize_patch_commits(patch_commits)
+    source_state = _normalize_patched_source(
+        patch_commits, patch_repository, effective_head, effective_tree
+    )
     if (
         source_repository != PINNED_SOURCE_REPOSITORY
         or source_commit != PINNED_SOURCE_COMMIT
         or source_tree != PINNED_SOURCE_TREE
     ):
         raise TargetRunError(
-            "emulator source does not match the pinned BB-BL1 baseline; update BB-BL1 first"
+            "emulator source base does not match the pinned BB-BL1 baseline; update BB-BL1 first"
         )
 
     target_root_resolved = _resolve_directory(target_root, "target_root")
@@ -1759,7 +1824,7 @@ def run_experiment(
                 "repository": source_repository,
                 "commit": source_commit,
                 "tree": source_tree,
-                "patch_commits": normalized_patches,
+                **source_state,
             },
             "binary": {"sha256": actual_binary_sha256, "size_bytes": binary_size},
             "config_sha256": host_manifest["run"]["emulator_config"]["sha256"],
@@ -1831,6 +1896,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     run.add_argument("--source-commit", required=True)
     run.add_argument("--source-tree", required=True)
     run.add_argument("--patch-commit", action="append", default=[])
+    run.add_argument("--patch-repository")
+    run.add_argument("--effective-head")
+    run.add_argument("--effective-tree")
     run.add_argument("--target-root", type=Path, required=True)
     run.add_argument("--working-directory", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
@@ -1861,6 +1929,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_commit=args.source_commit,
             source_tree=args.source_tree,
             patch_commits=args.patch_commit,
+            patch_repository=args.patch_repository,
+            effective_head=args.effective_head,
+            effective_tree=args.effective_tree,
             target_root=args.target_root,
             working_directory=args.working_directory,
             output_path=args.output,
