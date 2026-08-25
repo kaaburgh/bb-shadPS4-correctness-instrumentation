@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+from tools.shadps4_source_baseline import REPOSITORY as _PINNED_REPOSITORY
 
 SCHEMA_VERSION = "bb-graphics-pipeline-key-surface/v12"
 PINNED_SOURCE = {
-    "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "repository": _PINNED_REPOSITORY,
+    "commit": _PINNED_COMMIT,
     "path": "src/video_core/renderer_vulkan/vk_graphics_pipeline.h",
 }
 PINNED_DEPENDENCIES = {

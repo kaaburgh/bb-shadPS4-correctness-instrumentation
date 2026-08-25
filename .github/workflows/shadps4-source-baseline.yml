@@ -1,0 +1,27 @@
+name: shadPS4 source baseline
+
+# Deliberately unfiltered. This job answers "does every literal reference to the
+# pinned BB-BL1 shadPS4 commit still agree with docs/baseline/shadps4-source.json?",
+# and a stale reference can be introduced by any file in the repository. A path
+# filter here would reintroduce exactly the blind spot this check exists to close.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Declared pinned source identity
+        run: python -m tools.shadps4_source_baseline github-output
+      - name: Reject drifted baseline references
+        run: python -m tools.shadps4_source_baseline check
+      - name: Unit tests
+        run: python -m unittest tests.test_shadps4_source_baseline -v

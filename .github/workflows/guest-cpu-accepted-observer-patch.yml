@@ -7,6 +7,9 @@ on:
       - 'tests/test_prepare_guest_cpu_accepted_observer_patch.py'
       - 'docs/instrumentation/guest-cpu-accepted-observer-source-patch.md'
       - '.github/workflows/guest-cpu-accepted-observer-patch.yml'
+      - 'tools/shadps4_source_baseline.py'
+      - 'docs/baseline/shadps4-source.json'
+      - 'tests/test_shadps4_source_baseline.py'
   push:
     branches: [main]
     paths:
@@ -14,6 +17,9 @@ on:
       - 'tests/test_prepare_guest_cpu_accepted_observer_patch.py'
       - 'docs/instrumentation/guest-cpu-accepted-observer-source-patch.md'
       - '.github/workflows/guest-cpu-accepted-observer-patch.yml'
+      - 'tools/shadps4_source_baseline.py'
+      - 'docs/baseline/shadps4-source.json'
+      - 'tests/test_shadps4_source_baseline.py'
 
 jobs:
   validate:
@@ -23,18 +29,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Resolve pinned BB-BL1 source baseline
+        id: baseline
+        run: python -m tools.shadps4_source_baseline github-output >> "$GITHUB_OUTPUT"
       - name: Run focused regressions
         run: python -m unittest tests.test_prepare_guest_cpu_accepted_observer_patch -v
       - name: Fetch exact upstream source
         run: |
           curl -fsSL \
-            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/renderer_vulkan/vk_rasterizer.cpp \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/${{ steps.baseline.outputs.commit }}/src/video_core/renderer_vulkan/vk_rasterizer.cpp \
             -o vk_rasterizer.cpp
       - name: Prepare exact bounded patch
         run: |
           python tools/prepare_guest_cpu_accepted_observer_patch.py \
             vk_rasterizer.cpp \
-            --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
+            --source-commit ${{ steps.baseline.outputs.commit }} \
             --output guest-cpu-accepted-observer.patch
           grep -F 'SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE(addr, size, true)' guest-cpu-accepted-observer.patch
           grep -F 'SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE(addr, size, false)' guest-cpu-accepted-observer.patch

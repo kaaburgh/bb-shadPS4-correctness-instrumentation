@@ -15,6 +15,9 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      - name: Resolve pinned BB-BL1 source baseline
+        id: baseline
+        run: python -m tools.shadps4_source_baseline github-output >> "$GITHUB_OUTPUT"
       - name: Install target-manifest schema validator
         run: python -m pip install --disable-pip-version-check jsonschema==4.25.1
       - name: Run baseline-capture tests
@@ -26,4 +29,4 @@ jobs:
           --output "$RUNNER_TEMP/baseline-capture.zip"
       - name: Inspect safe artifact contract
         run: >-
-          python -c "import json,zipfile,os; p=os.path.join(os.environ['RUNNER_TEMP'],'baseline-capture.zip'); z=zipfile.ZipFile(p); assert sorted(z.namelist()) == ['capture-manifest.json','host-environment.json','target-manifest.json']; m=json.loads(z.read('capture-manifest.json')); assert m['source']['commit']=='28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64'; assert not m['evidence']['runtime_claims']; assert all(v['state']=='unavailable' for v in m['telemetry'].values())"
+          python -c "import json,zipfile,os; p=os.path.join(os.environ['RUNNER_TEMP'],'baseline-capture.zip'); z=zipfile.ZipFile(p); assert sorted(z.namelist()) == ['capture-manifest.json','host-environment.json','target-manifest.json']; m=json.loads(z.read('capture-manifest.json')); assert m['source']['commit']=='${{ steps.baseline.outputs.commit }}'; assert not m['evidence']['runtime_claims']; assert all(v['state']=='unavailable' for v in m['telemetry'].values())"

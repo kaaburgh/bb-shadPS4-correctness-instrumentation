@@ -7,6 +7,9 @@ on:
       - 'tests/test_prepare_buffer_live_range_observer_patch.py'
       - 'docs/instrumentation/buffer-live-range-source-patch.md'
       - '.github/workflows/buffer-live-range-observer-patch.yml'
+      - 'tools/shadps4_source_baseline.py'
+      - 'docs/baseline/shadps4-source.json'
+      - 'tests/test_shadps4_source_baseline.py'
   push:
     branches: [main]
     paths:
@@ -14,6 +17,9 @@ on:
       - 'tests/test_prepare_buffer_live_range_observer_patch.py'
       - 'docs/instrumentation/buffer-live-range-source-patch.md'
       - '.github/workflows/buffer-live-range-observer-patch.yml'
+      - 'tools/shadps4_source_baseline.py'
+      - 'docs/baseline/shadps4-source.json'
+      - 'tests/test_shadps4_source_baseline.py'
 
 jobs:
   validate:
@@ -23,18 +29,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Resolve pinned BB-BL1 source baseline
+        id: baseline
+        run: python -m tools.shadps4_source_baseline github-output >> "$GITHUB_OUTPUT"
       - name: Run focused regressions
         run: python -m unittest tests.test_prepare_buffer_live_range_observer_patch -v
       - name: Fetch exact pinned upstream source
         run: |
           curl -fsSL \
-            https://raw.githubusercontent.com/shadps4-emu/shadPS4/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/src/video_core/buffer_cache/buffer_cache.cpp \
+            https://raw.githubusercontent.com/shadps4-emu/shadPS4/${{ steps.baseline.outputs.commit }}/src/video_core/buffer_cache/buffer_cache.cpp \
             -o buffer_cache.cpp
       - name: Prepare exact source patch
         run: |
           python tools/prepare_buffer_live_range_observer_patch.py \
             buffer_cache.cpp \
-            --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
+            --source-commit ${{ steps.baseline.outputs.commit }} \
             --output buffer-live-range-observer.patch
           grep -F 'SHADPS4_BB_BUFFER_LIVE_RANGE_OBSERVE(buffer_id, buffer.CpuAddr(), buffer.SizeBytes(), true)' buffer-live-range-observer.patch
           grep -F 'SHADPS4_BB_BUFFER_LIVE_RANGE_OBSERVE(buffer_id, buffer.CpuAddr(), buffer.SizeBytes(), false)' buffer-live-range-observer.patch

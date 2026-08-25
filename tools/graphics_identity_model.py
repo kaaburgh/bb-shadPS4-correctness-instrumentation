@@ -4,6 +4,13 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+import sys
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
+from tools.shadps4_source_baseline import REPOSITORY as _PINNED_REPOSITORY
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -12,8 +19,8 @@ from tools import graphics_pipeline_key_surface
 
 MODEL_VERSION = "bb-graphics-identity/v2"
 PINNED_SOURCE = {
-    "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "repository": _PINNED_REPOSITORY,
+    "commit": _PINNED_COMMIT,
 }
 PIPELINE_KEY_SURFACE = Path("docs/instrumentation/graphics-pipeline-key-surface.json")
 LOGICAL_STAGES = {

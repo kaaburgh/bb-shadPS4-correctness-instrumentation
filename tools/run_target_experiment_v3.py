@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from tools import bloodborne_target_manifest
+from tools import shadps4_source_baseline
 from tools import collect_host_environment
 
 
@@ -43,9 +44,9 @@ COMMAND_SCHEMA_ID = "bb-target-command/v2"
 COMMAND_SCHEMA_VERSION = 2
 RUNNER_NAME = "bb-target-runner"
 RUNNER_VERSION = "1.5.0"
-PINNED_SOURCE_REPOSITORY = "https://github.com/shadps4-emu/shadPS4"
-PINNED_SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
-PINNED_SOURCE_TREE = "e6026c14092b01702d4e49a5ac6c2f779a072dfe"
+PINNED_SOURCE_REPOSITORY = shadps4_source_baseline.REPOSITORY
+PINNED_SOURCE_COMMIT = shadps4_source_baseline.COMMIT
+PINNED_SOURCE_TREE = shadps4_source_baseline.TREE
 MAX_INPUT_BYTES = 1024 * 1024
 MAX_COMMAND_BYTES = 256 * 1024
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
