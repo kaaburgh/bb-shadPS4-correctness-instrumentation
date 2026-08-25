@@ -16,7 +16,10 @@ resolves it at runtime, so no tool or workflow repeats the literal. The prose
 below, the provenance recorded in fixtures and derived mappings, and the upstream
 links in this repository stay literal on purpose — they record which baseline an
 artifact was produced against — and `python -m tools.shadps4_source_baseline check`
-fails closed when any of them disagrees with the declaration.
+fails closed when any of them disagrees with the declaration. Commit and tree are
+checked as distinct identities, so a slot holding the *other* canonical SHA is a
+finding, and every revision named in this document is checked in full rather than
+only where it sits beside the repository name.
 
 - **Upstream repository:** <https://github.com/shadps4-emu/shadPS4>
 - **Upstream branch observed:** `main`

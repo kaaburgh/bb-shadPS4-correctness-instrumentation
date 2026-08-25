@@ -42,20 +42,54 @@ _SKIP_DIRECTORIES = frozenset({".git", "__pycache__", ".pytest_cache", ".venv"})
 #: short window catches them without inspecting unrelated hex elsewhere.
 _UPSTREAM_CONTEXT_LINES = 3
 
-#: Line shapes that unambiguously denote the pinned shadPS4 source baseline.
-#: Unrelated 40-hex values elsewhere in the repository -- pinned GitHub Action
-#: SHAs, per-patch expected digests, this repository's own commits -- do not
-#: match any of these and are therefore never inspected.
-_REFERENCE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"shadps4-emu/shadPS4@(?P<sha>[0-9a-f]{40})"),
-    re.compile(r"raw\.githubusercontent\.com/shadps4-emu/shadPS4/(?P<sha>[0-9a-f]{40})"),
-    re.compile(r"github\.com/shadps4-emu/shadPS4/(?:blob|commit|tree)/(?P<sha>[0-9a-f]{40})"),
-    re.compile(r"--source-commit[=\s]+(?P<sha>[0-9a-f]{40})"),
-    re.compile(r"--source-tree[=\s]+(?P<sha>[0-9a-f]{40})"),
-    re.compile(
-        r"(?:PINNED_)?SOURCE_(?:COMMIT|TREE)\s*=\s*[\"'](?P<sha>[0-9a-f]{40})[\"']"
+#: The two identities a literal reference can name.  They are never
+#: interchangeable: a commit-labelled field holding the tree SHA is a wrong
+#: identity, not an acceptable alternative.
+COMMIT_KIND = "commit"
+TREE_KIND = "tree"
+
+#: Line shapes that unambiguously denote the pinned shadPS4 source baseline,
+#: each paired with the identity it names.  Unrelated 40-hex values elsewhere in
+#: the repository -- pinned GitHub Action SHAs, per-patch expected digests, this
+#: repository's own commits -- match none of these and are never inspected.
+#:
+#: The URL and ``@`` forms address the repository *at a revision*, which for this
+#: project is the commit; only an explicitly tree-named form carries the tree.
+_REFERENCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"shadps4-emu/shadPS4@(?P<sha>[0-9a-f]{40})"), COMMIT_KIND),
+    (
+        re.compile(
+            r"raw\.githubusercontent\.com/shadps4-emu/shadPS4/(?P<sha>[0-9a-f]{40})"
+        ),
+        COMMIT_KIND,
+    ),
+    (
+        re.compile(
+            r"github\.com/shadps4-emu/shadPS4/(?:blob|commit|tree)/(?P<sha>[0-9a-f]{40})"
+        ),
+        COMMIT_KIND,
+    ),
+    (re.compile(r"--source-commit[=\s]+(?P<sha>[0-9a-f]{40})"), COMMIT_KIND),
+    (re.compile(r"--source-tree[=\s]+(?P<sha>[0-9a-f]{40})"), TREE_KIND),
+    (
+        re.compile(r"(?:PINNED_)?SOURCE_COMMIT\s*=\s*[\"'](?P<sha>[0-9a-f]{40})[\"']"),
+        COMMIT_KIND,
+    ),
+    (
+        re.compile(r"(?:PINNED_)?SOURCE_TREE\s*=\s*[\"'](?P<sha>[0-9a-f]{40})[\"']"),
+        TREE_KIND,
     ),
 )
+
+#: Any of the three words that classify a nearby 40-hex value.  A prefix that
+#: mentions one has spoken for the value, so a label carried from an earlier
+#: line must not override it.
+_MENTIONS_LABEL = re.compile(r"commit|tree|blob", re.IGNORECASE)
+
+#: The declaration's prose counterpart.  Every revision it names is *about* the
+#: baseline, so the whole file is in scope rather than a window around the
+#: repository name, and a 40-hex value that is neither identity is a finding.
+_BASELINE_PROSE_PATHS: frozenset[str] = frozenset({"docs/baseline/shadps4.md"})
 
 #: Paths that must not carry the literal at all, because they resolve it.
 _DERIVED_PATHS: tuple[str, ...] = (".github/workflows",)
@@ -125,8 +159,19 @@ REPOSITORY_SLUG: str = _BASELINE["repository_slug"]
 COMMIT: str = _BASELINE["commit"]
 TREE: str = _BASELINE["tree"]
 
-#: Values a literal shadPS4 baseline reference is allowed to carry.
-_CANONICAL_SHAS = frozenset({COMMIT, TREE})
+#: The value each kind of literal shadPS4 baseline reference must carry.
+_EXPECTED: Mapping[str, str] = {COMMIT_KIND: COMMIT, TREE_KIND: TREE}
+
+#: Values a resolving location must not embed, whichever identity they name.
+_CANONICAL_SHAS = frozenset(_EXPECTED.values())
+
+#: Structured provenance fields, and the identity each one must carry.
+_JSON_IDENTITY_FIELDS: Mapping[str, str] = {
+    "commit": COMMIT_KIND,
+    "source_commit": COMMIT_KIND,
+    "tree": TREE_KIND,
+    "source_tree": TREE_KIND,
+}
 
 
 def raw_source_url(relative_path: str) -> str:
@@ -169,17 +214,27 @@ def _names_upstream(value: Any) -> bool:
     return isinstance(unwrapped, str) and REPOSITORY_SLUG.lower() in unwrapped.lower()
 
 
-def _labels_source_revision(prefix: str) -> bool:
-    """Does the text before a 40-hex value label it as the source commit or tree?
+def _labelled_kind(prefix: str) -> str | None:
+    """Which identity, if any, does the text before a 40-hex value label it as?
 
     Records that sit next to the upstream repository also carry values which are
     *not* the baseline -- most often a Git blob SHA-1 for the patched file -- so
-    the label decides.  ``commit``/``tree`` qualifies; ``blob`` never does.
+    the label decides.  ``blob`` never qualifies.
+
+    The *nearest* label wins, because one line routinely carries both: prose of
+    the form ``commit `<sha>` / tree `<sha>``` must classify each value by the
+    word immediately preceding it, not by whichever word appears first.
     """
     lowered = prefix.lower()
-    if "blob" in lowered:
-        return False
-    return "commit" in lowered or "tree" in lowered
+    labelled = {
+        COMMIT_KIND: lowered.rfind(COMMIT_KIND),
+        TREE_KIND: lowered.rfind(TREE_KIND),
+        "blob": lowered.rfind("blob"),
+    }
+    kind = max(labelled, key=labelled.__getitem__)
+    if labelled[kind] < 0 or kind == "blob":
+        return None
+    return kind
 
 
 def _check_text(path: Path, relative: str, findings: list[str]) -> None:
@@ -188,7 +243,9 @@ def _check_text(path: Path, relative: str, findings: list[str]) -> None:
     except (OSError, UnicodeDecodeError):
         return
     derived = any(relative.startswith(prefix) for prefix in _DERIVED_PATHS)
+    always = relative in _BASELINE_PROSE_PATHS
     upstream_until = -1
+    carried: str | None = None
     for number, line in enumerate(text.splitlines(), start=1):
         if derived:
             # A resolving location must carry no pinned literal at all, however
@@ -200,27 +257,42 @@ def _check_text(path: Path, relative: str, findings: list[str]) -> None:
                         f"and must not embed the literal {match.group(0)}"
                     )
             continue
-        for pattern in _REFERENCE_PATTERNS:
+        for pattern, kind in _REFERENCE_PATTERNS:
             for match in pattern.finditer(line):
                 sha = match.group("sha")
-                if sha not in _CANONICAL_SHAS:
+                if sha != _EXPECTED[kind]:
                     findings.append(
-                        f"{relative}:{number}: shadPS4 baseline reference {sha} "
-                        f"disagrees with docs/baseline/shadps4-source.json ({COMMIT})"
+                        f"{relative}:{number}: shadPS4 source {kind} reference {sha} "
+                        f"disagrees with docs/baseline/shadps4-source.json "
+                        f"({_EXPECTED[kind]})"
                     )
         if REPOSITORY_SLUG.lower() in line.lower():
             upstream_until = number + _UPSTREAM_CONTEXT_LINES
-        if number > upstream_until:
+        if not always and number > upstream_until:
+            carried = None
             continue
-        for match in _ANY_GIT_SHA.finditer(line):
+        values = list(_ANY_GIT_SHA.finditer(line))
+        for match in values:
             sha = match.group(0)
-            if sha in _CANONICAL_SHAS or not _labels_source_revision(line[: match.start()]):
-                continue
-            findings.append(
-                f"{relative}:{number}: 40-hex value {sha} labelled as a shadPS4 "
-                f"source revision disagrees with "
-                f"docs/baseline/shadps4-source.json ({COMMIT})"
-            )
+            prefix = line[: match.start()]
+            kind = _labelled_kind(prefix)
+            if kind is None and _MENTIONS_LABEL.search(prefix) is None:
+                kind = carried
+            if kind is not None:
+                if sha != _EXPECTED[kind]:
+                    findings.append(
+                        f"{relative}:{number}: 40-hex value {sha} labelled as the "
+                        f"shadPS4 source {kind} disagrees with "
+                        f"docs/baseline/shadps4-source.json ({_EXPECTED[kind]})"
+                    )
+            elif always and sha not in _CANONICAL_SHAS:
+                findings.append(
+                    f"{relative}:{number}: 40-hex value {sha} in the baseline "
+                    f"document is neither the declared source commit nor tree"
+                )
+        # A revision label with no value on its own line wraps onto the next one,
+        # which is how this document spells its longer entries.
+        carried = None if values else _labelled_kind(line)
 
 
 def _check_json(path: Path, relative: str, findings: list[str]) -> None:
@@ -235,16 +307,17 @@ def _check_json(path: Path, relative: str, findings: list[str]) -> None:
             for key, value in node.items()
         ):
             continue
-        for key in ("commit", "tree", "source_commit", "source_tree"):
+        for key, kind in _JSON_IDENTITY_FIELDS.items():
             if key not in node:
                 continue
             value = _constant_value(node[key])
             if not isinstance(value, str) or _GIT_SHA.fullmatch(value) is None:
                 continue
-            if value not in _CANONICAL_SHAS:
+            if value != _EXPECTED[kind]:
                 findings.append(
-                    f"{relative}: shadPS4 object field {key!r}={value} disagrees "
-                    f"with docs/baseline/shadps4-source.json ({COMMIT})"
+                    f"{relative}: shadPS4 object field {key!r}={value} is not the "
+                    f"declared source {kind} in docs/baseline/shadps4-source.json "
+                    f"({_EXPECTED[kind]})"
                 )
 
 
