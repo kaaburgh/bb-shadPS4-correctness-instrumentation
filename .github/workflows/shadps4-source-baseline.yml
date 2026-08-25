@@ -24,4 +24,8 @@ jobs:
       - name: Reject drifted baseline references
         run: python -m tools.shadps4_source_baseline check
       - name: Unit tests
-        run: python -m unittest tests.test_shadps4_source_baseline -v
+        run: >-
+          python -m unittest
+          tests.test_shadps4_source_baseline
+          tests.test_shadps4_source_baseline_resolving_workflows
+          -v
