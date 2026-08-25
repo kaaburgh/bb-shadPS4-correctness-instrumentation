@@ -50,7 +50,8 @@ class GraphicsPipelineCppSourceMappingTests(unittest.TestCase):
 
     def test_crlf_checkout_has_same_surface_identity(self):
         mapping, surface, graphics, runtime, blend, surface_bytes = load_inputs()
-        crlf_bytes = surface_bytes.replace(b"\n", b"\r\n")
+        canonical_lf = surface_bytes.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+        crlf_bytes = canonical_lf.replace(b"\n", b"\r\n")
         result = validate_mapping(mapping, surface, graphics, runtime, blend, crlf_bytes)
         self.assertTrue(result["source_mapping_ready"])
 
