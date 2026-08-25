@@ -1,0 +1,11 @@
+# Graphics pipeline C++ source mapping
+
+`bb-graphics-pipeline-cpp-source-mapping/v1` is the static compatibility boundary between the real pinned shadPS4 `Vulkan::GraphicsPipelineKey` and this repository's independently conformant typed C++ canonical serializer.
+
+The mapping is bound to `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` and the committed `bb-graphics-pipeline-key-surface/v12` document digest. The digest is computed over UTF-8 text with line endings canonicalized to LF, so the same repository content has one identity on Linux, macOS, and Windows checkouts. It covers every one of the 21 canonical fields exactly once. Scalar/bitfield/enum values are mapped through explicit integer casts, arrays preserve their canonical element order, `cb_shader_mask` uses its explicit `raw` member, and `color_buffers` / `blend_controls` are mapped memberwise rather than by object bytes.
+
+For `Shader::PsColorBuffer`, the mapping binds the pinned source members `data_format`, `num_format`, `num_conversion`, `export_format`, and `swizzle`. For `AmdGpu::BlendControl`, it binds only the named members that are assigned into the zero-initialized `GraphicsPipelineKey`; the pinned anonymous three-bit source field remains source-only and the existing canonical-surface contract keeps unassigned destination bits at canonical zero.
+
+`tools/graphics_pipeline_cpp_source_mapping.py` checks the mapping against the committed canonical surface and exact downloaded BB-BL1 headers. The dedicated CI workflow fails closed if a top-level declaration disappears, the record member layout changes, the canonical surface digest/version changes, or the mapping no longer covers exactly the complete 21-field surface.
+
+This evidence is `static` + `synthetic`. It does not compile the production shadPS4 emitter, modify shadPS4, execute `GetGraphicsPipeline`, emit a runtime pipeline record, or establish `created`/`cache_hit`, Bloodborne coverage, GPU timing semantics, or tracing overhead. The next source-integration step must use this mapping when adapting the real runtime key into the independently validated canonical serializer; it must not substitute `std::hash<GraphicsPipelineKey>` or object bytes for the exact `pipeline:sha256:...` identity contract.

@@ -1,0 +1,55 @@
+{
+  "schema_version": "bb-graphics-pipeline-cpp-source-mapping/v1",
+  "source": {
+    "repository": "https://github.com/shadps4-emu/shadPS4",
+    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "graphics_key_path": "src/video_core/renderer_vulkan/vk_graphics_pipeline.h",
+    "ps_color_buffer_path": "src/shader_recompiler/runtime_info.h",
+    "blend_control_path": "src/video_core/amdgpu/regs_color.h"
+  },
+  "canonical_surface": {
+    "schema_version": "bb-graphics-pipeline-key-surface/v12",
+    "path": "docs/instrumentation/graphics-pipeline-key-surface.json",
+    "digest_encoding": "utf-8-lf",
+    "sha256": "sha256:26cbd58ec7f1198c5030f0eec02fcedfa45df8abdffb4e134e70d2689b47a1a0"
+  },
+  "fields": [
+    {"name":"stage_hashes","mode":"array_unsigned_cast","expression":"static_cast<std::uint64_t>(key.stage_hashes[i])","source_declaration":"std::array<size_t, MaxShaderStages> stage_hashes;"},
+    {"name":"vertex_buffer_formats","mode":"array_enum_signed_cast","expression":"static_cast<std::int32_t>(key.vertex_buffer_formats[i])","source_declaration":"std::array<vk::Format, MaxVertexBufferCount> vertex_buffer_formats;"},
+    {"name":"patch_control_points","mode":"unsigned_cast","expression":"static_cast<std::uint32_t>(key.patch_control_points)","source_declaration":"u32 patch_control_points;"},
+    {"name":"num_color_attachments","mode":"unsigned_cast","expression":"static_cast<std::uint32_t>(key.num_color_attachments)","source_declaration":"u32 num_color_attachments;"},
+    {"name":"color_buffers","mode":"record_array","expression":"key.color_buffers[i]","source_declaration":"std::array<Shader::PsColorBuffer, AmdGpu::NUM_COLOR_BUFFERS> color_buffers;","record_fields":[
+      {"name":"data_format","expression":"static_cast<std::uint32_t>(src.data_format)"},
+      {"name":"num_format","expression":"static_cast<std::uint32_t>(src.num_format)"},
+      {"name":"num_conversion","expression":"static_cast<std::uint32_t>(src.num_conversion)"},
+      {"name":"export_format","expression":"static_cast<std::uint32_t>(src.export_format)"},
+      {"name":"swizzle","expression":"{static_cast<std::uint32_t>(src.swizzle.r),static_cast<std::uint32_t>(src.swizzle.g),static_cast<std::uint32_t>(src.swizzle.b),static_cast<std::uint32_t>(src.swizzle.a)}"}
+    ]},
+    {"name":"blend_controls","mode":"record_array","expression":"key.blend_controls[i]","source_declaration":"std::array<AmdGpu::BlendControl, AmdGpu::NUM_COLOR_BUFFERS> blend_controls;","record_fields":[
+      {"name":"color_src_factor","expression":"static_cast<std::uint32_t>(src.color_src_factor)"},
+      {"name":"color_func","expression":"static_cast<std::uint32_t>(src.color_func)"},
+      {"name":"color_dst_factor","expression":"static_cast<std::uint32_t>(src.color_dst_factor)"},
+      {"name":"alpha_src_factor","expression":"static_cast<std::uint32_t>(src.alpha_src_factor)"},
+      {"name":"alpha_func","expression":"static_cast<std::uint32_t>(src.alpha_func)"},
+      {"name":"alpha_dst_factor","expression":"static_cast<std::uint32_t>(src.alpha_dst_factor)"},
+      {"name":"separate_alpha_blend","expression":"static_cast<std::uint32_t>(src.separate_alpha_blend)"},
+      {"name":"enable","expression":"static_cast<std::uint32_t>(src.enable)"},
+      {"name":"disable_rop3","expression":"static_cast<std::uint32_t>(src.disable_rop3)"}
+    ]},
+    {"name":"write_masks","mode":"array_raw_bits","expression":"static_cast<std::uint32_t>(key.write_masks[i])","source_declaration":"std::array<vk::ColorComponentFlags, AmdGpu::NUM_COLOR_BUFFERS> write_masks;"},
+    {"name":"cb_shader_mask","mode":"raw_member","expression":"static_cast<std::uint32_t>(key.cb_shader_mask.raw)","source_declaration":"AmdGpu::ColorBufferMask cb_shader_mask;"},
+    {"name":"logic_op","mode":"enum_unsigned_cast","expression":"static_cast<std::uint32_t>(key.logic_op)","source_declaration":"AmdGpu::ColorControl::LogicOp logic_op;"},
+    {"name":"num_samples","mode":"unsigned_cast","expression":"static_cast<std::uint32_t>(key.num_samples)","source_declaration":"u8 num_samples;"},
+    {"name":"depth_samples","mode":"unsigned_cast","expression":"static_cast<std::uint32_t>(key.depth_samples)","source_declaration":"u8 depth_samples;"},
+    {"name":"color_samples","mode":"array_unsigned_cast","expression":"static_cast<std::uint32_t>(key.color_samples[i])","source_declaration":"std::array<u8, AmdGpu::NUM_COLOR_BUFFERS> color_samples;"},
+    {"name":"mrt_mask","mode":"unsigned_cast","expression":"static_cast<std::uint32_t>(key.mrt_mask)","source_declaration":"u32 mrt_mask;"},
+    {"name":"z_format","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.z_format)","source_declaration":"AmdGpu::DepthBuffer::ZFormat z_format : 2;"},
+    {"name":"stencil_format","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.stencil_format)","source_declaration":"AmdGpu::DepthBuffer::StencilFormat stencil_format : 1;"},
+    {"name":"depth_clamp_enable","mode":"bitfield_unsigned_cast","expression":"static_cast<std::uint32_t>(key.depth_clamp_enable)","source_declaration":"u32 depth_clamp_enable : 1;"},
+    {"name":"prim_type","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.prim_type)","source_declaration":"AmdGpu::PrimitiveType prim_type : 5;"},
+    {"name":"polygon_mode","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.polygon_mode)","source_declaration":"AmdGpu::PolygonMode polygon_mode : 2;"},
+    {"name":"clip_space","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.clip_space)","source_declaration":"AmdGpu::ClipSpace clip_space : 1;"},
+    {"name":"provoking_vtx_last","mode":"bitfield_enum_cast","expression":"static_cast<std::uint32_t>(key.provoking_vtx_last)","source_declaration":"AmdGpu::ProvokingVtxLast provoking_vtx_last : 1;"},
+    {"name":"depth_clip_enable","mode":"bitfield_unsigned_cast","expression":"static_cast<std::uint32_t>(key.depth_clip_enable)","source_declaration":"u32 depth_clip_enable : 1;"}
+  ]
+}
