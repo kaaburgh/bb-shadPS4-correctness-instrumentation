@@ -4,7 +4,7 @@
 
 The concrete route for target execution is **GATED target-machine**. This does not claim Bloodborne runtime behavior and does not classify the project as `LOCAL ONLY`: cloud work prepares and validates the handoff, while a machine that owns the target material executes the bounded run.
 
-The repository contains only synthetic target material. The proprietary target tree, target-machine graphics stack, and target-owned capture/input tooling are intentionally absent from the cloud checkout. The decision is based on static repository evidence plus assumed/operator-provided target-machine capability.
+The original repository-only investigation found only synthetic target material in the checkout; target-machine capability was then assumed/operator-provided. The [2026-09-08 local audit](local-environment-audit-2026-09-08.md) now directly establishes access to an external proprietary target installation and X11 display `:1` on the agent host. Those inputs remain outside Git. The installed emulator does not match the admitted binary, and the pinned Linux CI artifact download returns HTTP 410 (expired). This supersedes the environment-absence premise for that host, not the provenance contract or the uncompleted BB-ENV1 validation. The separate observational probes are not supported runner evidence.
 
 ## Supported handoff entrypoint
 
@@ -68,6 +68,8 @@ A future versioned producer-attestation contract is required before non-syntheti
 Synthetic file-oracle and artifact paths are still rejected if they pre-exist in the working directory.
 
 ## One-shot operator procedure
+
+On the host audited on 2026-09-08, graphics access already works with `export DISPLAY=:1` and inherited X11 authorization. First recover an archived copy of the exact pinned artifact and verify the digest above, or complete a separately reviewed build-provenance route; the normal Linux artifact download is expired (HTTP 410). Do not substitute the installed UltraPersona binary. Explicitly select the base `01.00` versus resolved update `01.09` content and inventory effective modifications/configuration.
 
 Prepare an immutable target view, separate writable working directory, validated BB-BL2 manifest, and command whose `argv[0]` names the exact pinned upstream artifact binary for the host. Do not use a wrapper. For a Linux/POSIX run, the working-directory filesystem must permit executable files because the verified private executable copy is staged there; the runner preflights that property and fails closed before delegation if the location is `noexec`. For non-synthetic execution use a `process-exit` scenario with no declared artifacts.
 
