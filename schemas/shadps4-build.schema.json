@@ -33,7 +33,8 @@
         "cmake_cache_sha256",
         "compile_commands_sha256",
         "material_environment",
-        "resolved_cache"
+        "resolved_cache",
+        "fetched_sources"
       ],
       "properties": {
         "os": {
@@ -123,6 +124,9 @@
               }
             }
           }
+        },
+        "fetched_sources": {
+          "$ref": "#/$defs/buildFetchedSources"
         }
       }
     },
@@ -310,6 +314,97 @@
                 "const": false
               }
             }
+          }
+        }
+      }
+    },
+    "buildFetchedSources": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "algorithm",
+          "sha256",
+          "git"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+-src$",
+            "maxLength": 128
+          },
+          "algorithm": {
+            "const": "sha256-build-inputs-v1"
+          },
+          "sha256": {
+            "$ref": "#/$defs/buildSha"
+          },
+          "git": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "repository",
+                  "commit",
+                  "tree",
+                  "submodules"
+                ],
+                "properties": {
+                  "repository": {
+                    "$ref": "#/$defs/buildRepo"
+                  },
+                  "commit": {
+                    "$ref": "#/$defs/buildGit"
+                  },
+                  "tree": {
+                    "$ref": "#/$defs/buildGit"
+                  },
+                  "submodules": {
+                    "type": "array",
+                    "maxItems": 512,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "repository",
+                        "commit",
+                        "tree",
+                        "dirty"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "maxLength": 512,
+                          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+                        },
+                        "repository": {
+                          "$ref": "#/$defs/buildRepo"
+                        },
+                        "commit": {
+                          "$ref": "#/$defs/buildGit"
+                        },
+                        "tree": {
+                          "$ref": "#/$defs/buildGit"
+                        },
+                        "dirty": {
+                          "const": false
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       }

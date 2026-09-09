@@ -158,6 +158,7 @@ class BuildAdmissionTests(unittest.TestCase):
             ("wrong size", lambda d: d["binary"].update(size_bytes=d["binary"]["size_bytes"] + 1)),
             ("missing compiler", lambda d: d["build"]["tools"].pop("cc")),
             ("missing commands", lambda d: d["build"].update(commands=[])),
+            ("missing fetched sources", lambda d: d["build"].pop("fetched_sources")),
         ]
         for label, mutate in mutations:
             with self.subTest(label=label):
@@ -277,6 +278,27 @@ class BuildAdmissionTests(unittest.TestCase):
         Draft202012Validator.check_schema(run_schema)
         for name, definition in schema["$defs"].items():
             self.assertEqual(run_schema["$defs"][name], definition)
+
+    def test_fetched_archive_bytes_and_git_identity_are_bound(self):
+        dependencies = self.root / "dependencies"
+        archive = dependencies / "archive-src"
+        archive.mkdir(parents=True)
+        payload = archive / "header.h"
+        payload.write_bytes(b"first")
+        original = build.fetched_sources(dependencies)
+        self.assertIsNone(original[0]["git"])
+        payload.write_bytes(b"other")
+        self.assertNotEqual(original[0]["sha256"], build.fetched_sources(dependencies)[0]["sha256"])
+        clone = dependencies / "git-src"
+        subprocess.run(["git", "clone", "-q", str(self.source), str(clone)], check=True)
+        subprocess.run(["git", "-C", str(clone), "remote", "set-url", "origin",
+                        build.baseline.REPOSITORY], check=True)
+        observed = build.fetched_sources(dependencies)[1]["git"]
+        self.assertEqual(observed["commit"], self.base)
+        self.assertEqual(observed["tree"], self.tree)
+        (clone / "main.c").write_text("dirty")
+        with self.assertRaisesRegex(build.BuildManifestError, "dirty"):
+            build.fetched_sources(dependencies)
 
     def test_duplicate_json_and_incomplete_provenance_are_rejected(self):
         with self.assertRaises(build.BuildManifestError):

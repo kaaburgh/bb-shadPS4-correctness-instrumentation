@@ -16,6 +16,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -245,6 +246,38 @@ def tool_version(executable):
             "executable_sha256": file_identity(Path(executable).resolve())["sha256"]}
 
 
+def fetched_sources(directory):
+    """Bind CMake-fetched Git and archive sources beyond the submodule graph."""
+    result = []
+    for root in sorted(directory.glob("*-src")):
+        if root.is_symlink() or not root.is_dir():
+            raise BuildManifestError("ambiguous fetched source root")
+        git_identity = None
+        if (root / ".git").exists():
+            head = git(root, "rev-parse", "HEAD")
+            _clean(root, head, require_history=False)
+            git_identity = {"repository": repository_url(git(root, "remote", "get-url", "origin")),
+                            "commit": head, "tree": git(root, "rev-parse", "HEAD^{tree}"),
+                            "submodules": _submodules(root)}
+        records = []
+        for current, children, names in os.walk(root):
+            children[:] = sorted(name for name in children if name != ".git")
+            for name in children + names:
+                path = Path(current) / name
+                if name == ".git":
+                    continue
+                info = path.lstat()
+                if stat.S_ISDIR(info.st_mode):
+                    continue
+                if not stat.S_ISREG(info.st_mode):
+                    raise BuildManifestError("nonregular fetched source input")
+                records.append([path.relative_to(root).as_posix(), stat.S_IMODE(info.st_mode),
+                                file_identity(path)])
+        result.append({"name": root.name, "algorithm": "sha256-build-inputs-v1",
+                       "sha256": digest(canonical(sorted(records))), "git": git_identity})
+    return result
+
+
 def build(*, source, build_directory, output, cc, cxx, options=(), patches=(), patch_repository=None,
           build_type="RelWithDebInfo", jobs=4, timeout=7200):
     source = source.resolve(strict=True)
@@ -260,7 +293,10 @@ def build(*, source, build_directory, output, cc, cxx, options=(), patches=(), p
     if not all(tool_paths.values()):
         raise BuildManifestError("required compiler/CMake/Ninja is unavailable")
     versions = {name: tool_version(path) for name, path in tool_paths.items()}
-    material = {"CMAKE_BUILD_TYPE": build_type, "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"}
+    dependencies = SCHEMA_PATH.parents[1] / ".astra-repos" / "build-dependencies" / uuid.uuid4().hex
+    dependencies.mkdir(parents=True, mode=0o700)
+    material = {"CMAKE_BUILD_TYPE": build_type, "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "FETCHCONTENT_BASE_DIR": str(dependencies)}
     for value in options:
         key, sep, setting = value.partition("=")
         if not sep or not re.fullmatch(r"[A-Z][A-Za-z0-9_]*", key) or key.startswith("CMAKE_"):
@@ -285,11 +321,17 @@ def build(*, source, build_directory, output, cc, cxx, options=(), patches=(), p
     ) if key in os.environ}
     commands = [configure, compile_command]
     directory.mkdir(parents=True)
+    fetched = None
     try:
         for i, command in enumerate(commands):
             with (directory / f"build-step-{i}.log").open("wb") as log:
                 subprocess.run(command, check=True, stdout=log, stderr=subprocess.STDOUT,
                                timeout=timeout, stdin=subprocess.DEVNULL)
+            observed_fetched = fetched_sources(dependencies)
+            if i == 0:
+                fetched = observed_fetched
+            elif observed_fetched != fetched:
+                raise BuildManifestError("fetched build sources changed during compilation")
     except (OSError, subprocess.SubprocessError) as error:
         raise BuildManifestError("build failed; private step log retained, no manifest emitted") from error
     if observe_source(source, patch_repository, patches) != state:
@@ -311,6 +353,7 @@ def build(*, source, build_directory, output, cc, cxx, options=(), patches=(), p
                 "build": {"os": platform.system(), "architecture": platform.machine(),
                           "os_release_sha256": digest(platform.platform().encode()),
                           "tools": versions, "options": material, "commands": commands,
+                          "fetched_sources": fetched,
                           "environment_sha256": environment_sha,
                           "material_environment": material_environment, "resolved_cache": resolved_cache,
                           "cmake_cache_sha256": digest((directory / "CMakeCache.txt").read_bytes()),
@@ -331,6 +374,7 @@ def safe_projection(document, raw):
             "source": document["source"], "binary": document["binary"],
             "build_os": b["os"], "build_architecture": b["architecture"],
             "tools": b["tools"], "options_sha256": digest(canonical(b["options"])),
+            "fetched_sources": b["fetched_sources"],
             "commands_sha256": digest(canonical(b["commands"])),
             "environment_sha256": b["environment_sha256"],
             "cmake_cache_sha256": b["cmake_cache_sha256"],

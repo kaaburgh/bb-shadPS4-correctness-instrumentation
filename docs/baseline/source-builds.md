@@ -27,6 +27,8 @@ The project creates `bb-shadps4-build/v1`, validated by
 
 - upstream repository, exact base commit/tree, explicit clean state;
 - recursive committed submodule URLs, paths, gitlink commits and trees;
+- CMake-fetched source byte identities and, for Git dependencies, exact repository,
+  commit/tree and recursive submodules;
 - optional patch repository, full ordered patch commits, effective HEAD/tree;
 - build OS/architecture, OS fingerprint, compiler/CMake/Ninja/Git versions and hashes;
 - explicit options, actual configure/build argv, resolved CMake cache, material
@@ -39,6 +41,13 @@ logs but emits no admitted build manifest. Project CMake options may be supplied
 with repeated `--option NAME=VALUE`; compiler/build-type/generator settings have
 dedicated controls. Retain the full manifest privately for replay; commands and
 resolved cache may contain host paths. Only its safe projection enters run ZIPs.
+
+FetchContent uses a fresh project-controlled directory under `.astra-repos/build-dependencies/`.
+The producer hashes fetched source paths, permission modes and file bytes after
+configuration and again after compilation; Git dependencies must also be clean.
+Their exact identities remain in the manifest and safe run projection. Admission
+rechecks the main checkout and its submodules; dependency and tool facts are the
+producer's build-time attestation and do not require retaining live dependency caches.
 
 For a patch, commit all changes on top of the exact baseline, configure both
 upstream and patch repository remotes, and add:

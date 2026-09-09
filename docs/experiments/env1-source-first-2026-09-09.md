@@ -74,6 +74,13 @@ commands and resolved CMake cache. Each attempt uses a new out-of-tree directory
 failed attempts emit no admitted manifest. Material settings are Ninja,
 RelWithDebInfo, Clang/Clang++ 19.1.1 and eight parallel build jobs.
 
+The complete build also revealed CMake-fetched Abseil and fmt sources outside
+the recursive submodule graph. The final producer places these in fresh
+`.astra-repos/build-dependencies/` directories, records byte-tree digests and
+Git identities where available, and compares them before/after compilation.
+The earlier successful build without this additional provenance is retained
+only as private preparation evidence; the supported attempt uses the final manifest.
+
 ## Target preparation and scope
 
 An explicit original `CUSA03173` base app tree was selected. Independently
@@ -101,7 +108,7 @@ saves/config/patches. Source target bytes remain immutable evidence inputs.
 
 ## Validation and acceptance boundary
 
-The full local suite passes 330 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
+The full local suite passes 331 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
 identity conformance, schema/contract tests, source-built baseline and patched
 stand-ins through the supported CLI dispatcher, and negative source/patch/binary
 admission cases. The stand-ins use actual Git histories and fresh CMake/Ninja
