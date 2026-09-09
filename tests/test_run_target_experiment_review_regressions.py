@@ -253,6 +253,8 @@ class ReviewRegressionTests(unittest.TestCase):
             )
             standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
             pinned = {
+                "source_commit": runner.PINNED_SOURCE_COMMIT,
+                "source_tree": runner.PINNED_SOURCE_TREE,
                 "binary_name": "standin-emulator",
                 "binary_sha256": "sha256:" + standin_sha256,
                 "binary_size_bytes": standin.stat().st_size,
@@ -317,6 +319,8 @@ class ReviewRegressionTests(unittest.TestCase):
             )
             standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
             pinned = {
+                "source_commit": runner.PINNED_SOURCE_COMMIT,
+                "source_tree": runner.PINNED_SOURCE_TREE,
                 "binary_name": "standin-emulator",
                 "binary_sha256": "sha256:" + standin_sha256,
                 "binary_size_bytes": standin.stat().st_size,
