@@ -1,0 +1,128 @@
+{
+  "schema": "bb-local-environment-audit/v1",
+  "evidence_kind": "curated-observational-audit-not-bb-target-run",
+  "date": "2026-09-08",
+  "repository_baseline": "c615ce4d767e18a13331ab50b30ce68d54024f93",
+  "producer": {
+    "probe_path": "local-environment-audit-probe.py",
+    "probe_sha256": "294a7bd4f4d75fd2ac0982f61cb73a4512edfdf4496f3b950a957ffd5b9161ca",
+    "python": "3.12.3",
+    "curation_model": "manual-allowlisted-observations/v1"
+  },
+  "emulator": {
+    "appimage_sha256": "70693665d2aed2281bd86b0b727eb1174328d09b5e0e9b7d1c9212f8fc598d0f",
+    "appimage_size_bytes": 35326456,
+    "extracted_elf_sha256": "bed84281e733d0260acfb248cee7a56282ca1c9157db5578216b3e70736f0c88",
+    "source_to_binary_attestation": "unknown",
+    "historical_log_reported_revision": "e3ce810f3a653f43ac64ebab63023de281a4103a"
+  },
+  "target": {
+    "title_id": "CUSA03173",
+    "sfo_app_version": "01.00",
+    "eboot_sha256": "6764938b23539d29c936bca9880fc4a774e7b0099ce31c7e8c4b0f8bd0befb80",
+    "param_sfo_sha256": "312d6e3068893dae46d871575498ef53b7160e60adb30282ef88da0a5deb60f2",
+    "base_tree": {
+      "algorithm": "sha256-tree-v1",
+      "sha256": "212a0643e0506f1d863f33ae761d41710fe0a746a26a15a95ff0fe0777b719c3",
+      "file_count": 28831,
+      "total_bytes": 31513388908,
+      "copy_verified": true,
+      "elapsed_seconds": 201.1
+    },
+    "update_included": false,
+    "user_saves_included": false,
+    "embedded_modification_provenance": "unknown",
+    "full_bb_bl2_manifest": false,
+    "original_post_probe_tree_state": "verified-unchanged",
+    "original_post_probe_tree_sha256": "212a0643e0506f1d863f33ae761d41710fe0a746a26a15a95ff0fe0777b719c3"
+  },
+  "host": {
+    "os": "Ubuntu 24.04.3 LTS",
+    "kernel": "7.0.0-31-generic",
+    "architecture": "x86_64",
+    "cpu": "AMD Ryzen 9 7945HX3D with Radeon Graphics",
+    "gpu_inventory": "NVIDIA GeForce RTX 5070 Ti",
+    "nvidia_driver": "595.84",
+    "display": ":1",
+    "runtime_backend_observed_in_probes": null,
+    "runtime_gpu_observed_in_probes": null
+  },
+  "scenario": {
+    "id": "base-01.00-clean-profile-no-input",
+    "flags": [
+      "--game",
+      "<verified-copy>/eboot.bin",
+      "--override-root",
+      "<verified-copy>",
+      "--config-clean",
+      "--ignore-game-patch",
+      "--fullscreen",
+      "false"
+    ],
+    "profile": "new portable user plus isolated XDG data/config/cache",
+    "config_consumption_attestation": "unknown",
+    "input_actions": 0,
+    "timeout_seconds_per_run": 60,
+    "max_file_bytes": 33554432,
+    "core_dumps": false,
+    "cleanup": "process-group SIGTERM then SIGKILL; each wait bounded to 3 seconds",
+    "semantic_oracle": "none; no menu/gameplay claim"
+  },
+  "admission": {
+    "pinned_linux_artifact": 9198177755,
+    "expired": true,
+    "download_http_status": 410,
+    "bb_env1_completed": false
+  },
+  "runs": [
+    {
+      "schema": "bb-local-audit-process/v1",
+      "producer_sha256": "294a7bd4f4d75fd2ac0982f61cb73a4512edfdf4496f3b950a957ffd5b9161ca",
+      "elapsed_seconds": 60.007,
+      "timeout_seconds": 60,
+      "timed_out": true,
+      "returncode": -15,
+      "semantic_checkpoint": "unassessed",
+      "bb_env1_validation": false,
+      "scenario": "base-01.00-clean-profile-no-input",
+      "debugger_attach_attempted": false,
+      "debugger_attach_result": "not-observed-before-process-exit",
+      "private_stdout_sha256": "ccd5242ad09c3f829af956c10bbd8ab626cbcd8b873d20d54dda037579257383",
+      "private_stdout_size_bytes": 311,
+      "observations": {
+        "game_window_observed": false,
+        "game_runtime_log_produced": false,
+        "cli_start_line_observed": true,
+        "title_checkpoint": "unassessed"
+      }
+    },
+    {
+      "schema": "bb-local-audit-process/v1",
+      "producer_sha256": "294a7bd4f4d75fd2ac0982f61cb73a4512edfdf4496f3b950a957ffd5b9161ca",
+      "elapsed_seconds": 60.005,
+      "timeout_seconds": 60,
+      "timed_out": true,
+      "returncode": -15,
+      "semantic_checkpoint": "unassessed",
+      "bb_env1_validation": false,
+      "scenario": "base-01.00-clean-profile-no-input",
+      "debugger_attach_attempted": true,
+      "debugger_attach_result": "ptrace-denied",
+      "private_stdout_sha256": "ccd5242ad09c3f829af956c10bbd8ab626cbcd8b873d20d54dda037579257383",
+      "private_stdout_size_bytes": 311,
+      "observations": {
+        "game_window_observed": false,
+        "game_runtime_log_produced": false,
+        "cli_start_line_observed": true,
+        "title_checkpoint": "unassessed"
+      }
+    }
+  ],
+  "limitations": [
+    "No supported BB-ENV1 run record",
+    "No source-to-binary attestation",
+    "No complete resolved update/config/mod manifest",
+    "No semantic checkpoint observation",
+    "Raw logs and target bytes intentionally not packaged"
+  ]
+}
