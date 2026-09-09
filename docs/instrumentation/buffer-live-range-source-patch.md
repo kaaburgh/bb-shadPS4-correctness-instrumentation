@@ -5,7 +5,7 @@ This BB-INS2 slice prepares a reviewable, compile-time-off-by-default source sea
 ## Pinned source
 
 - repository: `shadps4-emu/shadPS4`
-- commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`
+- commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`
 - path: `src/video_core/buffer_cache/buffer_cache.cpp`
 - Git blob: `68b85116029b6f05c45e9cc32be3ccf7de335bae`
 

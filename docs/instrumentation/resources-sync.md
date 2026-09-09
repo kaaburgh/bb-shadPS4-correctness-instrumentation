@@ -4,7 +4,7 @@ This document records the current BB-INS2 CLOUD RESEARCH slice. It is intentiona
 
 ## Pinned source baseline
 
-Static inspection is against `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`.
+Static inspection is against `shadps4-emu/shadPS4@e3ce810f3a653f43ac64ebab63023de281a4103a`.
 
 Candidate seams observed at that exact source baseline:
 

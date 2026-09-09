@@ -6,7 +6,7 @@ from pathlib import Path
 SCHEMA_VERSION = "bb-graphics-pipeline-production-emitter-admission/v1"
 EXPECTED_SOURCE = {
     "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a",
     "path": "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",
     "git_blob": "b39f1c30bfb00d1f21a082da48369ba95ce31368",
     "function": "Vulkan::PipelineCache::GetGraphicsPipeline",

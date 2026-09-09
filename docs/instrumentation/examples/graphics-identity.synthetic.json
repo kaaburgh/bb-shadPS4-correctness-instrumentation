@@ -2,7 +2,7 @@
   "model_version": "bb-graphics-identity/v2",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+    "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a"
   },
   "shaders": [
     {"logical_stage": "vertex", "stage_hash": "1111111111111111"},

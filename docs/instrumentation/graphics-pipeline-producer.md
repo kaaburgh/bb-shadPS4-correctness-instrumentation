@@ -8,7 +8,7 @@ The repository already defines an exact static/synthetic `pipeline_identity` thr
 
 A producer record is admitted only when it pins:
 
-- `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`;
+- `shadps4-emu/shadPS4@e3ce810f3a653f43ac64ebab63023de281a4103a`;
 - `src/video_core/renderer_vulkan/vk_pipeline_cache.cpp` / `VideoCore::PipelineCache::GetGraphicsPipeline`;
 - the post-lookup result observation point;
 - identity model `bb-graphics-identity/v2`;

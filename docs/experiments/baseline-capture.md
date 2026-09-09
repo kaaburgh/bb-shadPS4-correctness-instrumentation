@@ -4,7 +4,7 @@
 
 This CLOUD RESEARCH slice provides a one-command, privacy-bounded packer for comparable baseline provenance. It does **not** execute Bloodborne and does not convert synthetic/contract checks into runtime evidence.
 
-The source identity is fixed to `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` from BB-BL1. The command validates a BB-BL2 target manifest, projects it through the same transfer-safe allowlist used by the gated target runner, collects the allowlisted BB-BL3 host environment, and writes one ZIP containing canonical `capture-manifest.json`, `target-manifest.json`, and `host-environment.json`.
+The source identity is fixed to `shadps4-emu/shadPS4@e3ce810f3a653f43ac64ebab63023de281a4103a` from BB-BL1. The command validates a BB-BL2 target manifest, projects it through the same transfer-safe allowlist used by the gated target runner, collects the allowlisted BB-BL3 host environment, and writes one ZIP containing canonical `capture-manifest.json`, `target-manifest.json`, and `host-environment.json`.
 
 ## One command
 

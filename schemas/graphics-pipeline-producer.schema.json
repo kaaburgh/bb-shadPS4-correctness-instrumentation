@@ -13,7 +13,7 @@
       "required": ["repository", "commit"],
       "properties": {
         "repository": {"const": "https://github.com/shadps4-emu/shadPS4"},
-        "commit": {"const": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"}
+        "commit": {"const": "e3ce810f3a653f43ac64ebab63023de281a4103a"}
       }
     },
     "seam": {

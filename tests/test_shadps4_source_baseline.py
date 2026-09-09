@@ -9,7 +9,7 @@ from tools import shadps4_source_baseline as baseline
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CANONICAL = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+CANONICAL = "e3ce810f3a653f43ac64ebab63023de281a4103a"
 FOREIGN = "deadbeef" * 5
 
 
@@ -66,7 +66,7 @@ class DriftCheckTests(unittest.TestCase):
         shutil.copytree(
             ROOT,
             self.root,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"),
+            ignore=shutil.ignore_patterns(".git", ".astra-repos", ".astra-local", ".codex-*", "__pycache__", ".pytest_cache"),
         )
 
     def _drift(self) -> list[str]:

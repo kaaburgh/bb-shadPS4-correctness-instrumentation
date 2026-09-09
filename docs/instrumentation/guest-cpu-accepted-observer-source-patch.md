@@ -5,9 +5,9 @@ This BB-INS2 slice prepares a diagnostic-only source hook at the point where sha
 Pinned provenance:
 
 - source repository: `shadps4-emu/shadPS4`;
-- source commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`;
+- source commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`;
 - source path: `src/video_core/renderer_vulkan/vk_rasterizer.cpp`;
-- Git blob: `e2b9ec75f88b632998e3cd15ddd6ca0a9cfd396c`.
+- Git blob: `1dc5188e77c3b72858b7becfac30ef43a6015583`.
 
 At that exact source, `Rasterizer::InvalidateMemory` and `Rasterizer::ReadMemory` both reject a range unless `IsMapped(addr, size)` succeeds. The preparer inserts an off-by-default hook immediately after that rejection boundary:
 

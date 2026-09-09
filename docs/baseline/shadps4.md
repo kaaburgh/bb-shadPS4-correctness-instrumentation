@@ -22,21 +22,21 @@ finding, and every revision named in this document is checked in full rather tha
 only where it sits beside the repository name.
 
 - **Upstream repository:** <https://github.com/shadps4-emu/shadPS4>
-- **Upstream branch observed:** `main`
+- **Release tag observed:** `v.0.18.0` (peeled to the exact commit below)
 - **Exact upstream commit:**
-  [`28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`](https://github.com/shadps4-emu/shadPS4/commit/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64)
-- **Source tree:** `e6026c14092b01702d4e49a5ac6c2f779a072dfe`
-- **Commit timestamp:** `2026-08-13T15:51:02-05:00`
-- **Commit subject:** `Use a recursive mutex so deferred operations can defer more operations (#4846)`
+  [`e3ce810f3a653f43ac64ebab63023de281a4103a`](https://github.com/shadps4-emu/shadPS4/commit/e3ce810f3a653f43ac64ebab63023de281a4103a)
+- **Source tree:** `d61b059a991a95b21e77f963db61d618b308c62e`
+- **Commit timestamp:** `2026-08-18T07:49:32Z`
+- **Commit subject:** `tagged 0.18.0 release`
 - **Project patch stack:** none
 - **Effective source commit:**
-  `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`
-- **Baseline selected:** `2026-08-14`
+  `e3ce810f3a653f43ac64ebab63023de281a4103a`
+- **Baseline selected:** `2026-09-09`
 
 The full commit SHA, not `main`, a tag, a release name, or a downloaded binary
 name, is the baseline identity. The commit's gitlinks also pin all recursive
 submodules. Branch declarations in
-[`.gitmodules`](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/.gitmodules)
+[`.gitmodules`](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/.gitmodules)
 do not authorize moving them with `git submodule update --remote`.
 
 This pin covers the shadPS4 emulator core. The separate QtLauncher repository and
@@ -44,9 +44,10 @@ prebuilt release artifacts are not part of the source baseline. If a future run
 depends materially on a launcher, packaging script, or other external component,
 that component needs its own exact identity in the run provenance.
 
-The pin was chosen because it was the tip of upstream `main` observed while
-BB-BL1 was performed and no project patch stack existed. That is source-selection
-provenance, not evidence that the commit runs Bloodborne correctly.
+The release pin was selected after exact upstream tag/commit verification and the
+operator’s reported Ubuntu source build. See [the baseline adoption review](../experiments/baseline-v0180-adoption.md)
+for the previous identity, reviewed changes, revalidated static seams and evidence
+invalidation. Reported guest/Vulkan activity is not supported ENV1 run evidence.
 
 ## Fetch and verify the baseline
 
@@ -57,9 +58,9 @@ and so later comparisons do not depend on a depth-limited history:
 git clone --filter=blob:none --no-checkout \
   https://github.com/shadps4-emu/shadPS4.git shadPS4
 git -C shadPS4 fetch origin \
-  28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64
+  e3ce810f3a653f43ac64ebab63023de281a4103a
 git -C shadPS4 checkout --detach \
-  28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64
+  e3ce810f3a653f43ac64ebab63023de281a4103a
 git -C shadPS4 submodule sync --recursive
 git -C shadPS4 submodule update --init --recursive
 ```
@@ -83,7 +84,7 @@ by advancing a branch or submodule.
 
 The initial reference build profile mirrors the material compile options of the
 Windows SDL `Release` profile defined by upstream's pinned
-[`build.yml`](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/.github/workflows/build.yml):
+[`build.yml`](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/.github/workflows/build.yml):
 
 ```powershell
 cmake --fresh -S shadPS4 -B build-shadps4 -G Ninja `
@@ -196,13 +197,12 @@ merged into evidence from the active baseline.
 
 Evidence class: **static repository evidence**. The upstream repository metadata,
 branch ref, commit/tree, submodule gitlinks, build documentation, CI configuration
-and contribution policy were inspected at the exact commit above. No source patch,
-build, emulator execution, proprietary target, or target-machine observation was
-used.
+and contribution policy were inspected at the exact commit above. The original selection used no build or target execution. The 2026-09-09
+adoption review distinguishes new static checks from reported target activity.
 
 The inspected immutable upstream inputs were the
-[core README](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/README.md),
-[Windows build guide](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/documents/building-windows.md),
-[CI build workflow](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/.github/workflows/build.yml),
-[submodule configuration](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/.gitmodules),
-and [contribution policy](https://github.com/shadps4-emu/shadPS4/blob/28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64/CONTRIBUTING.md).
+[core README](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/README.md),
+[Windows build guide](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/documents/building-windows.md),
+[CI build workflow](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/.github/workflows/build.yml),
+[submodule configuration](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/.gitmodules),
+and [contribution policy](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/CONTRIBUTING.md).
