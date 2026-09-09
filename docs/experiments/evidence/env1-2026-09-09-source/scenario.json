@@ -1,0 +1,12 @@
+{
+  "artifacts": [],
+  "description": "<redacted-operator-description>",
+  "oracle": {
+    "expected_exit_code": 0,
+    "kind": "process-exit"
+  },
+  "scenario_id": "scenario-09537a54ccf716b4",
+  "schema_id": "bb-target-scenario/v3",
+  "schema_version": 3,
+  "timeout_seconds": 30
+}

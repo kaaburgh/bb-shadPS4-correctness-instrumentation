@@ -1,0 +1,66 @@
+{
+  "build": {
+    "app_version": null,
+    "eboot": {
+      "evidence_class": "static",
+      "sha256": "6764938b23539d29c936bca9880fc4a774e7b0099ce31c7e8c4b0f8bd0befb80",
+      "size_bytes": 93827832
+    },
+    "master_version": null,
+    "param_sfo": {
+      "evidence_class": "static",
+      "sha256": "312d6e3068893dae46d871575498ef53b7160e60adb30282ef88da0a5deb60f2",
+      "size_bytes": 1760
+    }
+  },
+  "configuration": {
+    "active_modifications": {},
+    "modification_order": {
+      "evidence_class": "static",
+      "value": []
+    },
+    "settings": {}
+  },
+  "content": {
+    "base": {
+      "content_id": null,
+      "source_package": null,
+      "version": null
+    },
+    "dlc": {},
+    "resolved_tree": {
+      "algorithm": "sha256-tree-v1",
+      "evidence_class": "static",
+      "file_count": 28831,
+      "sha256": "212a0643e0506f1d863f33ae761d41710fe0a746a26a15a95ff0fe0777b719c3",
+      "total_bytes": 31513388908
+    },
+    "update": {
+      "state": "not_installed"
+    }
+  },
+  "identity_completeness": {
+    "state": "complete",
+    "unknown_fields": []
+  },
+  "manifest_kind": "bloodborne-target-identity",
+  "provenance": {
+    "collected_at": "2026-09-09T12:21:59.218726+00:00",
+    "evidence_classes": [
+      "static"
+    ],
+    "producer": {
+      "name": "bb-target-manifest-safe-projection",
+      "version": "1.0.0"
+    }
+  },
+  "schema_version": 1,
+  "target": {
+    "distribution_region": null,
+    "name": "Bloodborne",
+    "title_id": {
+      "evidence_class": "static",
+      "value": "CUSA03173"
+    }
+  }
+}

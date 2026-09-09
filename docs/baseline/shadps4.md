@@ -82,6 +82,12 @@ by advancing a branch or submodule.
 
 ## Build provenance contract
 
+Use the [source-first build producer and manifest verifier](source-builds.md)
+for supported BB-ENV1 admission, including Ubuntu RelWithDebInfo builds and
+fully identified linear patch stacks. The profiles below remain examples;
+they do not constrain admission to one CI binary.
+
+
 The initial reference build profile mirrors the material compile options of the
 Windows SDL `Release` profile defined by upstream's pinned
 [`build.yml`](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/.github/workflows/build.yml):

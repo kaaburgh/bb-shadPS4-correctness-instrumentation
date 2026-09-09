@@ -432,5 +432,20 @@ class RunTests(unittest.TestCase):
                 runner.validate_run_manifest(packaged_manifest)
 
 
+
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Keep source-build controls in the supported runner's explicit test suite.
+
+    Full discovery already loads their module separately. The existing target-run
+    CI job invokes this module explicitly and therefore receives both suites.
+    """
+    if pattern is None:
+        from tests import test_shadps4_build_manifest
+        standard_tests.addTests(loader.loadTestsFromModule(test_shadps4_build_manifest))
+    return standard_tests
+
+
 if __name__ == "__main__":
     unittest.main()

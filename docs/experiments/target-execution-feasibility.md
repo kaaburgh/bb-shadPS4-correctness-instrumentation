@@ -4,7 +4,14 @@
 
 The concrete route for target execution is **GATED target-machine**. This does not claim Bloodborne runtime behavior and does not classify the project as `LOCAL ONLY`: cloud work prepares and validates the handoff, while a machine that owns the target material executes the bounded run.
 
-The repository contains only synthetic target material. The proprietary target tree, target-machine graphics stack, and target-owned capture/input tooling are intentionally absent from the cloud checkout. The decision is based on static repository evidence plus assumed/operator-provided target-machine capability.
+Git contains only synthetic target material. The 2026-09-08 audit in PR #128 established a local target-owning Ubuntu route; its expired-artifact and observational probes were not supported run records. The current source-first experiment uses that host with a separately verified base-only copy. See [the source-first experiment](env1-source-first-2026-09-09.md) for actual results and remaining gates.
+
+The 2026-09-09 supported source-built attempt passed admission and target pre/post
+verification, but reached its 30-second deadline (`timed_out`, oracle `unknown`,
+packaging `complete`). BB-ENV1 remains validation incomplete. The next operator
+experiment needs a reproducible clean termination mechanism and a successful
+bounded record, preserving the verified base-only identities and resolving
+material host/config provenance unknowns. No menu/gameplay checkpoint is required.
 
 ## Supported handoff entrypoint
 
@@ -18,20 +25,45 @@ Before delegation, the supported entrypoint loads and validates the target manif
 
 ## Exact executable provenance and private staging
 
-A caller-provided digest does not prove that executable bytes came from the declared source. Non-synthetic target execution therefore accepts only the independently observed upstream `shadps4-emu/shadPS4` **Build and Release** workflow run `31742892228` for the historical BB-BL1 identity `28c84fb` (superseded; these bytes do not identify the active baseline).
+Non-synthetic runs require a `bb-shadps4-build/v1` manifest plus its source
+checkout. [The build tooling](../../tools/shadps4_build_manifest.py) produces it
+only after a new out-of-tree CMake/Ninja build and matching pre/post source
+observations. See [source-build procedure](../baseline/source-builds.md).
 
-Accepted artifacts:
+Admission requires the active exact base commit **and** tree. Unpatched builds
+must have that HEAD/tree. Patched builds must identify a public patch repository,
+all ordered commits, and the effective HEAD/tree. The runner checks every commit's
+single parent against the preceding commit, starting at the base. Omitted,
+reordered, duplicate, unrelated or merge commits fail closed. Merge-based stacks
+must first be expressed as a complete linear series; no ordering is guessed.
+The effective HEAD must be the final listed commit. All recursive gitlinks,
+submodule trees and committed URLs are checked, including clean worktrees.
+Shallow top-level history, replacements, grafts, hidden index flags and dirty
+(including ignored/untracked) source inputs are rejected.
 
-- Windows SDL: artifact `9198403207`, `shadps4-win64-sdl-2026-08-13-28c84fb`; archive SHA-256 `bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65`; contained `shadPS4.exe` SHA-256 `4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f`, size `67641344`.
-- Linux SDL: artifact `9198177755`, `shadps4-linux-sdl-2026-08-13-28c84fb`; archive SHA-256 `127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789`; contained `Shadps4-sdl.AppImage` SHA-256 `7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`, size `35179000`.
+The manifest is a durable record of a locally observed build, not a signed
+third-party reproducible-build attestation. Git verifies source relationships;
+the project producer binds its actual configure/build commands, resolved CMake
+cache, tool versions and output bytes. A deliberately forged manifest or hostile
+same-user mutation remains outside the maintainer-owned execution model. There
+is no supported command for blessing an arbitrary pre-existing binary.
 
-For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner creates the private per-run snapshot beneath the operator-selected `working_directory`, copies the executable into that snapshot, adds the user execute bit to the staged copy, and verifies the staged digest and size against both the independently pinned artifact and the caller-supplied digest before delegating execution. On POSIX the staged copy must also pass an explicit executable-access preflight; a `working_directory` on a `noexec` filesystem fails closed before the compatibility engine is invoked. The compatibility engine then repeats direct command-path binding and binary-digest verification against that staged path before launch.
+The previous gate accepted only upstream workflow `31742892228` at historical
+baseline `28c84fb`: Windows artifact `9198403207` and Linux artifact `9198177755`.
+The latter expired (PR #128 observed HTTP 410). Its AppImage digest was
+`7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75`,
+35179000 bytes. Those historical identities are preserved as a negative result;
+neither archived availability nor byte-for-byte reproduction of that binary is
+an admission dependency now. PR #127's completeness idea was useful, but its
+unchecked patch declarations and unpatched CI pin were not adopted.
+
+For a non-synthetic run, the operator command `argv[0]` and `--emulator-binary` must identify the same regular non-link file. The runner creates the private per-run snapshot beneath the operator-selected `working_directory`, copies the executable into that snapshot, adds the user execute bit to the staged copy, and verifies the staged digest and size against both the validated build manifest and the caller-supplied digest before delegating execution. On POSIX the staged copy must also pass an explicit executable-access preflight; a `working_directory` on a `noexec` filesystem fails closed before the compatibility engine is invoked. The compatibility engine then repeats direct command-path binding and binary-digest verification against that staged path before launch.
 
 The project execution model has no documented adversary: the target run occurs on the maintainer's own machine with a binary they selected, while the maintainer is present to confirm whether the emulator launched. The previous platform-specific sealed-memfd / locked-handle hash-to-exec lease was therefore removed rather than repaired. No `vm.memfd_noexec` capability is required, and Linux and Windows use the existing bounded compatibility-engine executor after the same staged-byte provenance checks. This contract does not claim resistance to a hostile same-user process mutating the staged file after verification.
 
-The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.11.0` identifies the private-staging + pre-launch digest contract and the fail-closed compatibility-engine boundary.
+The runner still records the actual executable digest/size in the v3 run record. Producer version `bb-target-runner/1.12.0` identifies the private-staging + pre-launch digest contract and the fail-closed compatibility-engine boundary.
 
-Fully synthetic controls are exempt from the upstream executable pin. They remain capability evidence only.
+Fully synthetic unpatched controls may omit the build manifest. Patched controls must use the same verified source-build route. They remain capability evidence only.
 
 ## Stable operator command identity
 
@@ -69,15 +101,17 @@ Synthetic file-oracle and artifact paths are still rejected if they pre-exist in
 
 ## One-shot operator procedure
 
-Prepare an immutable target view, separate writable working directory, validated BB-BL2 manifest, and command whose `argv[0]` names the exact pinned upstream artifact binary for the host. Do not use a wrapper. For a Linux/POSIX run, the working-directory filesystem must permit executable files because the verified private executable copy is staged there; the runner preflights that property and fails closed before delegation if the location is `noexec`. For non-synthetic execution use a `process-exit` scenario with no declared artifacts.
+Prepare an immutable target view, separate writable working directory, validated BB-BL2 manifest, and command whose `argv[0]` names the binary produced by the verified source-build manifest. Do not use a wrapper. For a Linux/POSIX run, the working-directory filesystem must permit executable files because the verified private executable copy is staged there; the runner preflights that property and fails closed before delegation if the location is `noexec`. For non-synthetic execution use a `process-exit` scenario with no declared artifacts.
 
 ```text
 python tools/run_target_experiment.py run \
   --target-manifest <safe-target-manifest.json> \
   --scenario <scenario.json> \
   --command-file <private-command.json> \
-  --emulator-binary <path-to-pinned-upstream-artifact-binary> \
-  --emulator-binary-sha256 <pinned-64-lowercase-hex-digest> \
+  --emulator-binary <source-built-binary> \
+  --emulator-binary-sha256 <manifest-binary-64-lowercase-hex-digest> \
+  --build-manifest <private-build-manifest.json> \
+  --source-checkout <verified-shadPS4-checkout> \
   --source-repository https://github.com/shadps4-emu/shadPS4 \
   --source-commit e3ce810f3a653f43ac64ebab63023de281a4103a \
   --source-tree d61b059a991a95b21e77f963db61d618b308c62e \
@@ -87,7 +121,13 @@ python tools/run_target_experiment.py run \
   --output <safe-output-directory>/run-<scenario-id>.zip
 ```
 
-Do not pass `--patch-commit` or `--emulator-config`; both fail closed until their provenance can be independently bound.
+For a patched build repeat `--patch-commit <sha>` in exactly the manifest order.
+The manifest supplies patch repository and effective HEAD/tree; CLI base fields
+continue to name the active upstream base. Do not pass `--emulator-config`;
+consumed configuration attestation remains separate work. For the local base-only
+experiment use a new portable `user` directory and `--config-clean --ignore-game-patch`, with no saves, update, patches or existing profile.
+`tools/prepare_env1_target_copy.py` can create an independently verified copy from
+an explicit source tree and independently supplied full-tree digest/count/size.
 
 Validate a detached record with:
 
@@ -99,10 +139,28 @@ python tools/run_target_experiment.py validate <unpacked-run-manifest.json>
 
 This handoff does not establish that Bloodborne launches or reaches a semantic checkpoint, that a backend label reflects consumed configuration, or that any capture is safe or producer-bound. Non-synthetic semantic file/capture evidence remains gated on an independently verified current-run producer/tool relationship.
 
-The next target-machine execution can validate the bounded execution route with the pinned upstream CI binary. It cannot yet promote file/capture output into correctness evidence.
+BB-ENV1 acceptance is a successful bounded supported target-machine run record
+with required provenance and termination. Menu/gameplay checkpoints are not an
+ENV1 criterion: scenario selection and correctness evidence have later gates.
+A timeout/failure record is useful diagnostic evidence and must not be described
+as a passed process-exit oracle.
 
 ## Validation in this PR
 
-The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, pinned upstream executable identity, hashed DLC identity, post-run target-tree integrity state, and runner version `1.11.0`. A Linux regression drives a non-synthetic-classified manifest end-to-end through the supported entrypoint with a locally generated stand-in executable and verifies that the private staged binary reaches the normal bounded executor. A POSIX staging regression verifies that a non-executable staging filesystem is rejected before delegation. Dedicated post-run integrity regressions cover both unchanged and failed target re-verification, including forced partial packaging on the latter. Dedicated sealing symbols are asserted absent so the retired descriptor-executor path cannot silently reappear.
+The target-run workflow executes the full contract suites, including review regressions for the supported direct entrypoint, fail-closed direct compatibility-engine invocation, immutable input snapshots, stable original-command digest rewriting, non-synthetic oracle/artifact rejection, source/build and staged executable identity, hashed DLC identity, post-run target-tree integrity state, and runner version `1.12.0`. A Linux regression drives a non-synthetic-classified manifest end-to-end through the supported entrypoint with a locally generated stand-in executable and verifies that the private staged binary reaches the normal bounded executor. A POSIX staging regression verifies that a non-executable staging filesystem is rejected before delegation. Dedicated post-run integrity regressions cover both unchanged and failed target re-verification, including forced partial packaging on the latter. Dedicated sealing symbols are asserted absent so the retired descriptor-executor path cannot silently reappear.
 
 These are synthetic/contract validations only; they do not establish Bloodborne runtime behavior.
+
+The real-Git/CMake/Ninja controls cover baseline and two-commit patched builds
+through the supported CLI dispatcher and final ZIP, plus wrong base commit/tree,
+dirty and hidden index state, missing/incomplete/reordered patches, wrong
+effective HEAD/tree, recursive submodule drift and binary digest/size mutations.
+Only the fixture baseline is substituted; admission and execution are not mocked
+in the positive controls. These remain synthetic evidence even when a fixture
+manifest exercises the non-synthetic admission branch.
+
+The v3 record adds `emulator.admission` and `emulator.build_provenance`. The latter
+contains exact source/submodule identities, tool versions and hashes; full build
+commands, resolved cache and build environment paths remain private and are bound
+by the exact manifest digest. Detached validation checks source/binary agreement.
+It does not independently re-prove Git ancestry without the source checkout.

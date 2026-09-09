@@ -1,0 +1,22 @@
+{
+  "schema_version": "bb-env1-gpu-observation/v1",
+  "evidence_class": "runtime",
+  "collected_at_utc": "2026-09-09T13:09:49.889720+00:00",
+  "producer": {
+    "name": "nvidia-smi",
+    "executable_sha256": "dd0cbc1a839dae1cfadb5ba1ffb8e3bfed99ddd8f3d1dca8e986d68ce7d0515c",
+    "arguments": [
+      "--query-gpu=name,driver_version,pci.device_id",
+      "--format=csv,noheader,nounits"
+    ]
+  },
+  "stdout_sha256": "32a9892faa512dd30d3eb00c1e4e1c92fa34a868aced4ff2a66a1560cbf45266",
+  "gpus": [
+    {
+      "name": "NVIDIA GeForce RTX 5070 Ti",
+      "driver_version": "595.84",
+      "pci_device_vendor_id": "0x2C0510DE"
+    }
+  ],
+  "scope": "Independent adjacent host inventory; not proof of guest Vulkan rendering. The unmodified run collector leaves GPU name/driver version unknown."
+}

@@ -200,8 +200,12 @@ def _require_git_sha(value: Any, field: str) -> str:
     return value
 
 
-def _normalize_patch_commits(values: Sequence[str]) -> list[str]:
-    """Accept only the exact unpatched BB-BL1 baseline until patch provenance is attested."""
+def _normalize_patch_commits(values: Sequence[str], verified_build=None) -> list[str]:
+    """Patched lists require the supported entrypoint’s verified build projection."""
+    if values and verified_build is not None:
+        if list(values) != verified_build["source"]["patch_commits"]:
+            raise TargetRunError("patch list differs from verified build")
+        return list(values)
     if values:
         for value in values:
             _require_git_sha(value, "patch_commit")
@@ -1608,6 +1612,22 @@ def validate_run_manifest(manifest: Mapping[str, Any]) -> None:
     if not isinstance(manifest, Mapping):
         raise TargetRunError("target-run manifest must be an object")
     _validate_run_schema(manifest)
+    emulator = manifest["emulator"]
+    if emulator.get("build_provenance") is not None:
+        build = emulator["build_provenance"]
+        if build["binary"] != emulator["binary"]:
+            raise TargetRunError("run binary disagrees with build provenance")
+        for key, value in emulator["source"].items():
+            if build["source"].get(key) != value:
+                raise TargetRunError("run source disagrees with build provenance")
+        source = build["source"]
+        patches = source["patch_commits"]
+        if source["effective_head"] != (patches[-1] if patches else source["commit"]):
+            raise TargetRunError("run effective HEAD does not close patch chain")
+        if bool(patches) != bool(source["patch_repository"]):
+            raise TargetRunError("run patch repository identity is incomplete")
+        if not patches and source["effective_tree"] != source["tree"]:
+            raise TargetRunError("run effective tree does not match unpatched source")
 
 
 def _write_zip_atomic(output: Path, entries: Mapping[str, bytes]) -> None:
@@ -1651,6 +1671,7 @@ def run_experiment(
     output_path: Path,
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
+    verified_build: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run and package one bounded target-machine experiment."""
     if re.fullmatch(r"[0-9a-f]{64}", emulator_binary_sha256) is None:
@@ -1659,7 +1680,7 @@ def run_experiment(
     _require_git_sha(source_commit, "source_commit")
     _require_git_sha(source_tree, "source_tree")
     _require_attestable_emulator_config(emulator_config_path)
-    normalized_patches = _normalize_patch_commits(patch_commits)
+    normalized_patches = _normalize_patch_commits(patch_commits, verified_build)
     if (
         source_repository != PINNED_SOURCE_REPOSITORY
         or source_commit != PINNED_SOURCE_COMMIT
@@ -1805,6 +1826,12 @@ def run_experiment(
             "warnings": ["raw-process-output-excluded"],
         },
     }
+    run_manifest["emulator"]["admission"] = "source-build" if verified_build else "synthetic-control"
+    if verified_build is not None:
+        run_manifest["emulator"]["build_provenance"] = verified_build
+        if normalized_patches:
+            for field in ("patch_repository", "effective_head", "effective_tree"):
+                run_manifest["emulator"]["source"][field] = verified_build["source"][field]
     validate_run_manifest(run_manifest)
 
     package_entries = {
@@ -1836,6 +1863,8 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     run.add_argument("--output", type=Path, required=True)
     run.add_argument("--backend")
     run.add_argument("--emulator-config", type=Path)
+    run.add_argument("--build-manifest", type=Path)
+    run.add_argument("--source-checkout", type=Path)
 
     validate = subparsers.add_parser("validate", help="validate a run manifest")
     validate.add_argument("manifest", type=Path)
@@ -1866,6 +1895,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=args.output,
             graphics_backend=args.backend,
             emulator_config_path=args.emulator_config,
+            build_manifest_path=args.build_manifest,
+            source_checkout=args.source_checkout,
         )
         print(
             f"{manifest['termination']['state']} "
