@@ -1,6 +1,6 @@
 # Guest-CPU observer producer boundary
 
-This document records the BB-INS2 CLOUD RESEARCH observer-provenance boundary at the exact BB-BL1 shadPS4 baseline `shadps4-emu/shadPS4@28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`.
+This document records the BB-INS2 CLOUD RESEARCH observer-provenance boundary at the exact BB-BL1 shadPS4 baseline `shadps4-emu/shadPS4@e3ce810f3a653f43ac64ebab63023de281a4103a`.
 
 It specifies where a future diagnostic producer may observe direct guest-CPU accesses and what evidence must exist before those observations can support resource classification. It does **not** implement a shadPS4 producer, execute Bloodborne, establish observer completeness, or justify a negative `GPU-only` claim.
 

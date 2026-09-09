@@ -13,7 +13,7 @@ For each selected scenario, record all of the following. Keep identifiers stable
 - **Purpose:** startup | representative-gameplay | correctness-sensitive | performance-sensitive
 - **Baseline identity:**
   - shadPS4 repository: `https://github.com/shadps4-emu/shadPS4`
-  - shadPS4 commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`
+  - shadPS4 commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`
   - patches: none unless independently attested by a future runner contract
   - Bloodborne target manifest: `<safe BB-BL2 manifest digest or run-record reference>`
   - host manifest: `<BB-BL3 manifest/run-record reference>`

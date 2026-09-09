@@ -13,7 +13,7 @@ TARGET = "sha256:" + "1" * 64
 TARGET_B = "sha256:" + "4" * 64
 HOST_A = "sha256:" + "2" * 64
 HOST_B = "sha256:" + "3" * 64
-SOURCE_COMMIT = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+SOURCE_COMMIT = "e3ce810f3a653f43ac64ebab63023de281a4103a"
 SOURCE_COMMIT_B = "f" * 40
 
 

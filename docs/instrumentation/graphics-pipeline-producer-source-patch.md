@@ -7,7 +7,7 @@ This slice prepares a deterministic reviewable patch for the pinned BB-BL1 `Pipe
 The preparer accepts only:
 
 - repository: `shadps4-emu/shadPS4`;
-- commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`;
+- commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`;
 - file: `src/video_core/renderer_vulkan/vk_pipeline_cache.cpp`;
 - Git blob SHA: `b39f1c30bfb00d1f21a082da48369ba95ce31368`;
 - seam: immediately after `graphics_pipelines.try_emplace(graphics_key)`, where the returned `is_new` value distinguishes the lookup result before the existing creation branch runs.
@@ -35,7 +35,7 @@ Given the exact pinned source file:
 ```text
 python tools/prepare_graphics_pipeline_producer_patch.py \
   vk_pipeline_cache.cpp \
-  --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
+  --source-commit e3ce810f3a653f43ac64ebab63023de281a4103a \
   --output graphics-pipeline-producer.patch
 ```
 

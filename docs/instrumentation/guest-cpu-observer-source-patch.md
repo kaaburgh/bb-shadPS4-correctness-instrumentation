@@ -7,7 +7,7 @@ This document describes a static/source-integration preparation step for BB-INS2
 The patch preparer accepts only:
 
 - source repository: `shadps4-emu/shadPS4`;
-- source commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`;
+- source commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`;
 - source path: `src/video_core/page_manager.cpp`;
 - Git blob SHA-1: `6a4bcbd7dfd2031f93f069968304dd835443a342`.
 

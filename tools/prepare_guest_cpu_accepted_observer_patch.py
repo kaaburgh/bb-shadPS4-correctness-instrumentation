@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
 from tools.shadps4_source_baseline import COMMIT as _PINNED_COMMIT
 
 SOURCE_COMMIT = _PINNED_COMMIT
-SOURCE_GIT_BLOB = "e2b9ec75f88b632998e3cd15ddd6ca0a9cfd396c"
+SOURCE_GIT_BLOB = "1dc5188e77c3b72858b7becfac30ef43a6015583"
 HOOK = "SHADPS4_BB_GUEST_CPU_ACCEPTED_OBSERVE"
 
 WRITE_ANCHOR = """bool Rasterizer::InvalidateMemory(VAddr addr, u64 size) {\n    if (!IsMapped(addr, size)) {\n        // Not GPU mapped memory, can skip invalidation logic entirely.\n        return false;\n    }\n    buffer_cache.InvalidateMemory(addr, size);\n"""

@@ -15,7 +15,7 @@
         "scenario_id": null,
         "baseline": {
           "source_repository": "https://github.com/shadps4-emu/shadPS4",
-          "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+          "source_commit": "e3ce810f3a653f43ac64ebab63023de281a4103a",
           "target_manifest_sha256": null,
           "host_manifest_sha256": null
         }

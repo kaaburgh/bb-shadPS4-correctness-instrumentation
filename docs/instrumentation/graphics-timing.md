@@ -7,7 +7,7 @@ This document records the current **static + synthetic** BB-INS3 slice. It does 
 Static source inspection is pinned to the BB-BL1 baseline:
 
 - repository: `shadps4-emu/shadPS4`
-- commit: `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64`
+- commit: `e3ce810f3a653f43ac64ebab63023de281a4103a`
 
 No proprietary shader or target payload is stored here.
 

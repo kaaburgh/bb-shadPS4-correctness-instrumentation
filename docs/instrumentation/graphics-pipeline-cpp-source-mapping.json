@@ -2,7 +2,7 @@
   "schema_version": "bb-graphics-pipeline-cpp-source-mapping/v1",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+    "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a",
     "graphics_key_path": "src/video_core/renderer_vulkan/vk_graphics_pipeline.h",
     "ps_color_buffer_path": "src/shader_recompiler/runtime_info.h",
     "blend_control_path": "src/video_core/amdgpu/regs_color.h"
@@ -11,7 +11,7 @@
     "schema_version": "bb-graphics-pipeline-key-surface/v12",
     "path": "docs/instrumentation/graphics-pipeline-key-surface.json",
     "digest_encoding": "utf-8-lf",
-    "sha256": "sha256:26cbd58ec7f1198c5030f0eec02fcedfa45df8abdffb4e134e70d2689b47a1a0"
+    "sha256": "sha256:cd87216c4dc08918ea640f60c57bc9874acaa0ce6a10117b4c3dea5428ee8bdf"
   },
   "fields": [
     {"name":"stage_hashes","mode":"array_unsigned_cast","expression":"static_cast<std::uint64_t>(key.stage_hashes[i])","source_declaration":"std::array<size_t, MaxShaderStages> stage_hashes;"},

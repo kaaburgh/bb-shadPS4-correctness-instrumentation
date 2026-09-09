@@ -2,7 +2,7 @@
   "schema_version": "bb-graphics-pipeline-producer/v1",
   "source": {
     "repository": "https://github.com/shadps4-emu/shadPS4",
-    "commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64"
+    "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a"
   },
   "seam": {
     "path": "src/video_core/renderer_vulkan/vk_pipeline_cache.cpp",

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ _ANY_GIT_SHA = re.compile(r"(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])")
 _TEXT_SUFFIXES = frozenset(
     {".py", ".md", ".json", ".yml", ".yaml", ".toml", ".txt", ".cpp", ".h", ".hpp"}
 )
-_SKIP_DIRECTORIES = frozenset({".git", "__pycache__", ".pytest_cache", ".venv"})
+_SKIP_DIRECTORIES = frozenset({".git", "__pycache__", ".pytest_cache", ".venv", ".astra-repos", ".astra-local"})
 
 #: How many lines after a line naming the upstream repository stay in scope.
 #: Provenance records spell the repository and the commit as adjacent constants
@@ -184,12 +185,13 @@ def raw_source_url(relative_path: str) -> str:
 
 
 def _text_files(root: Path) -> Iterator[Path]:
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix not in _TEXT_SUFFIXES:
-            continue
-        if any(part in _SKIP_DIRECTORIES for part in path.relative_to(root).parts):
-            continue
-        yield path
+    for directory, children, names in os.walk(root):
+        children[:] = sorted(name for name in children if name not in _SKIP_DIRECTORIES
+                             and not name.startswith(".codex-"))
+        for name in sorted(names):
+            path = Path(directory) / name
+            if path.is_file() and path.suffix in _TEXT_SUFFIXES:
+                yield path
 
 
 def _iter_json_objects(value: Any) -> Iterator[Mapping[str, Any]]:

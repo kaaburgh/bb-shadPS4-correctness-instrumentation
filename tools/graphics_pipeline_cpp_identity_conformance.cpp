@@ -9,10 +9,10 @@
 namespace {
 
 constexpr std::string_view kRepository = "https://github.com/shadps4-emu/shadPS4";
-constexpr std::string_view kCommit = "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64";
+constexpr std::string_view kCommit = "e3ce810f3a653f43ac64ebab63023de281a4103a";
 constexpr std::string_view kSurfaceVersion = "bb-graphics-pipeline-key-surface/v12";
-constexpr std::string_view kSurfaceDigest = "sha256:21f03690ddfc424a1d4624eced6fb4d48cdc030df14d5e098e0d979d78191f6e";
-constexpr std::string_view kExpectedIdentity = "pipeline:sha256:c46cf5568ebdb232b52bc092f2fc445bf1fa9aee1b7663717b087fae5cce1c38";
+constexpr std::string_view kSurfaceDigest = "sha256:83cfb4f6ab0cd32e5195d3ac9c932bb643233da35b9f201fe9498aa6a9b81339";
+constexpr std::string_view kExpectedIdentity = "pipeline:sha256:5207ff696d77398f09283c237e00aa37a1ed9c08d208b73997845188cc150ad4";
 
 struct Sha256 {
     std::array<std::uint32_t, 8> state{

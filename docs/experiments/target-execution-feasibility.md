@@ -18,7 +18,7 @@ Before delegation, the supported entrypoint loads and validates the target manif
 
 ## Exact executable provenance and private staging
 
-A caller-provided digest does not prove that executable bytes came from the declared source. Non-synthetic target execution therefore accepts only the independently observed upstream `shadps4-emu/shadPS4` **Build and Release** workflow run `31742892228` for BB-BL1 commit `28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64` / tree `e6026c14092b01702d4e49a5ac6c2f779a072dfe`.
+A caller-provided digest does not prove that executable bytes came from the declared source. Non-synthetic target execution therefore accepts only the independently observed upstream `shadps4-emu/shadPS4` **Build and Release** workflow run `31742892228` for the historical BB-BL1 identity `28c84fb` (superseded; these bytes do not identify the active baseline).
 
 Accepted artifacts:
 
@@ -79,8 +79,8 @@ python tools/run_target_experiment.py run \
   --emulator-binary <path-to-pinned-upstream-artifact-binary> \
   --emulator-binary-sha256 <pinned-64-lowercase-hex-digest> \
   --source-repository https://github.com/shadps4-emu/shadPS4 \
-  --source-commit 28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64 \
-  --source-tree e6026c14092b01702d4e49a5ac6c2f779a072dfe \
+  --source-commit e3ce810f3a653f43ac64ebab63023de281a4103a \
+  --source-tree d61b059a991a95b21e77f963db61d618b308c62e \
   --target-root <immutable-target-tree> \
   --working-directory <isolated-writable-executable-directory> \
   --backend vulkan \

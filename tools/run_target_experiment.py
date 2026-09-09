@@ -39,6 +39,8 @@ _legacy.RUNNER_VERSION = RUNNER_VERSION
 PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
 PINNED_BUILD_ARTIFACTS: dict[str, dict[str, Any]] = {
     "windows": {
+        "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+        "source_tree": "e6026c14092b01702d4e49a5ac6c2f779a072dfe",
         "workflow_run_id": PINNED_BUILD_WORKFLOW_RUN_ID,
         "artifact_id": 9198403207,
         "artifact_name": "shadps4-win64-sdl-2026-08-13-28c84fb",
@@ -48,6 +50,8 @@ PINNED_BUILD_ARTIFACTS: dict[str, dict[str, Any]] = {
         "binary_size_bytes": 67641344,
     },
     "linux": {
+        "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
+        "source_tree": "e6026c14092b01702d4e49a5ac6c2f779a072dfe",
         "workflow_run_id": PINNED_BUILD_WORKFLOW_RUN_ID,
         "artifact_id": 9198177755,
         "artifact_name": "shadps4-linux-sdl-2026-08-13-28c84fb",
@@ -105,6 +109,8 @@ def _require_non_synthetic_evidence_contract(
             "non-synthetic declared artifacts require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports declared artifacts only for synthetic controls"
         )
     pinned = _pinned_build_for_host()
+    if (pinned.get("source_commit"), pinned.get("source_tree")) != (PINNED_SOURCE_COMMIT, PINNED_SOURCE_TREE):
+        raise TargetRunError("historical CI artifact does not identify the active source baseline; source-build admission is required")
     actual_sha256, actual_size = _legacy._sha256_file(
         emulator_binary_path, label="staged emulator binary"
     )
