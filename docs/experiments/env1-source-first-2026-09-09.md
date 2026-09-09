@@ -121,13 +121,20 @@ empty. The allowlist was not weakened.
 
 ## Validation and acceptance boundary
 
-The full local suite passes 332 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
+The full local suite passes 333 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
 identity conformance, schema/contract tests, source-built baseline and patched
 stand-ins through the supported CLI dispatcher, and negative source/patch/binary
 admission cases. The stand-ins use actual Git histories and fresh CMake/Ninja
 builds; admission and execution are not mocked. They prove harness capability,
 not target behavior. Source mapping and exact observer-patch preparation were
 also checked directly against the adopted upstream checkout.
+
+The first CI pass with the real nested build projection exposed a false positive
+in the existing textual baseline checker: it labelled the nearby CLI11 submodule
+commit as the parent shadPS4 commit. JSON now uses object ownership for those
+fields; explicit URL/CLI checks remain. A regression accepts the independent
+dependency identity while still rejecting a stale parent commit. Runtime evidence
+bytes were not changed to accommodate the checker.
 
 BB-ENV1 completion requires a successful supported bounded target-machine record
 with required provenance and termination. It does not require a title menu or
