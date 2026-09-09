@@ -81,6 +81,14 @@ Git identities where available, and compares them before/after compilation.
 The earlier successful build without this additional provenance is retained
 only as private preparation evidence; the supported attempt uses the final manifest.
 
+The admitted output has SHA-256
+`273d224dac5a7bbb083f6dba0dca81a5ca551f68a72dd50f0d26a6c5de5a0ae7`
+and size 370,726,248 bytes. It binds 53 recursive submodules, Abseil commit
+`76bb24329e8bf5f39704eb10d21b9a80befa7c81` and the fmt source byte-tree
+digest. The producer is the committed implementation at `17bbe02`; its exact
+file digest is retained in the manifest. Independent manifest verification and
+dynamic-loader resolution passed before attempting target execution.
+
 ## Target preparation and scope
 
 An explicit original `CUSA03173` base app tree was selected. Independently
@@ -106,9 +114,14 @@ no newly applied modifications. A new portable `user` profile and
 `--config-clean --ignore-game-patch --fullscreen false` exclude previous
 saves/config/patches. Source target bytes remain immutable evidence inputs.
 
+A packaging preflight rejected `config-clean` and `ignore-game-patch` as
+unregistered target settings before any target launch. They are emulator CLI
+options and were retained in the private command instead; target settings are
+empty. The allowlist was not weakened.
+
 ## Validation and acceptance boundary
 
-The full local suite passes 331 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
+The full local suite passes 332 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
 identity conformance, schema/contract tests, source-built baseline and patched
 stand-ins through the supported CLI dispatcher, and negative source/patch/binary
 admission cases. The stand-ins use actual Git histories and fresh CMake/Ninja
@@ -121,6 +134,32 @@ with required provenance and termination. It does not require a title menu or
 gameplay checkpoint. A timed-out or failed process-exit oracle must remain
 failure evidence; it does not become a pass because a ZIP was produced.
 
-Real target-run outcome and the final completion decision are recorded below
-after the supported attempt. No proprietary payload, emulator binary, private
-command/config, raw process log, save or screenshot is committed.
+## Supported target-run outcome
+
+The actual unpatched source-built ELF passed the supported non-synthetic
+entrypoint on the Ubuntu machine. The one target process had a 30-second deadline
+and terminated as `timed_out`, exit `-15`, after 34.064 seconds including teardown.
+The process-exit oracle was `unknown`, not passed. Packaging was `complete` with
+no warnings; target pre/post byte verification passed. No remaining shadPS4
+process was observed after runner completion.
+
+[Safe evidence](evidence/env1-2026-09-09-source/README.md) contains the four
+unaltered JSON entries from the 8,114-byte ZIP, independent copy verification,
+and an adjacent GPU inventory observation. All entry schemas and record-bound
+entry hashes/sizes passed verification; private path scanning passed. The host
+collector leaves GPU name/driver version unknown; the separate observation binds
+RTX 5070 Ti / 595.84 without rewriting the original run record. OS build and
+emulator-config digest remain explicitly unknown in the collector. No proprietary
+payload, emulator binary, private command/config, raw process log, save or
+screenshot is committed.
+
+**BB-ENV1 remains Implemented, validation incomplete.** The expired artifact is no
+longer an admission dependency, and actual baseline plus synthetic patched-build
+admission are established. The remaining ENV1 gate is a successful bounded
+supported target-machine termination/oracle record with required provenance.
+The next bounded experiment should establish a reproducible clean termination
+mechanism and retain the same verified base-only source/target identities;
+this timeout must not be relabelled as a pass. Resolve material host/config
+unknowns in that evidence where needed. Menu/gameplay semantic checkpoints,
+non-synthetic artifact/oracle admission and explicit emulator-config admission
+remain separate later gates.

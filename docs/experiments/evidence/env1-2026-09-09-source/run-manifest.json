@@ -1,0 +1,539 @@
+{
+  "artifacts": [],
+  "emulator": {
+    "admission": "source-build",
+    "binary": {
+      "sha256": "sha256:273d224dac5a7bbb083f6dba0dca81a5ca551f68a72dd50f0d26a6c5de5a0ae7",
+      "size_bytes": 370726248
+    },
+    "build_provenance": {
+      "binary": {
+        "sha256": "sha256:273d224dac5a7bbb083f6dba0dca81a5ca551f68a72dd50f0d26a6c5de5a0ae7",
+        "size_bytes": 370726248
+      },
+      "build_architecture": "x86_64",
+      "build_os": "Linux",
+      "cmake_cache_sha256": "sha256:78c724cbd025219b77a09cde92ddd95cb37a6b1b78240cf6bfcd340927bdfd66",
+      "commands_sha256": "sha256:b7cba347652e7936293d14cc5b8fa9525c9efeef4e7d16459ea5a22f0dc16890",
+      "compile_commands_sha256": "sha256:98c6aa92b5c62874d1c1b057bd0dade231f486f4f3161fd07844ed88bfcbb289",
+      "environment_sha256": "sha256:673f056d8f6c4f4eecff89eb11b41d672870bfa401ef9b8fc0e3c8be7223dc8c",
+      "fetched_sources": [
+        {
+          "algorithm": "sha256-build-inputs-v1",
+          "git": {
+            "commit": "76bb24329e8bf5f39704eb10d21b9a80befa7c81",
+            "repository": "https://github.com/abseil/abseil-cpp",
+            "submodules": [],
+            "tree": "5ddcda4d2a13641f9e161eeb9a3321820b9f1052"
+          },
+          "name": "absl-src",
+          "sha256": "sha256:7ec74890434baa879aed4b397c9b5b50988ba898649b70aa2bd8995d5e3974a2"
+        },
+        {
+          "algorithm": "sha256-build-inputs-v1",
+          "git": null,
+          "name": "fmt-src",
+          "sha256": "sha256:a89ed4450460238bc6dffb1e58c459f1b3234643c687710475ca20a7a0a790a6"
+        }
+      ],
+      "manifest_sha256": "sha256:81c383860c292c0eb0a0cc56b350a10a575a7871026c0cb8ad8150255c0df1ad",
+      "manifest_size_bytes": 71905,
+      "options_sha256": "sha256:ce65a0e4261baabc35f2e39181d3fb25be5fcda724fe44ad5f2b3ebe2aee8ca3",
+      "producer": {
+        "sha256": "sha256:d6296c53acd78d5296ad991f44aa00f78940e6df6c5b94234d16011ce217f096",
+        "version": "bb-shadps4-build/1.0.0"
+      },
+      "schema_version": "bb-shadps4-build/v1",
+      "source": {
+        "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a",
+        "dirty": false,
+        "effective_head": "e3ce810f3a653f43ac64ebab63023de281a4103a",
+        "effective_tree": "d61b059a991a95b21e77f963db61d618b308c62e",
+        "patch_commits": [],
+        "patch_repository": null,
+        "repository": "https://github.com/shadps4-emu/shadPS4",
+        "submodules": [
+          {
+            "commit": "12ba4ac4dbaa6489cb07e01be796e2bc074ef4f4",
+            "dirty": false,
+            "path": "externals/CLI11",
+            "repository": "https://github.com/shadexternals/CLI11",
+            "tree": "b0318f3fd85598d5394a22090a37c702b3e1a2e3"
+          },
+          {
+            "commit": "6e3ddeb485e8804beefae6e6d690b7709084bacd",
+            "dirty": false,
+            "path": "externals/ImGuiFileDialog",
+            "repository": "https://github.com/shadexternals/ImGuiFileDialog",
+            "tree": "d0d8fe1335170aa702c83158813d5c7bb470aa4e"
+          },
+          {
+            "commit": "946e05a9212976626a9f5e52f29c0a7202871f29",
+            "dirty": false,
+            "path": "externals/LibAtrac9",
+            "repository": "https://github.com/shadps4-emu/ext-LibAtrac9",
+            "tree": "ff7c9667d3696594b977681b34d0c55582277ace"
+          },
+          {
+            "commit": "ee76460efbdb147e26d804c798949c23f174460b",
+            "dirty": false,
+            "path": "externals/aacdec/fdk-aac",
+            "repository": "https://android.googlesource.com/platform/external/aac",
+            "tree": "c3900d70bbdf4129d37f8cd5ab4a6589a34eb95b"
+          },
+          {
+            "commit": "28f8264d134a576422cd0f99f19719c2749d9e47",
+            "dirty": false,
+            "path": "externals/cpp-httplib",
+            "repository": "https://github.com/shadexternals/cpp-httplib",
+            "tree": "3af656ea18e404a1abd64ce101c1f9791c7c0376"
+          },
+          {
+            "commit": "a45ea7c17b4a7f320e199b71436074bd624c9e15",
+            "dirty": false,
+            "path": "externals/date",
+            "repository": "https://github.com/HowardHinnant/date",
+            "tree": "22a1d40ea2d73dc0d5bbf33a673c5511661f332e"
+          },
+          {
+            "commit": "f4d9359095eff3eb03f685921edc1cf0e37b1687",
+            "dirty": false,
+            "path": "externals/dear_imgui",
+            "repository": "https://github.com/shadps4-emu/ext-imgui",
+            "tree": "08bb2afc664d7b12d3e25ef2f014aa967bcf5421"
+          },
+          {
+            "commit": "19f66e6dcabb2268965f453db9e5774ede43238f",
+            "dirty": false,
+            "path": "externals/discord-rpc",
+            "repository": "https://github.com/shadps4-emu/ext-discord-rpc",
+            "tree": "d34cedaadb7454cfc7b42048f6125c7fae6a8fdd"
+          },
+          {
+            "commit": "d621dc9e9c77f81e5c8a35b8dcc16dcd63351321",
+            "dirty": false,
+            "path": "externals/discord-rpc/thirdparty/rapidjson",
+            "repository": "https://github.com/Tencent/rapidjson",
+            "tree": "0fb4c154ce809edc03025e3982208347401ad750"
+          },
+          {
+            "commit": "ba96d0b1161f540656efdaed035b3c062b60e006",
+            "dirty": false,
+            "path": "externals/discord-rpc/thirdparty/rapidjson/thirdparty/gtest",
+            "repository": "https://github.com/google/googletest",
+            "tree": "f038bb048175150c0cd0833de4d551b1bc688c5b"
+          },
+          {
+            "commit": "18159584bb3d17e601b9315a7398ace018251bdc",
+            "dirty": false,
+            "path": "externals/epoll-shim",
+            "repository": "https://github.com/jiixyj/epoll-shim",
+            "tree": "32f30dc1d3ac39f4ca4263786194b3c8ca01ffec"
+          },
+          {
+            "commit": "ca6f230e67be7cc45fc919057f07b2aee64dadc1",
+            "dirty": false,
+            "path": "externals/ext-boost",
+            "repository": "https://github.com/shadps4-emu/ext-boost",
+            "tree": "b4cfe8327bdaa1df22e393a6350ab784c521e748"
+          },
+          {
+            "commit": "d3bb81035304a0dc6a5ca48ebf0f8cee1fe269e4",
+            "dirty": false,
+            "path": "externals/ext-wepoll",
+            "repository": "https://github.com/shadps4-emu/ext-wepoll",
+            "tree": "39a8dbd7fd74389e1f0fa3d37fcb77d1d6ef5b10"
+          },
+          {
+            "commit": "94dde08c8a9e4271a93a2a7e4159e9fb05d30c0a",
+            "dirty": false,
+            "path": "externals/ffmpeg-core",
+            "repository": "https://github.com/shadps4-emu/ext-ffmpeg-core",
+            "tree": "e61ac3275c265eff65bd367153fa375c01278a5d"
+          },
+          {
+            "commit": "ec73fb72477d80926c758894a3ab2cb3994fd051",
+            "dirty": false,
+            "path": "externals/fmt",
+            "repository": "https://github.com/shadps4-emu/ext-fmt",
+            "tree": "ddf3d1e1822dfa4cdc9158750448e2fe16849625"
+          },
+          {
+            "commit": "b91f75bd02db43b06d634591eb286d3eb0ce3b65",
+            "dirty": false,
+            "path": "externals/freetype",
+            "repository": "https://github.com/freetype/freetype",
+            "tree": "84a6fa6276a41ebff796b2b16fd217e867b0c8bd"
+          },
+          {
+            "commit": "395ccad2c1e0daae535c4d20bb0a3f2424648e17",
+            "dirty": false,
+            "path": "externals/freetype/subprojects/dlg",
+            "repository": "https://github.com/nyorain/dlg",
+            "tree": "2cb75941a2859cf0801048f5b613a1e02f500184"
+          },
+          {
+            "commit": "ba1640446f3826a518721d1f083f3a8cca1120c3",
+            "dirty": false,
+            "path": "externals/glslang",
+            "repository": "https://github.com/KhronosGroup/glslang",
+            "tree": "e18cd88d329d093698f4207001c5285879bb52c3"
+          },
+          {
+            "commit": "1ddada225144cac0de8f6b5c0dd9acffd99a2e68",
+            "dirty": false,
+            "path": "externals/half",
+            "repository": "https://github.com/ROCm/half",
+            "tree": "09d55fd8c419136b265665e2ecb5cd17c832eed8"
+          },
+          {
+            "commit": "8660006e0ca4aae5dda7a29e585968b50b0273b7",
+            "dirty": false,
+            "path": "externals/hwinfo",
+            "repository": "https://github.com/shadps4-emu/ext-hwinfo",
+            "tree": "c74d06b5a0aaf0f70ef2d64cc45ce31db28a1a9c"
+          },
+          {
+            "commit": "55f93686c01528224f448c19128836e7df245f72",
+            "dirty": false,
+            "path": "externals/json",
+            "repository": "https://github.com/nlohmann/json",
+            "tree": "1eb780542e829bf1615828ed0d5f407497bbce7b"
+          },
+          {
+            "commit": "c1cc0f3f4c3d4abd11ca68c59446a29ff6f95003",
+            "dirty": false,
+            "path": "externals/libpng",
+            "repository": "https://github.com/pnggroup/libpng",
+            "tree": "e0a898a2f286686505239885ae3f97a429afe603"
+          },
+          {
+            "commit": "b0504086dbbc186724b0cc92e6ba1832c245de0b",
+            "dirty": false,
+            "path": "externals/libressl",
+            "repository": "https://github.com/shadexternals/libressl",
+            "tree": "65b654e195c8c7df555260dcde2a7e9d3cc089b5"
+          },
+          {
+            "commit": "d087ea86539ab1f1ec42faf86e2357e2fad126a6",
+            "dirty": false,
+            "path": "externals/libusb",
+            "repository": "https://github.com/shadexternals/libusb",
+            "tree": "5def501faf5897739beda53c9d395d783d8b31c9"
+          },
+          {
+            "commit": "a413fcc9c46a020a746907136a384c227f3cd095",
+            "dirty": false,
+            "path": "externals/magic_enum",
+            "repository": "https://github.com/Neargye/magic_enum",
+            "tree": "df815f23d0abe38a527716fb5dbd905d1a4018ea"
+          },
+          {
+            "commit": "c502a84d3f62f7b8031222c81a948506bf1d6a54",
+            "dirty": false,
+            "path": "externals/mesa-kosmickrisp",
+            "repository": "https://github.com/shadexternals/mesa-kosmickrisp",
+            "tree": "1578316952fa6a655dab37de95e5817a61330499"
+          },
+          {
+            "commit": "282d791a69b69d03110519ee4bdcf2eee7138aaa",
+            "dirty": false,
+            "path": "externals/mesa-kosmickrisp/externals/mesa",
+            "repository": "https://gitlab.freedesktop.org/mesa/mesa",
+            "tree": "5fa5896f8ea91e215588022eccc86eeb66d94eec"
+          },
+          {
+            "commit": "7b590fdcfa5a79c033e76eacc05d0c3e4c79f536",
+            "dirty": false,
+            "path": "externals/minimp3",
+            "repository": "https://github.com/lieff/minimp3",
+            "tree": "b08bf46bb83ae444d696825ad2a51b81b32fb84a"
+          },
+          {
+            "commit": "bf4215a7574f88aa55859db9db00e3ae58cf42d6",
+            "dirty": false,
+            "path": "externals/miniupnp",
+            "repository": "https://github.com/miniupnp/miniupnp",
+            "tree": "e643d7ca88a2b95af0bdd7c200aa294089c7acf8"
+          },
+          {
+            "commit": "174573d60290f447c13a2b1b3405de2b96e27d6c",
+            "dirty": false,
+            "path": "externals/miniz",
+            "repository": "https://github.com/richgel999/miniz",
+            "tree": "a18a6335f390d763566d51521c3245a194b61cd1"
+          },
+          {
+            "commit": "83ea7236c6f23fc98e2b62eb9c5b3abfd4b2be86",
+            "dirty": false,
+            "path": "externals/openal-soft",
+            "repository": "https://github.com/shadexternals/openal-soft",
+            "tree": "5a57fbfb69c8c452edead1f286fd630d615feafa"
+          },
+          {
+            "commit": "5917ee224a7e47383a78acc129628511fe210dff",
+            "dirty": false,
+            "path": "externals/protobuf",
+            "repository": "https://github.com/shadexternals/protobuf",
+            "tree": "424dddada65f6e6bb2d7ea3f9d17890078a0b6f9"
+          },
+          {
+            "commit": "caade5a28aad86b92a4b5337a9dc70c4ba73c5eb",
+            "dirty": false,
+            "path": "externals/pugixml",
+            "repository": "https://github.com/zeux/pugixml",
+            "tree": "c2be7627694d7efbc8e45d9d663ec8554981bd83"
+          },
+          {
+            "commit": "4ec1bf19c6a96125ea22062f38c2cf5b958e448e",
+            "dirty": false,
+            "path": "externals/robin-map",
+            "repository": "https://github.com/Tessil/robin-map",
+            "tree": "d427e39344f576b726a1176314d80305d096651f"
+          },
+          {
+            "commit": "d5af35e3fbb5bb6555ed00e69740d52af2a4e877",
+            "dirty": false,
+            "path": "externals/sdl3",
+            "repository": "https://github.com/shadexternals/sdl3",
+            "tree": "ef87bf7a1f154a2ae91678877c21af8d66dfa1cb"
+          },
+          {
+            "commit": "282083a595dcca86814dedab2f2b0363ef38f1ec",
+            "dirty": false,
+            "path": "externals/sirit",
+            "repository": "https://github.com/shadps4-emu/sirit",
+            "tree": "7de3c3c384317d5be1bf7ee2753839ca44573bc8"
+          },
+          {
+            "commit": "2acb319af38d43be3ea76bfabf3998e5281d8d12",
+            "dirty": false,
+            "path": "externals/sirit/externals/SPIRV-Headers",
+            "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+            "tree": "bd5df1884a582e0e71c1ecce726ed69f33e2740e"
+          },
+          {
+            "commit": "b8944a4bcd478ee03375c9c50dc8d6c741f43f7b",
+            "dirty": false,
+            "path": "externals/spdlog",
+            "repository": "https://github.com/gabime/spdlog",
+            "tree": "65e077fe870de06376e6a53430fd8409aef32c9a"
+          },
+          {
+            "commit": "a01fe3b4c14c6d7b99ee3f07c9e80058c6403097",
+            "dirty": false,
+            "path": "externals/toml11",
+            "repository": "https://github.com/ToruNiina/toml11",
+            "tree": "25109b56aacd385e8557f3274eff1e0edb48644c"
+          },
+          {
+            "commit": "2f64607bc9a4caa6ffc4ed7f614c8ad9a5b6611c",
+            "dirty": false,
+            "path": "externals/toml11/docs/themes/hugo-book",
+            "repository": "https://github.com/alex-shpak/hugo-book",
+            "tree": "c4045e8b252ada03d7594e5f08fe8d262c89b9b6"
+          },
+          {
+            "commit": "ae7a13539fb71f270b87eb2e874fbac80bc8dda2",
+            "dirty": false,
+            "path": "externals/toml11/tests/extlib/doctest",
+            "repository": "https://github.com/doctest/doctest",
+            "tree": "f7eaa6a8fe61f0e58beca519352931276db4c64a"
+          },
+          {
+            "commit": "8c391e04fe4195d8be862c97f38cfe10e2a3472e",
+            "dirty": false,
+            "path": "externals/toml11/tests/extlib/json",
+            "repository": "https://github.com/nlohmann/json",
+            "tree": "af6a017e0a73da88d03c2107dd1d029b7b0d154f"
+          },
+          {
+            "commit": "143a53d1985b8e52a7590a0daca30a0a7c653b42",
+            "dirty": false,
+            "path": "externals/tracy",
+            "repository": "https://github.com/shadps4-emu/tracy",
+            "tree": "daaaac35cb2e488714013a4ede5ff8b98a1acae6"
+          },
+          {
+            "commit": "f378e7b3f18f6e2b06b957f6ba7b1c7207d2a536",
+            "dirty": false,
+            "path": "externals/vma",
+            "repository": "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator",
+            "tree": "a21002d4e783f2a978ff6b05d9b1844ffd5e82be"
+          },
+          {
+            "commit": "ee3b5caaa7e372715873c7b9c390ee1c3ca5db25",
+            "dirty": false,
+            "path": "externals/vulkan-headers",
+            "repository": "https://github.com/KhronosGroup/Vulkan-Headers",
+            "tree": "3b9b8aebb170730238023ca164696ce5936e636f"
+          },
+          {
+            "commit": "466498bc64eb77955c3b782f0127520548224de0",
+            "dirty": false,
+            "path": "externals/vulkan-loader",
+            "repository": "https://github.com/KhronosGroup/Vulkan-Loader",
+            "tree": "674753739c2dbe456143995ccfaa872f239ca07e"
+          },
+          {
+            "commit": "44a72f369268f7d552650891b296693e91db86bb",
+            "dirty": false,
+            "path": "externals/xbyak",
+            "repository": "https://github.com/herumi/xbyak",
+            "tree": "ad16a0bcffeb5db72dd4089922cdc09914cc9533"
+          },
+          {
+            "commit": "953a09abc39096da9e216b6eb0002c681cdc1199",
+            "dirty": false,
+            "path": "externals/xxhash",
+            "repository": "https://github.com/Cyan4973/xxHash",
+            "tree": "8b766b22b3682b90dd84336874e6be616125f9e8"
+          },
+          {
+            "commit": "965b66c8d67b6b7e30fd63b3b75aa91a99ff303b",
+            "dirty": false,
+            "path": "externals/zarchive",
+            "repository": "https://github.com/shadexternals/ZArchive",
+            "tree": "f112a15eaf50c580a9bf357fb3045de876b2d0e6"
+          },
+          {
+            "commit": "fd0d263cedab1a136f40d65199987e3eaeecfcbd",
+            "dirty": false,
+            "path": "externals/zlib-ng",
+            "repository": "https://github.com/shadps4-emu/ext-zlib-ng",
+            "tree": "4476d89384fc2be913ced071438d8d87c6251f5f"
+          },
+          {
+            "commit": "5c7b7bad26808e6b40ac3b3d0075466e27738a9d",
+            "dirty": false,
+            "path": "externals/zstd",
+            "repository": "https://github.com/shadexternals/zstd",
+            "tree": "1c4cf1887cbc64f38f27f625727b502dab1d3905"
+          },
+          {
+            "commit": "120e0e705f8e3b507dc49377ac2879979f0d545c",
+            "dirty": false,
+            "path": "externals/zydis",
+            "repository": "https://github.com/zyantific/zydis",
+            "tree": "a3a76b01e3a3a69503d42d7d063c7c48f956a881"
+          },
+          {
+            "commit": "38d4f0285e6157ee840ea82a9b90aba71c8a705d",
+            "dirty": false,
+            "path": "externals/zydis/dependencies/zycore",
+            "repository": "https://github.com/zyantific/zycore-c",
+            "tree": "645c317fccc0bcd5d789e3b1ebd0aea6152cba93"
+          }
+        ],
+        "tree": "d61b059a991a95b21e77f963db61d618b308c62e"
+      },
+      "tools": {
+        "cc": {
+          "executable_sha256": "sha256:f6d5286a52de10b1e3e8841457c9903a1ea28f222ac0f58cd616697d0dcd9db3",
+          "version": "19.1.1",
+          "version_output_sha256": "sha256:c78246cd1b70b8017341bb87f29c81948d78ee0bf0411c0f2ff00b1cc88cfa4d"
+        },
+        "cmake": {
+          "executable_sha256": "sha256:1c5227af4edd22d8d689def545e18ee458260c0fd579eba2187967f38817e638",
+          "version": "3.28.3",
+          "version_output_sha256": "sha256:d3d5b682f3f5ef5b24a79ed8cf4b8c5868fc950dad48cab1be0e3c060a77f8ee"
+        },
+        "cxx": {
+          "executable_sha256": "sha256:f6d5286a52de10b1e3e8841457c9903a1ea28f222ac0f58cd616697d0dcd9db3",
+          "version": "19.1.1",
+          "version_output_sha256": "sha256:c78246cd1b70b8017341bb87f29c81948d78ee0bf0411c0f2ff00b1cc88cfa4d"
+        },
+        "git": {
+          "executable_sha256": "sha256:2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668",
+          "version": "2.43.0",
+          "version_output_sha256": "sha256:25f3602b5caaf92437be1e76b53698e8d73f14a6c71c2e91c8d5875f923ab29f"
+        },
+        "ninja": {
+          "executable_sha256": "sha256:5965527e09fe2b3787772aa4f711d6a36b393e7f2fcaa744a7a96c5a4ddf59cb",
+          "version": "1.11.1",
+          "version_output_sha256": "sha256:4f9416d650bd28343244b868dfebdb11e70d7b32423536cb87b8c31fde62f993"
+        }
+      }
+    },
+    "config_sha256": null,
+    "graphics_backend": "vulkan",
+    "source": {
+      "commit": "e3ce810f3a653f43ac64ebab63023de281a4103a",
+      "patch_commits": [],
+      "repository": "https://github.com/shadps4-emu/shadPS4",
+      "tree": "d61b059a991a95b21e77f963db61d618b308c62e"
+    }
+  },
+  "execution": {
+    "command_argv_sha256": "sha256:362640bf4ff1c8206f50d054b46db0b10e028ecd3564058fa3698471907b3a13",
+    "declared_outputs_preflighted": true,
+    "process_tree_control": "posix-process-group",
+    "raw_process_output_captured": true,
+    "target_root_separate": true,
+    "working_directory_isolated": true
+  },
+  "host_environment": {
+    "manifest_sha256": "sha256:7b1e7d342465049ec647bed30e3581cc9d8224cfcc7884be57c41d42db81bace",
+    "manifest_size_bytes": 1071,
+    "unknown_field_count": 4,
+    "warning_count": 0
+  },
+  "manifest_kind": "bb-target-run",
+  "oracle": {
+    "expected_exit_code": 0,
+    "expected_sha256": null,
+    "kind": "process-exit",
+    "observed_exit_code": -15,
+    "observed_sha256": null,
+    "observed_size_bytes": null,
+    "state": "unknown"
+  },
+  "packaging": {
+    "state": "complete",
+    "warnings": []
+  },
+  "provenance": {
+    "captured_at_utc": "2026-09-09T13:07:15Z",
+    "producer": {
+      "name": "bb-target-runner",
+      "version": "1.12.0"
+    }
+  },
+  "redaction": {
+    "command_file": "excluded",
+    "policy": "allowlist-v3",
+    "raw_process_output": "excluded",
+    "target_paths": "excluded",
+    "warnings": [
+      "raw-process-output-excluded"
+    ]
+  },
+  "route": "gated-target-machine",
+  "scenario": {
+    "id": "scenario-09537a54ccf716b4",
+    "input_sha256": "sha256:09537a54ccf716b4c5099dd61201b8d779e1270dbb79e5dde5ba7678e1c80d98",
+    "input_size_bytes": 388,
+    "oracle_kind": "process-exit",
+    "packaged_sha256": "sha256:bd25cfc57594d7aff5f6c4833cee91a6b0eac5767090584ec8e0b2c94c82b59d",
+    "packaged_size_bytes": 283,
+    "timeout_seconds": 30
+  },
+  "schema_version": 3,
+  "target": {
+    "identity_state": "complete",
+    "manifest_sha256": "sha256:25e235e9ae3a83f2a156e7cb3ce7137e3cec68b67144cfb8a5c0969e0594f88d",
+    "manifest_size_bytes": 1582,
+    "packaged_manifest_sha256": "sha256:c0ebdcd073a8901a5713861e615058ac1e5012c098954519ebcdd2694c43656d",
+    "packaged_manifest_size_bytes": 1554,
+    "post_run_tree_state": "verified"
+  },
+  "termination": {
+    "elapsed_seconds": 34.064,
+    "exit_code": -15,
+    "state": "timed_out",
+    "stderr_bytes": 0,
+    "stderr_truncated": false,
+    "stdout_bytes": 418,
+    "stdout_truncated": false
+  }
+}

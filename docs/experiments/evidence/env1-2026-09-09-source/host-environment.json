@@ -1,0 +1,51 @@
+{
+  "captured_at_utc": "2026-09-09T13:06:41Z",
+  "collection_warnings": [],
+  "collector": {
+    "name": "bb-host-environment",
+    "version": "1.0.0"
+  },
+  "host": {
+    "cpu": {
+      "architecture": "x86_64",
+      "logical_processors": 32,
+      "model": "AMD Ryzen 9 7945HX3D with Radeon Graphics",
+      "vendor": "AuthenticAMD"
+    },
+    "gpus": [
+      {
+        "device_id": "0x2c05",
+        "driver": {
+          "name": "nvidia",
+          "version": null
+        },
+        "name": null,
+        "vendor_id": "0x10de"
+      }
+    ],
+    "memory": {
+      "physical_bytes": 33342222336
+    },
+    "os": {
+      "build": null,
+      "family": "linux",
+      "kernel": "7.0.0-31-generic",
+      "name": "Ubuntu",
+      "version": "24.04"
+    }
+  },
+  "run": {
+    "emulator_config": {
+      "sha256": null
+    },
+    "graphics_backend": "vulkan"
+  },
+  "schema_id": "bb-host-environment/v1",
+  "schema_version": 1,
+  "unknown_fields": [
+    "/host/gpus/0/driver/version",
+    "/host/gpus/0/name",
+    "/host/os/build",
+    "/run/emulator_config/sha256"
+  ]
+}

@@ -6,6 +6,13 @@ The concrete route for target execution is **GATED target-machine**. This does n
 
 Git contains only synthetic target material. The 2026-09-08 audit in PR #128 established a local target-owning Ubuntu route; its expired-artifact and observational probes were not supported run records. The current source-first experiment uses that host with a separately verified base-only copy. See [the source-first experiment](env1-source-first-2026-09-09.md) for actual results and remaining gates.
 
+The 2026-09-09 supported source-built attempt passed admission and target pre/post
+verification, but reached its 30-second deadline (`timed_out`, oracle `unknown`,
+packaging `complete`). BB-ENV1 remains validation incomplete. The next operator
+experiment needs a reproducible clean termination mechanism and a successful
+bounded record, preserving the verified base-only identities and resolving
+material host/config provenance unknowns. No menu/gameplay checkpoint is required.
+
 ## Supported handoff entrypoint
 
 [`tools/run_target_experiment.py`](../../tools/run_target_experiment.py) is the only supported one-shot entrypoint. `tools/run_target_experiment_v3.py` remains an internal compatibility engine behind it; direct module/script execution of that engine fails closed before exposing its `run`/`validate` CLI. The supported direct invocation from the repository root is regression-tested:

@@ -300,6 +300,15 @@ class BuildAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(build.BuildManifestError, "dirty"):
             build.fetched_sources(dependencies)
 
+    def test_ambiguous_fetched_source_names_are_rejected(self):
+        document = copy.deepcopy(self.document)
+        entry = {"name": "fmt-src", "algorithm": "sha256-build-inputs-v1",
+                 "sha256": "sha256:" + "0" * 64, "git": None}
+        second = dict(entry, sha256="sha256:" + "1" * 64)
+        document["build"]["fetched_sources"] = [entry, second]
+        with self.assertRaisesRegex(build.BuildManifestError, "ambiguous fetched"):
+            build.validate(document)
+
     def test_duplicate_json_and_incomplete_provenance_are_rejected(self):
         with self.assertRaises(build.BuildManifestError):
             build.strict_load(b'{"source":{},"source":{}}')

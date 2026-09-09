@@ -208,6 +208,18 @@ def validate(document):
     paths = [x["path"] for x in s["submodules"]]
     if paths != sorted(set(paths)):
         raise BuildManifestError("ambiguous recursive submodule identities")
+    fetched = document["build"]["fetched_sources"]
+    names = [item["name"] for item in fetched]
+    if names != sorted(set(names)):
+        raise BuildManifestError("ambiguous fetched source identities")
+    for item in fetched:
+        if item["git"] is not None:
+            identity = item["git"]
+            if repository_url(identity["repository"]) != identity["repository"]:
+                raise BuildManifestError("noncanonical fetched repository identity")
+            paths = [entry["path"] for entry in identity["submodules"]]
+            if paths != sorted(set(paths)):
+                raise BuildManifestError("ambiguous fetched submodule identities")
     return document
 
 
