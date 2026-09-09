@@ -98,7 +98,7 @@ def repository_url(value):
 
 
 def _clean(source, expected_head, *, require_history=True):
-    if git(source, "rev-parse", "--show-toplevel") != str(source.resolve()):
+    if Path(git(source, "rev-parse", "--show-toplevel")).resolve() != source.resolve():
         raise BuildManifestError("source must identify a repository root")
     if require_history and git(source, "rev-parse", "--is-shallow-repository") != "false":
         raise BuildManifestError("shallow source history is ambiguous")

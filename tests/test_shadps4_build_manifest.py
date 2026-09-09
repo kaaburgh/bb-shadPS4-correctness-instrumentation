@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -116,6 +117,7 @@ class BuildAdmissionTests(unittest.TestCase):
         self.assertEqual(record["emulator"]["source"]["patch_commits"], self.patches)
         return record
 
+    @unittest.skipUnless(os.name == "nt" or sys.platform.startswith("linux"), "target execution requires Linux or Windows containment")
     def test_source_built_baseline_supported_entrypoint(self):
         record = self.assert_run()
         del record["emulator"]["admission"]
@@ -123,6 +125,7 @@ class BuildAdmissionTests(unittest.TestCase):
         with self.assertRaises(runner.TargetRunError):
             runner.validate_run_manifest(record)
 
+    @unittest.skipUnless(os.name == "nt" or sys.platform.startswith("linux"), "target execution requires Linux or Windows containment")
     def test_patched_source_supported_entrypoint(self):
         self.patch_stack()
         record = self.assert_run()
@@ -130,6 +133,11 @@ class BuildAdmissionTests(unittest.TestCase):
         record["emulator"]["binary"]["size_bytes"] += 1
         with self.assertRaisesRegex(runner.TargetRunError, "binary disagrees"):
             runner.validate_run_manifest(record)
+
+    @unittest.skipUnless(sys.platform == "darwin", "unsupported target POSIX host control")
+    def test_macos_target_execution_stays_fail_closed(self):
+        with self.assertRaisesRegex(runner.TargetRunError, "Linux subreaper containment"):
+            runner.run_experiment(**self.run_args())
 
     def test_wrong_source_patch_and_binary_identities_fail_before_execution(self):
         self.patch_stack()
@@ -241,6 +249,7 @@ class BuildAdmissionTests(unittest.TestCase):
                 runner.run_experiment(**args)
         self.assertFalse(args["output_path"].exists())
 
+    @unittest.skipUnless(os.name == "nt" or sys.platform.startswith("linux"), "target execution requires Linux or Windows containment")
     def test_build_manifest_input_is_snapshotted_once(self):
         expected = build.digest(self.manifest.read_bytes())
         original = runner._stage_emulator_binary

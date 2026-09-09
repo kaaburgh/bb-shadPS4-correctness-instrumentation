@@ -60,6 +60,9 @@ Bounded fresh-build attempts preserved these concrete negative results:
    toolchain option, not an uncommitted source workaround.
 7. Compilation then reached `kernel.cpp` and reported missing `uuid/uuid.h`;
    Ubuntu `uuid-dev` supplied the header required by the pinned Linux workflow.
+8. All translation units compiled; final linking could not resolve `-ludev`
+   because the extracted development symlink lacked its `libudev1` runtime
+   target. The matching Ubuntu runtime package supplied that target.
 
 The subsequent build uses `CMAKE_PREFIX_PATH`, `PKG_CONFIG_PATH` and
 `PKG_CONFIG_SYSROOT_DIR` for the extracted prefix, with `C_INCLUDE_PATH` and
@@ -98,7 +101,7 @@ saves/config/patches. Source target bytes remain immutable evidence inputs.
 
 ## Validation and acceptance boundary
 
-The full local suite passes 329 tests, including independently compiled C++
+The full local suite passes 330 tests (one macOS-only containment control is skipped on Linux), including independently compiled C++
 identity conformance, schema/contract tests, source-built baseline and patched
 stand-ins through the supported CLI dispatcher, and negative source/patch/binary
 admission cases. The stand-ins use actual Git histories and fresh CMake/Ninja
