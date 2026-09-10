@@ -98,7 +98,8 @@ dynamic-loader resolution passed before attempting target execution.
 An explicit original `CUSA03173` base app tree was selected. Independently
 parsed SFO fields were `TITLE_ID=CUSA03173`, `APP_VER=01.00`, `VERSION=01.00`
 and `CONTENT_ID=EP9000-CUSA03173_00-BLOODBORNE0000EU`.
-The adjacent 01.09 update was not copied. SFO labels do not establish that
+The adjacent 01.09 update was not copied for this historical base-only run. Its
+receipt therefore does not represent the active 1.09 disposable route. SFO labels do not establish that
 every file is stock; exact hashes identify the actual base input used here.
 
 `tools/prepare_env1_target_copy.py` checked the independently supplied prior
@@ -169,7 +170,8 @@ longer an admission dependency, and actual baseline plus synthetic patched-build
 admission are established. The remaining ENV1 gate is a successful bounded
 supported target-machine termination/oracle record with required provenance.
 The next bounded experiment should establish a reproducible clean termination
-mechanism and retain the same verified base-only source/target identities;
+mechanism against the active 1.09 target, while retaining these verified
+base-only source/target identities as historical evidence;
 this timeout must not be relabelled as a pass. Resolve material host/config
 unknowns in that evidence where needed. Menu/gameplay semantic checkpoints,
 non-synthetic artifact/oracle admission and explicit emulator-config admission

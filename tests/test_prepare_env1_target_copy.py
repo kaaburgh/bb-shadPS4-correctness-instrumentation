@@ -23,6 +23,20 @@ class TargetCopyTests(unittest.TestCase):
     def prepare(self):
         return copy_tool.prepare(self.source, self.destination, self.expected)
 
+    def prepare_with_update(self):
+        update_source = self.root / "update-original"
+        update_source.mkdir()
+        (update_source / "update.bin").write_bytes(b"synthetic update")
+        update_expected = copy_tool.identity(update_source)
+        result = copy_tool.prepare(
+            self.source,
+            self.destination,
+            self.expected,
+            update_source=update_source,
+            update_expected=update_expected,
+        )
+        return result, update_source, update_expected
+
     def test_receipt_after_verified_copy_allows_reuse_without_hashing(self):
         self.prepare()
         (self.destination / "app/eboot.bin").write_bytes(b"working drift")
@@ -62,6 +76,47 @@ class TargetCopyTests(unittest.TestCase):
         with mock.patch.object(copy_tool.shutil, "copytree", side_effect=AssertionError("recopy")):
             copy_tool.prepare(self.source, self.destination, self.expected, verify_existing=True)
         copy_tool.require_copy_receipt(self.destination)
+
+    def test_update_sibling_is_copied_and_bound_to_resolved_identity(self):
+        result, update_source, update_expected = self.prepare_with_update()
+        self.assertEqual(result["schema_version"], "bb-env1-target-copy/v2")
+        self.assertTrue((self.destination / copy_tool.UPDATE_DIR_NAME).is_dir())
+        expected_resolved = copy_tool.resolved_identity(
+            self.destination / "app", self.destination / copy_tool.UPDATE_DIR_NAME
+        )
+        receipt = copy_tool.require_copy_receipt(
+            self.destination,
+            require_update=True,
+            expected_resolved_tree=expected_resolved,
+        )
+        self.assertEqual(receipt["update_identity_at_creation"], update_expected)
+        self.assertEqual(
+            (self.destination / copy_tool.UPDATE_DIR_NAME / "update.bin").read_bytes(),
+            (update_source / "update.bin").read_bytes(),
+        )
+
+    def test_required_update_rejects_base_only_receipt(self):
+        self.prepare()
+        with self.assertRaisesRegex(ValueError, "required app-UPDATE"):
+            copy_tool.require_copy_receipt(self.destination, require_update=True)
+
+    def test_migrate_existing_copy_and_add_update_without_recopied_base(self):
+        shutil.copytree(self.source, self.destination / "app")
+        update_source = self.root / "update-original"
+        update_source.mkdir()
+        (update_source / "update.bin").write_bytes(b"synthetic update")
+        update_expected = copy_tool.identity(update_source)
+        with mock.patch.object(copy_tool.shutil, "copytree", wraps=copy_tool.shutil.copytree) as copied:
+            copy_tool.prepare(
+                self.source,
+                self.destination,
+                self.expected,
+                update_source=update_source,
+                update_expected=update_expected,
+                verify_existing=True,
+            )
+        self.assertEqual(copied.call_count, 1)
+        copy_tool.require_copy_receipt(self.destination, require_update=True)
 
     def test_migration_rejects_hardlinks_to_original(self):
         import os

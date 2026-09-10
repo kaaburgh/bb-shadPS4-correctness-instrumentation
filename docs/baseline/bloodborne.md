@@ -21,6 +21,11 @@ above the base. The update is not applied by copying files into the base, and
 `-p/--patch` is a memory-patch option rather than a PKG installer. The relevant
 upstream implementation is [`fs.cpp` at the pinned baseline](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/src/core/file_sys/fs.cpp#L89-L145).
 
+The reusable exploratory target therefore keeps an independent `app` copy and
+an independent `app-UPDATE` sibling under one disposable root. Its private
+receipt binds both siblings and the one-time resolved tree identity; a base-only
+disposable receipt is not valid for this active 1.09 manifest.
+
 The update directory's `sce_sys/param.sfo` identifies `CUSA03173` and
 `APP_VER=01.09`; the current manifest also binds its `eboot.bin` and
 `param.sfo` digests. A bounded exploratory launch on 2026-09-10 independently

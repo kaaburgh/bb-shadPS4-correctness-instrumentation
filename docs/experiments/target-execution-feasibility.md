@@ -37,24 +37,27 @@ reusable between exploratory runs and does not require another full target copy.
 
 Original operator-owned game/package inputs stay immutable. Once, prepare a
 separate verified disposable target working copy with no links to originals.
-[`prepare_env1_target_copy.py`](../../tools/prepare_env1_target_copy.py) supports
-an explicit base app tree and independently supplied digest/count/size; it reads
-both original and copy to verify creation, then writes the private
-`.bb-env1-disposable-copy.json` receipt inside the destination. Exploration
-requires this small regular file and checks its destination/app path and directory
-identity before execution; it does not rehash the target. Copying the receipt to
-another tree does not admit that tree. Keep it private: it contains local paths
-and is never packaged. It guards accidental original selection, not deliberate
-forgery, later content changes or arbitrary command writes.
+[`prepare_env1_target_copy.py`](../../tools/prepare_env1_target_copy.py) accepts
+an explicit base app tree and, when the target manifest says an update is
+installed, an explicit update tree as well. Supply independent
+digest/count/size values for both components. The helper copies the base to
+`app` and the update to its shadPS4-native `app-UPDATE` sibling; it never merges
+update files into the base. It reads original and copy trees independently,
+then writes the private `.bb-env1-disposable-copy.json` receipt inside the
+destination. The v2 receipt binds `root`, `app`, and `app-UPDATE` directory
+identity and records the one-time resolved app-tree identity.
 
-For a pre-receipt disposable copy, run the helper once with the same explicit
-`--source`, `--destination`, independent `--expected-sha256`,
-`--expected-file-count`, `--expected-total-bytes` and `--verify-existing`.
-This rechecks both trees and rejects links without copying or resetting working
-profile/cache state. A changed app that no longer matches the independent identity
-cannot acquire a receipt through this migration; retain it and prepare a separate
-verified copy instead. Moving/replacing a receipted directory invalidates its
-receipt. Never manually mint or copy a receipt onto original inputs.
+Exploration requires the receipt and, for an installed update, requires that
+v2 sibling binding and compares its recorded resolved tree with the target
+manifest before execution; it does not rehash the target on every run. For a
+pre-receipt copy, run the helper once with the same base flags plus
+`--update-source`, `--update-expected-sha256`, `--update-expected-file-count`,
+`--update-expected-total-bytes`, and `--verify-existing`. This can add the
+update sibling to an unchanged existing disposable base without recopying its
+30+ GB `app` tree. A changed app or mismatching update cannot acquire a receipt
+through this migration; retain it and prepare a separate verified copy instead.
+Moving/replacing a receipted directory invalidates its receipt. Never manually
+mint or copy a receipt onto original inputs.
 
 Reuse that copy, profile/cache state
 and a separate writable working directory between exploratory runs. Do not make
@@ -64,7 +67,8 @@ point `--target-root` or writable command inputs at original evidence.
 
 Prepare a private command JSON with `argv[0]` naming the existing regular non-link
 binary and a target argument pointing to the disposable copy's `app` or
-`app/eboot.bin`, using the existing command schema. Run a bounded scenario:
+`app/eboot.bin`, using the existing command schema. The `app-UPDATE` sibling
+must remain beside that `app` for every run. Run a bounded scenario:
 
 ```text
 python3 tools/run_target_experiment.py run \
@@ -165,12 +169,14 @@ claim. A `verification-candidate` or passed process-exit oracle proves neither
 menu/gameplay nor graphics correctness nor performance. Missing promotion-grade
 provenance blocks promotion of a claim, never ordinary exploration.
 
-The separate direct SDL exploratory launch recorded in
+The reusable disposable-route exploratory launch recorded in
 [`bloodborne-1.09-exploratory-launch.md`](./bloodborne-1.09-exploratory-launch.md)
-reported `Game id: CUSA03173` and `App Version: 01.09` after Vulkan and
-Bloodborne resource/pipeline initialization. It is launch/liveness evidence
-only; it is not a supported-run record, semantic checkpoint, or correctness
-evidence.
+was admitted through the v2 receipt with its `app-UPDATE` sibling and matching
+resolved-tree identity. The existing AppImage then reported `Game id:
+CUSA03173` and `App Version: 01.09` after Vulkan and Bloodborne
+resource/pipeline initialization. The safe runner record was complete but timed
+out as exploratory evidence. This is launch/liveness evidence only; it is not a
+semantic checkpoint, correctness evidence, or ENV1 completion record.
 
 Full manifests are maintainer-owned local build observations, not signed
 third-party attestations or protection against deliberate forgery. Detached
