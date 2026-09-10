@@ -20,6 +20,7 @@ jobs:
       - name: Run target-run contract tests
         run: >-
           python -m unittest
+          tests.test_prepare_env1_target_copy
           tests.test_run_target_experiment
           tests.test_run_target_experiment_hardening
           tests.test_run_target_experiment_review_regressions
