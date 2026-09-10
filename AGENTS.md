@@ -92,9 +92,9 @@ without a receipt; it can add the update sibling without recopying an unchanged
 base. It need not run before each experiment. Exploration does not require a
 full expensive pre/post target hash pass unless the hypothesis needs one.
 Current working state may drift; record that as unverified. Recheck exact
-identity for promotion. Never commit proprietary payloads, private dumps,
-secrets, unrestricted logs or unnecessarily large captures. Safe metadata and
-tooling may be retained; original inputs stay outside packaging.
+identity for promotion. Never commit proprietary payloads, private dumps, secrets,
+unrestricted logs or unnecessarily large captures. Safe metadata and tooling may
+be retained; original inputs stay outside packaging.
 
 ## Observations and promotion
 
