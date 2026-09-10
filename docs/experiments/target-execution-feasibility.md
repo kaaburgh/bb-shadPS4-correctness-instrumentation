@@ -31,7 +31,24 @@ Original operator-owned game/package inputs stay immutable. Once, prepare a
 separate verified disposable target working copy with no links to originals.
 [`prepare_env1_target_copy.py`](../../tools/prepare_env1_target_copy.py) supports
 an explicit base app tree and independently supplied digest/count/size; it reads
-both original and copy to verify creation. Reuse that copy, profile/cache state
+both original and copy to verify creation, then writes the private
+`.bb-env1-disposable-copy.json` receipt inside the destination. Exploration
+requires this small regular file and checks its destination/app path and directory
+identity before execution; it does not rehash the target. Copying the receipt to
+another tree does not admit that tree. Keep it private: it contains local paths
+and is never packaged. It guards accidental original selection, not deliberate
+forgery, later content changes or arbitrary command writes.
+
+For a pre-receipt disposable copy, run the helper once with the same explicit
+`--source`, `--destination`, independent `--expected-sha256`,
+`--expected-file-count`, `--expected-total-bytes` and `--verify-existing`.
+This rechecks both trees and rejects links without copying or resetting working
+profile/cache state. A changed app that no longer matches the independent identity
+cannot acquire a receipt through this migration; retain it and prepare a separate
+verified copy instead. Moving/replacing a receipted directory invalidates its
+receipt. Never manually mint or copy a receipt onto original inputs.
+
+Reuse that copy, profile/cache state
 and a separate writable working directory between exploratory runs. Do not make
 a full new copy or hash the complete tree before and after every experiment
 unless the hypothesis requires it. The runner does not sandbox writes: never
@@ -112,12 +129,16 @@ and unchanged verified binaries can also be reused without another fresh build.
 ## Records and promotion boundary
 
 The runner emits [`bb-target-run` schema v4](../../schemas/target-run.schema.json)
-with producer `bb-target-runner/1.13.0`. The schema requires matching run
-classification and emulator admission. Exploratory records cannot contain
+with producer `bb-target-runner/1.13.1`. The schema requires matching run
+classification, target evidence classes and emulator admission. Synthetic leaf
+or top-level target evidence remains `synthetic-control` with a strict build.
+Exploratory records cannot contain
 `source` or `build_provenance`; strict records require source/build agreement.
 The v4 compatibility boundary makes old consumers fail closed. Historical v3
 records remain historical evidence with their original limitations; do not relabel
-them or fabricate v4 fields to pass a gate.
+them or fabricate v4 fields to pass a gate. Pre-review v4 records from 1.13.0
+lack the required target evidence-class projection and also fail closed; do not
+backfill their summaries to obtain promotion admission.
 
 ```text
 python3 tools/run_target_experiment.py validate <run-manifest.json>
@@ -125,9 +146,12 @@ python3 tools/run_target_experiment.py validate <run-manifest.json> --require-pr
 ```
 
 The first command checks format and internal agreement only. The second also
-rejects exploratory/synthetic records, incomplete target/host identity, unchecked
+rejects exploratory/synthetic records, incomplete target identity, unchecked
 or changed trees, failed/unknown termination or oracle, and partial packaging.
-Its success is necessary, not sufficient: a reviewer must establish consumed
+Aggregate host unknown/warning counts are retained, but are not a generic gate:
+non-material or unavailable optional fields do not invalidate bounded evidence.
+Its success is necessary, not sufficient: a reviewer must resolve material host
+unknowns and establish consumed
 configuration and an independent semantic oracle appropriate to the promoted
 claim. A `verification-candidate` or passed process-exit oracle proves neither
 menu/gameplay nor graphics correctness nor performance. Missing promotion-grade
@@ -153,3 +177,8 @@ commands, config contents, emulator/target bytes and opaque captures are exclude
 DLC keys remain hashed; free-form versions are redacted. There is no same-user
 adversary or sealed-executable claim. Preserve safe negative records without
 representing reused or changed state as a verified current baseline.
+
+The structured recorded-experiment runner still requires command/scenario JSON, a
+target manifest and a fresh declared output path. PR #131 review identified a
+possible thinner exploratory invocation as a nonblocking follow-up: measure
+actual operator friction before adding another interface.

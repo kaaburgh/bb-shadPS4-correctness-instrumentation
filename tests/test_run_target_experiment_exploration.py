@@ -12,6 +12,7 @@ import zipfile
 
 from tests import test_shadps4_build_manifest as strict_tests
 from tools import run_target_experiment as runner
+from tools import prepare_env1_target_copy as target_copy
 
 
 @unittest.skipUnless((os.name == "nt" or sys.platform.startswith("linux"))
@@ -24,6 +25,13 @@ class ExplorationTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.fixture.setUp()
         self.args = self.fixture.run_args()
+        original = self.args["target_root"]
+        disposable = self.fixture.root / "disposable"
+        target_copy.prepare(original / "app", disposable, target_copy.identity(original / "app"))
+        command = json.loads(self.args["command_path"].read_text())
+        command["argv"][1] = str(disposable / "app")
+        self.args["command_path"].write_bytes(runner._json_bytes(command))
+        self.args["target_root"] = disposable
 
     def exploratory_args(self):
         args = dict(self.args)
@@ -132,18 +140,50 @@ class ExplorationTests(unittest.TestCase):
         (args["working_directory"] / "new-output.bin").write_bytes(b"old")
         self.assertEqual(runner.main(argv), 2)  # stale declared output still fails preflight
 
-    def test_strict_candidate_and_incomplete_promotion_gate(self):
+    def test_synthetic_strict_build_cannot_promote_even_with_complete_summaries(self):
+        # Runtime top-level provenance still contains synthetic leaf evidence.
         record = runner.run_experiment(**self.args)
         self.assertEqual(record["emulator"]["admission"], "source-build")
-        self.assertEqual(record["evidence_classification"], "verification-candidate")
-        # Synthetic host fixture has unknowns: source verification alone is insufficient.
-        with self.assertRaisesRegex(runner.TargetRunError, "complete verified"):
-            runner.require_promotion_evidence(record)
-        for key in ("unknown_field_count", "warning_count"):
-            record["host_environment"][key] = 0
+        self.assertEqual(record["evidence_classification"], "synthetic-control")
+        record["host_environment"]["unknown_field_count"] = 0
+        record["host_environment"]["warning_count"] = 0
         record["target"]["identity_state"] = "complete"
-        runner.require_promotion_evidence(record)  # synthetic gate control, not target evidence
+        with self.assertRaisesRegex(runner.TargetRunError, "promotion requires"):
+            runner.require_promotion_evidence(record)
+        record["evidence_classification"] = "verification-candidate"
+        with self.assertRaises(runner.TargetRunError):
+            runner.require_promotion_evidence(record)
+        # Also exercise wholly synthetic provenance paired with the strict build.
+        target = json.loads(self.args["target_manifest_path"].read_text())
+        target["provenance"]["evidence_classes"] = ["synthetic"]
+        self.args["target_manifest_path"].write_bytes(runner._json_bytes(target))
+        record = runner.run_experiment(**self.args)
+        self.assertEqual(record["evidence_classification"], "synthetic-control")
+        with self.assertRaises(runner.TargetRunError):
+            runner.require_promotion_evidence(record)
+
+    def test_candidate_gate_accepts_collector_unknowns_without_summary_mutation(self):
+        # Simulated runtime input tests the real producer path, not real target evidence.
+        target = json.loads(self.args["target_manifest_path"].read_text())
+        def runtime(node):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "evidence_class":
+                        node[key] = "runtime"
+                    else:
+                        runtime(value)
+            elif isinstance(node, list):
+                for value in node:
+                    runtime(value)
+        runtime(target)
+        target["identity_completeness"] = {"state": "complete", "unknown_fields": []}
+        self.args["target_manifest_path"].write_bytes(runner._json_bytes(target))
+        record = runner.run_experiment(**self.args)
+        self.assertEqual(record["evidence_classification"], "verification-candidate")
+        self.assertGreater(record["host_environment"]["unknown_field_count"], 0)
+        runner.require_promotion_evidence(record)
         for mutation in (
+            lambda r: r["target"].update(identity_state="partial"),
             lambda r: r["target"].update(post_run_tree_state="changed_or_unverifiable"),
             lambda r: r["termination"].update(state="timed_out"),
             lambda r: r["oracle"].update(state="unknown"),
@@ -153,6 +193,12 @@ class ExplorationTests(unittest.TestCase):
             mutation(changed)
             with self.assertRaises(runner.TargetRunError):
                 runner.require_promotion_evidence(changed)
+
+    def test_exploration_requires_receipt_before_execution(self):
+        (self.args["target_root"] / target_copy.RECEIPT_NAME).unlink()
+        with mock.patch.object(runner._legacy, "_execute_command", side_effect=AssertionError("must not execute")):
+            with self.assertRaisesRegex(runner.TargetRunError, "receipt required"):
+                runner.run_experiment(**self.exploratory_args())
 
 
 if __name__ == "__main__":

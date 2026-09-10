@@ -33,6 +33,7 @@ from typing import Any, Mapping, Sequence
 from tools import bloodborne_target_manifest
 from tools import shadps4_source_baseline
 from tools import collect_host_environment
+from tools.prepare_env1_target_copy import require_copy_receipt
 
 
 RUN_SCHEMA_PATH = Path(__file__).parents[1] / "schemas" / "target-run.schema.json"
@@ -1630,23 +1631,43 @@ def validate_run_manifest(manifest: Mapping[str, Any]) -> None:
             raise TargetRunError("run effective tree does not match unpatched source")
 
 
+def target_evidence_classes(value: Any) -> list[str]:
+    """Include leaf evidence, so mixed provenance cannot hide synthetic inputs."""
+    classes: set[str] = set()
+    def visit(node: Any) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                if key == "evidence_class" and isinstance(child, str):
+                    classes.add(child)
+                elif key == "evidence_classes" and isinstance(child, list):
+                    classes.update(child)
+                else:
+                    visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+    visit(value)
+    return sorted(classes)
+
+
 def require_promotion_evidence(manifest: Mapping[str, Any]) -> None:
     """Fail closed on unverified/legacy records; passing is necessary, not sufficient.
 
-    Claim-specific semantic oracles and independent review remain required.
+    Material host/config completeness, claim-specific semantic oracles and
+    independent review remain required; aggregate unknown/warning counts do not
+    establish whether a missing field is material to the claim.
     """
     validate_run_manifest(manifest)
-    if manifest["evidence_classification"] != "verification-candidate":
+    if (manifest["evidence_classification"] != "verification-candidate"
+            or "synthetic" in manifest["target"]["evidence_classes"]):
         raise TargetRunError("promotion requires a verification-candidate run, not exploratory or synthetic evidence")
     if (manifest["target"]["pre_run_tree_state"] != "verified"
             or manifest["target"]["post_run_tree_state"] != "verified"
             or manifest["target"]["identity_state"] != "complete"
             or manifest["termination"]["state"] != "completed"
             or manifest["oracle"]["state"] != "passed"
-            or manifest["packaging"]["state"] != "complete"
-            or manifest["host_environment"]["unknown_field_count"] != 0
-            or manifest["host_environment"]["warning_count"] != 0):
-        raise TargetRunError("promotion requires complete verified target/host identity and successful bounded evidence")
+            or manifest["packaging"]["state"] != "complete"):
+        raise TargetRunError("promotion requires complete verified target identity and successful bounded evidence")
 
 
 def _write_zip_atomic(output: Path, entries: Mapping[str, bytes]) -> None:
@@ -1754,6 +1775,10 @@ def run_experiment(
     _preflight_declared_outputs(scenario, workdir_resolved)
 
     if exploratory:
+        try:
+            require_copy_receipt(target_root_resolved)
+        except (OSError, ValueError) as error:
+            raise TargetRunError(f"disposable target copy receipt required: {error}") from error
         app_root = _resolve_target_directory(target_root_resolved, target_root_resolved / "app", "target_root/app")
         target_eboot = _resolve_target_file(target_root_resolved, app_root / "eboot.bin", "target_root/app/eboot.bin")
     else:
@@ -1807,6 +1832,7 @@ def run_experiment(
             "manifest_size_bytes": len(target_raw),
             "packaged_manifest_sha256": _sha256_bytes(safe_target_raw),
             "packaged_manifest_size_bytes": len(safe_target_raw),
+            "evidence_classes": target_evidence_classes(target_manifest),
             "identity_state": target_manifest["identity_completeness"]["state"],
         },
         "host_environment": {
@@ -1867,7 +1893,7 @@ def run_experiment(
         },
     }
     run_manifest["emulator"]["admission"] = "exploratory-unverified" if exploratory else "source-build" if verified_build else "synthetic-control"
-    run_manifest["evidence_classification"] = "exploratory-unverified" if exploratory else "verification-candidate" if verified_build else "synthetic-control"
+    run_manifest["evidence_classification"] = "exploratory-unverified" if exploratory else "verification-candidate" if verified_build and "synthetic" not in run_manifest["target"]["evidence_classes"] else "synthetic-control"
     run_manifest["target"]["pre_run_tree_state"] = "not_checked" if exploratory else "verified"
     run_manifest["target"]["post_run_tree_state"] = "not_checked"
     if exploratory:

@@ -84,7 +84,9 @@ Original operator-owned game/package inputs are immutable. Never execute a
 writable target against those originals or delete them. Prepare one separate,
 verified disposable Bloodborne working copy (no links back to originals) and reuse
 it across exploratory runs, including its working profile/cache state. The copy
-helper verifies creation; it need not run before each experiment. Exploration does
+helper verifies creation and writes a private, directory-bound receipt required
+by exploratory runs. Use its `--verify-existing` option once for an older copy
+without a receipt; it need not run before each experiment. Exploration does
 not require a full expensive pre/post target hash pass unless the hypothesis needs
 one. Current working state may drift; record that as unverified. Recheck exact
 identity for promotion. Never commit proprietary payloads, private dumps, secrets,

@@ -287,8 +287,8 @@ class ReviewRegressionTests(unittest.TestCase):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
     def test_runner_version_identifies_supported_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.13.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.13.0")
+        self.assertEqual(runner.RUNNER_VERSION, "1.13.1")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.13.1")
         self.assertFalse(hasattr(runner, "PINNED_BUILD_ARTIFACTS"))
 
 

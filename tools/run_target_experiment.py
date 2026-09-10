@@ -34,7 +34,7 @@ for _export_name in dir(_legacy):
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 _package_target_manifest = _shared_package_target_manifest
 
-RUNNER_VERSION = "1.13.0"
+RUNNER_VERSION = "1.13.1"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
 
