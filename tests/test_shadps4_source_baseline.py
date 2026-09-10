@@ -137,6 +137,19 @@ class DriftCheckTests(unittest.TestCase):
         )
         self.assertTrue(any("stale.schema.json" in item for item in self._drift()))
 
+    def test_nested_dependency_commit_is_not_the_parent_source_identity(self):
+        path = "docs/re/build-provenance.json"
+        source = {"commit": baseline.COMMIT, "tree": baseline.TREE,
+                  "repository": baseline.REPOSITORY,
+                  "submodules": [{"commit": FOREIGN, "tree": FOREIGN,
+                                  "repository": "https://example.invalid/dependency"}]}
+        self._write(path, json.dumps({"source": source}, indent=2))
+        self.assertEqual(self._drift(), [])
+        source["commit"] = FOREIGN
+        self._write(path, json.dumps({"source": source}, indent=2))
+        self.assertTrue(any(path in item and "object field 'commit'" in item
+                            for item in self._drift()))
+
     def test_workflow_must_resolve_rather_than_embed_the_literal(self):
         """The original defect: a workflow keeps fetching the old headers."""
         self._write(

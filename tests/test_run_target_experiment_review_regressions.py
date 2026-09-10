@@ -111,7 +111,7 @@ class ReviewRegressionTests(unittest.TestCase):
         manifest["provenance"]["evidence_classes"] = ["runtime"]
         with self.assertRaisesRegex(runner.TargetRunError, "current-run producer provenance"):
             runner._require_non_synthetic_evidence_contract(
-                manifest, _scenario("file-sha256"), Path("unused-target-binary"), "0" * 64
+                manifest, _scenario("file-sha256"), Path("unused-target-binary"), "0" * 64, build_manifest={}
             )
 
     def test_non_synthetic_artifacts_fail_closed_without_producer_attestation(self):
@@ -126,7 +126,7 @@ class ReviewRegressionTests(unittest.TestCase):
         }]
         with self.assertRaisesRegex(runner.TargetRunError, "declared artifacts require"):
             runner._require_non_synthetic_evidence_contract(
-                manifest, scenario, Path("unused-target-binary"), "0" * 64
+                manifest, scenario, Path("unused-target-binary"), "0" * 64, build_manifest={}
             )
 
     def test_safe_target_projection_preserves_hashed_dlc_identity(self):
@@ -235,140 +235,12 @@ class ReviewRegressionTests(unittest.TestCase):
             self.assertEqual(observed["scenario_raw"], scenario_raw)
             self.assertEqual(observed["command_raw"], command_raw)
 
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
-    def test_linux_non_synthetic_staged_binary_executes_end_to_end(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            target_root, target_manifest_path = _write_bound_target_fixture(
-                root, runtime_classified=True
-            )
-            workdir = root / "work"
-            workdir.mkdir()
-            output = root / "run.zip"
-
-            standin = root / "standin-emulator"
-            standin.write_text(
-                "#!/usr/bin/env python3\nraise SystemExit(0)\n",
-                encoding="utf-8",
-            )
-            standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
-            pinned = {
-                "source_commit": runner.PINNED_SOURCE_COMMIT,
-                "source_tree": runner.PINNED_SOURCE_TREE,
-                "binary_name": "standin-emulator",
-                "binary_sha256": "sha256:" + standin_sha256,
-                "binary_size_bytes": standin.stat().st_size,
-            }
-
-            scenario_path = root / "scenario.json"
-            scenario_path.write_bytes(runner._json_bytes(_scenario()))
-            command = {
-                "schema_id": runner.COMMAND_SCHEMA_ID,
-                "schema_version": runner.COMMAND_SCHEMA_VERSION,
-                "argv": [str(standin), str(target_root / "app")],
-                "emulator_binary_index": 0,
-                "target_path_index": 1,
-            }
-            command_path = root / "command.json"
-            command_path.write_bytes(runner._json_bytes(command))
-
-            with mock.patch.dict(
-                runner.PINNED_BUILD_ARTIFACTS,
-                {"linux": pinned},
-                clear=False,
-            ):
-                manifest = runner.run_experiment(
-                    target_manifest_path=target_manifest_path,
-                    scenario_path=scenario_path,
-                    command_path=command_path,
-                    emulator_binary_path=standin,
-                    emulator_binary_sha256=standin_sha256,
-                    source_repository=runner.PINNED_SOURCE_REPOSITORY,
-                    source_commit=runner.PINNED_SOURCE_COMMIT,
-                    source_tree=runner.PINNED_SOURCE_TREE,
-                    patch_commits=[],
-                    target_root=target_root,
-                    working_directory=workdir,
-                    output_path=output,
-                    graphics_backend="synthetic",
-                    emulator_config_path=None,
-                )
-
-            self.assertFalse(runner._is_explicit_synthetic_control(
-                json.loads(target_manifest_path.read_text(encoding="utf-8"))
-            ))
-            self.assertEqual(manifest["termination"]["state"], "completed")
-            self.assertEqual(manifest["oracle"]["state"], "passed")
-            self.assertEqual(manifest["provenance"]["producer"]["version"], "1.11.0")
-            self.assertEqual(manifest["emulator"]["binary"]["sha256"], "sha256:" + standin_sha256)
-            self.assertTrue(output.is_file())
-
-    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux non-synthetic branch regression")
-    def test_linux_non_synthetic_digest_mismatch_fails_before_delegation(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            target_root, target_manifest_path = _write_bound_target_fixture(
-                root, runtime_classified=True
-            )
-            workdir = root / "work"
-            workdir.mkdir()
-            standin = root / "standin-emulator"
-            standin.write_text(
-                "#!/usr/bin/env python3\nraise SystemExit(0)\n",
-                encoding="utf-8",
-            )
-            standin_sha256 = hashlib.sha256(standin.read_bytes()).hexdigest()
-            pinned = {
-                "source_commit": runner.PINNED_SOURCE_COMMIT,
-                "source_tree": runner.PINNED_SOURCE_TREE,
-                "binary_name": "standin-emulator",
-                "binary_sha256": "sha256:" + standin_sha256,
-                "binary_size_bytes": standin.stat().st_size,
-            }
-            scenario_path = root / "scenario.json"
-            scenario_path.write_bytes(runner._json_bytes(_scenario()))
-            command_path = root / "command.json"
-            command_path.write_bytes(
-                runner._json_bytes(
-                    {
-                        "schema_id": runner.COMMAND_SCHEMA_ID,
-                        "schema_version": runner.COMMAND_SCHEMA_VERSION,
-                        "argv": [str(standin), str(target_root / "app")],
-                        "emulator_binary_index": 0,
-                        "target_path_index": 1,
-                    }
-                )
-            )
-
-            with (
-                mock.patch.dict(
-                    runner.PINNED_BUILD_ARTIFACTS,
-                    {"linux": pinned},
-                    clear=False,
-                ),
-                mock.patch.object(runner, "_LEGACY_RUN_EXPERIMENT") as legacy_run,
-            ):
-                with self.assertRaisesRegex(
-                    runner.TargetRunError,
-                    "requires the exact independently observed upstream",
-                ):
-                    runner.run_experiment(
-                        target_manifest_path=target_manifest_path,
-                        scenario_path=scenario_path,
-                        command_path=command_path,
-                        emulator_binary_path=standin,
-                        emulator_binary_sha256="0" * 64,
-                        source_repository=runner.PINNED_SOURCE_REPOSITORY,
-                        source_commit=runner.PINNED_SOURCE_COMMIT,
-                        source_tree=runner.PINNED_SOURCE_TREE,
-                        patch_commits=[],
-                        target_root=target_root,
-                        working_directory=workdir,
-                        output_path=root / "run.zip",
-                        graphics_backend="synthetic",
-                        emulator_config_path=None,
-                    )
-                legacy_run.assert_not_called()
+    def test_non_synthetic_binary_without_manifest_has_no_promotion_admission(self):
+        manifest = _manifest()
+        manifest["provenance"]["evidence_classes"] = ["runtime"]
+        self.assertIsNone(runner._require_non_synthetic_evidence_contract(
+            manifest, _scenario(), Path(sys.executable), "0" * 64
+        ))
 
     def test_removed_sealing_symbols_do_not_reappear(self):
         for name in (
@@ -415,9 +287,9 @@ class ReviewRegressionTests(unittest.TestCase):
                 runner._resolve_command_binary(_command(link), workdir, binary)
 
     def test_runner_version_identifies_supported_entrypoint(self):
-        self.assertEqual(runner.RUNNER_VERSION, "1.11.0")
-        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.11.0")
-        self.assertEqual(runner.PINNED_BUILD_WORKFLOW_RUN_ID, 31742892228)
+        self.assertEqual(runner.RUNNER_VERSION, "1.13.0")
+        self.assertEqual(runner._legacy.RUNNER_VERSION, "1.13.0")
+        self.assertFalse(hasattr(runner, "PINNED_BUILD_ARTIFACTS"))
 
 
 if __name__ == "__main__":

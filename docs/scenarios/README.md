@@ -32,12 +32,12 @@ A scenario is `selected` only after target-machine evidence demonstrates that it
 
 ## Current BB-ENV1 execution boundary
 
-The supported non-synthetic entrypoint remains `python tools/run_target_experiment.py run ...` as documented in `docs/experiments/target-execution-feasibility.md`. For non-synthetic runs the current contract accepts only a `process-exit` oracle and no declared artifacts. That establishes bounded execution/termination and exact provenance, but it does **not** independently attest a title-visible checkpoint, input sequence, save state, screenshot, frame/resource state, or other semantic observable.
+The supported non-synthetic entrypoint remains `python tools/run_target_experiment.py run ...` as documented in `docs/experiments/target-execution-feasibility.md`. Exploratory non-synthetic runs need no build manifest or clean source checkout and may reuse a disposable working copy before ENV1 completion. Their file/capture results remain unverified observations. For strict verification candidates the contract accepts only a `process-exit` oracle and no declared artifacts. That establishes bounded execution/termination and exact provenance, but it does **not** independently attest a title-visible checkpoint, input sequence, save state, screenshot, frame/resource state, or other semantic observable.
 
 Therefore BB-BL4 target selection is deliberately two-stage:
 
 1. use this template to define bounded candidate scenarios without claiming they work;
-2. on a target-owning machine, exercise candidates using the BB-ENV1 route and retain only safe evidence. Promote a candidate to `selected` only when the expected observable has an independent evidence path appropriate to the claim.
+2. on a target-owning machine, exercise candidates now using the exploratory route, without waiting for BB-ENV1 verification and retain only safe evidence. Promote a candidate to `selected` only when the expected observable has an independent evidence path appropriate to the claim.
 
 Until a producer-bound semantic observable exists, a target run can establish launch/termination feasibility but cannot by itself select representative gameplay or correctness/performance-sensitive checkpoints. Operator observation may be retained as `reported` evidence, not silently upgraded to `runtime` semantic verification.
 

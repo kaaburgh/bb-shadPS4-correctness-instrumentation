@@ -176,7 +176,7 @@ class HardeningRegressionTests(unittest.TestCase):
         self.assertIn("packaged_sha256", required)
         self.assertIn("packaged_size_bytes", required)
         patch_schema = schema["properties"]["emulator"]["properties"]["source"]["properties"]["patch_commits"]
-        self.assertEqual(patch_schema["maxItems"], 0)
+        self.assertEqual(patch_schema["maxItems"], 64)
 
 
 if __name__ == "__main__":

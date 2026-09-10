@@ -56,7 +56,7 @@ class PostRunTargetIntegrityTests(unittest.TestCase):
         )
         field = schema["properties"]["target"]["properties"]["post_run_tree_state"]
         self.assertEqual(
-            set(field["enum"]), {"verified", "changed_or_unverifiable"}
+            set(field["enum"]), {"verified", "changed_or_unverifiable", "not_checked"}
         )
 
 
