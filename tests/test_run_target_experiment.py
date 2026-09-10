@@ -338,7 +338,7 @@ class RunTests(unittest.TestCase):
             other_target.mkdir()
             wrong_command["argv"][wrong_command["target_path_index"]] = str(other_target)
             app_root, eboot = runner._verify_target_root(target_root.resolve(), target_manifest)
-            with self.assertRaisesRegex(runner.TargetRunError, "does not identify the verified target"):
+            with self.assertRaisesRegex(runner.TargetRunError, "does not identify the selected target"):
                 runner._bind_command_target(wrong_command, workdir.resolve(), app_root, eboot)
 
             manifest = runner.run_experiment(
@@ -430,6 +430,21 @@ class RunTests(unittest.TestCase):
                     archive.read("run-manifest.json").decode("utf-8")
                 )
                 runner.validate_run_manifest(packaged_manifest)
+
+
+
+
+
+def load_tests(loader, standard_tests, pattern):
+    """Keep source-build controls in the supported runner's explicit test suite.
+
+    Full discovery already loads their module separately. The existing target-run
+    CI job invokes this module explicitly and therefore receives both suites.
+    """
+    if pattern is None:
+        from tests import test_shadps4_build_manifest
+        standard_tests.addTests(loader.loadTestsFromModule(test_shadps4_build_manifest))
+    return standard_tests
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/kaaburgh/bb-shadPS4-correctness-instrumentation/main/schemas/target-run.schema.json",
   "title": "Bloodborne/shadPS4 bounded target-run manifest",
-  "description": "Safe, payload-free record produced by the gated target-machine runner.",
+  "description": "Bounded exploration or verification candidate; classification is not semantic claim promotion.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,14 +19,15 @@
     "oracle",
     "artifacts",
     "packaging",
-    "redaction"
+    "redaction",
+    "evidence_classification"
   ],
   "properties": {
     "manifest_kind": {
       "const": "bb-target-run"
     },
     "schema_version": {
-      "const": 3
+      "const": 4
     },
     "provenance": {
       "type": "object",
@@ -71,7 +72,10 @@
         "manifest_size_bytes",
         "packaged_manifest_sha256",
         "packaged_manifest_size_bytes",
-        "identity_state"
+        "identity_state",
+        "pre_run_tree_state",
+        "post_run_tree_state",
+        "evidence_classes"
       ],
       "properties": {
         "manifest_sha256": {
@@ -83,13 +87,15 @@
         "identity_state": {
           "enum": [
             "complete",
-            "partial"
+            "partial",
+            "unverified"
           ]
         },
         "post_run_tree_state": {
           "enum": [
             "verified",
-            "changed_or_unverifiable"
+            "changed_or_unverifiable",
+            "not_checked"
           ]
         },
         "packaged_manifest_sha256": {
@@ -97,6 +103,26 @@
         },
         "packaged_manifest_size_bytes": {
           "$ref": "#/$defs/positiveInteger"
+        },
+        "pre_run_tree_state": {
+          "enum": [
+            "verified",
+            "not_checked"
+          ]
+        },
+        "evidence_classes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "static",
+              "runtime",
+              "synthetic",
+              "reported",
+              "assumed"
+            ]
+          }
         }
       }
     },
@@ -128,10 +154,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "source",
         "binary",
         "config_sha256",
-        "graphics_backend"
+        "graphics_backend",
+        "admission"
       ],
       "properties": {
         "source": {
@@ -156,11 +182,53 @@
             },
             "patch_commits": {
               "type": "array",
-              "maxItems": 0,
+              "maxItems": 64,
               "uniqueItems": true,
               "items": {
                 "$ref": "#/$defs/gitSha"
               }
+            },
+            "patch_repository": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/buildRepo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effective_head": {
+              "$ref": "#/$defs/buildGit"
+            },
+            "effective_tree": {
+              "$ref": "#/$defs/buildGit"
+            }
+          },
+          "if": {
+            "properties": {
+              "patch_commits": {
+                "minItems": 1
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "patch_repository",
+              "effective_head",
+              "effective_tree"
+            ],
+            "properties": {
+              "patch_repository": {
+                "$ref": "#/$defs/buildRepo"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "patch_repository": false,
+              "effective_head": false,
+              "effective_tree": false
             }
           }
         },
@@ -193,8 +261,222 @@
               "type": "null"
             }
           ]
+        },
+        "build_provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "manifest_sha256",
+            "manifest_size_bytes",
+            "schema_version",
+            "producer",
+            "source",
+            "binary",
+            "build_os",
+            "build_architecture",
+            "tools",
+            "options_sha256",
+            "commands_sha256",
+            "environment_sha256",
+            "cmake_cache_sha256",
+            "compile_commands_sha256",
+            "fetched_sources"
+          ],
+          "properties": {
+            "manifest_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "manifest_size_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "schema_version": {
+              "const": "bb-shadps4-build/v1"
+            },
+            "producer": {
+              "$ref": "#/$defs/buildProducer"
+            },
+            "source": {
+              "$ref": "#/$defs/buildSource"
+            },
+            "binary": {
+              "$ref": "#/$defs/buildBinary"
+            },
+            "build_os": {
+              "enum": [
+                "Linux",
+                "Windows",
+                "Darwin"
+              ]
+            },
+            "build_architecture": {
+              "enum": [
+                "x86_64",
+                "AMD64",
+                "aarch64",
+                "arm64"
+              ]
+            },
+            "tools": {
+              "$ref": "#/$defs/buildTools"
+            },
+            "options_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "commands_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "environment_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "cmake_cache_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "compile_commands_sha256": {
+              "$ref": "#/$defs/buildSha"
+            },
+            "fetched_sources": {
+              "$ref": "#/$defs/buildFetchedSources"
+            }
+          }
+        },
+        "admission": {
+          "enum": [
+            "synthetic-control",
+            "source-build",
+            "exploratory-unverified"
+          ]
+        },
+        "source_observation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "commit",
+            "tree",
+            "patch_commits"
+          ],
+          "properties": {
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^https://[^\\s]{1,240}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "commit": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/gitSha"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tree": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/gitSha"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "patch_commits": {
+              "type": "array",
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/gitSha"
+              }
+            }
+          }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "admission": {
+                "const": "source-build"
+              }
+            },
+            "required": [
+              "admission"
+            ]
+          },
+          "then": {
+            "required": [
+              "build_provenance"
+            ]
+          },
+          "else": {
+            "properties": {
+              "build_provenance": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "patch_commits": {
+                    "minItems": 1
+                  }
+                }
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "required": [
+              "build_provenance",
+              "admission"
+            ],
+            "properties": {
+              "admission": {
+                "const": "source-build"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "admission": {
+                "const": "exploratory-unverified"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "source_observation"
+            ],
+            "properties": {
+              "source": false,
+              "build_provenance": false
+            }
+          },
+          "else": {
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "source_observation": false
+            }
+          }
+        }
+      ]
     },
     "scenario": {
       "type": "object",
@@ -521,6 +803,13 @@
           }
         }
       }
+    },
+    "evidence_classification": {
+      "enum": [
+        "exploratory-unverified",
+        "synthetic-control",
+        "verification-candidate"
+      ]
     }
   },
   "$defs": {
@@ -543,6 +832,413 @@
     "positiveInteger": {
       "type": "integer",
       "minimum": 1
+    },
+    "buildSha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "buildGit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "buildRepo": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^https://[A-Za-z0-9.-]+/[A-Za-z0-9_./-]+$"
+    },
+    "buildBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/buildSha"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "buildProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sha256"
+      ],
+      "properties": {
+        "version": {
+          "const": "bb-shadps4-build/1.0.0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/buildSha"
+        }
+      }
+    },
+    "buildTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "version_output_sha256",
+        "executable_sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+){1,3}$"
+        },
+        "version_output_sha256": {
+          "$ref": "#/$defs/buildSha"
+        },
+        "executable_sha256": {
+          "$ref": "#/$defs/buildSha"
+        }
+      }
+    },
+    "buildTools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cc",
+        "cxx",
+        "cmake",
+        "ninja",
+        "git"
+      ],
+      "properties": {
+        "cc": {
+          "$ref": "#/$defs/buildTool"
+        },
+        "cxx": {
+          "$ref": "#/$defs/buildTool"
+        },
+        "cmake": {
+          "$ref": "#/$defs/buildTool"
+        },
+        "ninja": {
+          "$ref": "#/$defs/buildTool"
+        },
+        "git": {
+          "$ref": "#/$defs/buildTool"
+        }
+      }
+    },
+    "buildSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "tree",
+        "dirty",
+        "patch_repository",
+        "patch_commits",
+        "effective_head",
+        "effective_tree",
+        "submodules"
+      ],
+      "properties": {
+        "repository": {
+          "$ref": "#/$defs/buildRepo"
+        },
+        "commit": {
+          "$ref": "#/$defs/buildGit"
+        },
+        "tree": {
+          "$ref": "#/$defs/buildGit"
+        },
+        "dirty": {
+          "const": false
+        },
+        "patch_repository": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/buildRepo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_commits": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/buildGit"
+          }
+        },
+        "effective_head": {
+          "$ref": "#/$defs/buildGit"
+        },
+        "effective_tree": {
+          "$ref": "#/$defs/buildGit"
+        },
+        "submodules": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "repository",
+              "commit",
+              "tree",
+              "dirty"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+              },
+              "repository": {
+                "$ref": "#/$defs/buildRepo"
+              },
+              "commit": {
+                "$ref": "#/$defs/buildGit"
+              },
+              "tree": {
+                "$ref": "#/$defs/buildGit"
+              },
+              "dirty": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "buildFetchedSources": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "algorithm",
+          "sha256",
+          "git"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+-src$",
+            "maxLength": 128
+          },
+          "algorithm": {
+            "const": "sha256-build-inputs-v1"
+          },
+          "sha256": {
+            "$ref": "#/$defs/buildSha"
+          },
+          "git": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "repository",
+                  "commit",
+                  "tree",
+                  "submodules"
+                ],
+                "properties": {
+                  "repository": {
+                    "$ref": "#/$defs/buildRepo"
+                  },
+                  "commit": {
+                    "$ref": "#/$defs/buildGit"
+                  },
+                  "tree": {
+                    "$ref": "#/$defs/buildGit"
+                  },
+                  "submodules": {
+                    "type": "array",
+                    "maxItems": 512,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "path",
+                        "repository",
+                        "commit",
+                        "tree",
+                        "dirty"
+                      ],
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "maxLength": 512,
+                          "pattern": "^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$"
+                        },
+                        "repository": {
+                          "$ref": "#/$defs/buildRepo"
+                        },
+                        "commit": {
+                          "$ref": "#/$defs/buildGit"
+                        },
+                        "tree": {
+                          "$ref": "#/$defs/buildGit"
+                        },
+                        "dirty": {
+                          "const": false
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "emulator": {
+            "properties": {
+              "admission": {
+                "const": "exploratory-unverified"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_classification": {
+            "const": "exploratory-unverified"
+          },
+          "target": {
+            "properties": {
+              "identity_state": {
+                "const": "unverified"
+              },
+              "pre_run_tree_state": {
+                "const": "not_checked"
+              },
+              "post_run_tree_state": {
+                "const": "not_checked"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "emulator": {
+            "properties": {
+              "admission": {
+                "const": "synthetic-control"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_classification": {
+            "const": "synthetic-control"
+          },
+          "target": {
+            "properties": {
+              "identity_state": {
+                "enum": [
+                  "complete",
+                  "partial"
+                ]
+              },
+              "pre_run_tree_state": {
+                "const": "verified"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "emulator": {
+            "properties": {
+              "admission": {
+                "const": "source-build"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_classification": {
+            "enum": [
+              "verification-candidate",
+              "synthetic-control"
+            ]
+          },
+          "target": {
+            "properties": {
+              "identity_state": {
+                "enum": [
+                  "complete",
+                  "partial"
+                ]
+              },
+              "pre_run_tree_state": {
+                "const": "verified"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "target": {
+            "properties": {
+              "evidence_classes": {
+                "contains": {
+                  "const": "synthetic"
+                }
+              }
+            }
+          },
+          "emulator": {
+            "properties": {
+              "admission": {
+                "const": "source-build"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evidence_classification": {
+            "const": "synthetic-control"
+          }
+        }
+      }
+    }
+  ]
 }

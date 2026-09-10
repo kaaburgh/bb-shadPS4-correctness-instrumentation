@@ -246,6 +246,13 @@ def _check_text(path: Path, relative: str, findings: list[str]) -> None:
         return
     derived = any(relative.startswith(prefix) for prefix in _DERIVED_PATHS)
     always = relative in _BASELINE_PROSE_PATHS
+    structured_json = False
+    if path.suffix == ".json":
+        try:
+            loads_strict(text)
+            structured_json = True
+        except SourceBaselineError:
+            pass
     upstream_until = -1
     carried: str | None = None
     for number, line in enumerate(text.splitlines(), start=1):
@@ -281,6 +288,11 @@ def _check_text(path: Path, relative: str, findings: list[str]) -> None:
                         f"disagrees with docs/baseline/shadps4-source.json "
                         f"({_EXPECTED[kind]})"
                     )
+        # JSON identity ownership follows object structure (_check_json), not
+        # line proximity: a nested dependency has its own repository and SHA.
+        # Explicit URLs/CLI references above still receive the text checks.
+        if structured_json:
+            continue
         if REPOSITORY_SLUG.lower() in line.lower():
             upstream_until = number + _UPSTREAM_CONTEXT_LINES
         if not always and number > upstream_until:

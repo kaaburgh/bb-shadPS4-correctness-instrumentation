@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run one bounded gated target experiment and pack safe run metadata.
+"""Execute a bounded experiment for the supported exploration/verification entrypoint.
 
 The runner deliberately treats the target command as an operator-owned input.
-It validates the payload-free target identity manifest, exact emulator binary
-identity, source provenance, scenario/oracle contract, and working-directory
-separation before starting a process.  The resulting ZIP contains only
+It validates scenario/oracle bounds and working-directory separation, observes
+actual binary bytes, and optionally verifies exact source/build and target
+provenance. Exploratory observations never become verified build evidence.  The resulting ZIP contains only
 allowlisted metadata and optionally redacted JSON artifacts; it never contains
 the command file, target root, emulator binary, or raw process output.
 """
@@ -33,11 +33,12 @@ from typing import Any, Mapping, Sequence
 from tools import bloodborne_target_manifest
 from tools import shadps4_source_baseline
 from tools import collect_host_environment
+from tools.prepare_env1_target_copy import require_copy_receipt
 
 
 RUN_SCHEMA_PATH = Path(__file__).parents[1] / "schemas" / "target-run.schema.json"
 RUN_SCHEMA_ID = "bb-target-run"
-RUN_SCHEMA_VERSION = 3
+RUN_SCHEMA_VERSION = 4
 SCENARIO_SCHEMA_ID = "bb-target-scenario/v3"
 SCENARIO_SCHEMA_VERSION = 3
 COMMAND_SCHEMA_ID = "bb-target-command/v2"
@@ -200,8 +201,12 @@ def _require_git_sha(value: Any, field: str) -> str:
     return value
 
 
-def _normalize_patch_commits(values: Sequence[str]) -> list[str]:
-    """Accept only the exact unpatched BB-BL1 baseline until patch provenance is attested."""
+def _normalize_patch_commits(values: Sequence[str], verified_build=None) -> list[str]:
+    """Patched lists require the supported entrypoint’s verified build projection."""
+    if values and verified_build is not None:
+        if list(values) != verified_build["source"]["patch_commits"]:
+            raise TargetRunError("patch list differs from verified build")
+        return list(values)
     if values:
         for value in values:
             _require_git_sha(value, "patch_commit")
@@ -611,7 +616,7 @@ def _bind_command_target(
     app_root: Path,
     eboot: Path,
 ) -> str:
-    """Require the declared target argv element to resolve to the verified app root or eboot."""
+    """Require the declared target argv element to resolve to the selected app root or eboot."""
     argument = Path(command["argv"][command["target_path_index"]])
     candidate = argument if argument.is_absolute() else workdir / argument
     try:
@@ -628,7 +633,7 @@ def _bind_command_target(
     kind = expected.get(os.path.normcase(str(candidate_resolved)))
     if kind is None:
         raise TargetRunError(
-            "command target_path_index does not identify the verified target app root or eboot"
+            "command target_path_index does not identify the selected target app root or eboot"
         )
     return kind
 
@@ -1608,6 +1613,61 @@ def validate_run_manifest(manifest: Mapping[str, Any]) -> None:
     if not isinstance(manifest, Mapping):
         raise TargetRunError("target-run manifest must be an object")
     _validate_run_schema(manifest)
+    emulator = manifest["emulator"]
+    if emulator.get("build_provenance") is not None:
+        build = emulator["build_provenance"]
+        if build["binary"] != emulator["binary"]:
+            raise TargetRunError("run binary disagrees with build provenance")
+        for key, value in emulator["source"].items():
+            if build["source"].get(key) != value:
+                raise TargetRunError("run source disagrees with build provenance")
+        source = build["source"]
+        patches = source["patch_commits"]
+        if source["effective_head"] != (patches[-1] if patches else source["commit"]):
+            raise TargetRunError("run effective HEAD does not close patch chain")
+        if bool(patches) != bool(source["patch_repository"]):
+            raise TargetRunError("run patch repository identity is incomplete")
+        if not patches and source["effective_tree"] != source["tree"]:
+            raise TargetRunError("run effective tree does not match unpatched source")
+
+
+def target_evidence_classes(value: Any) -> list[str]:
+    """Include leaf evidence, so mixed provenance cannot hide synthetic inputs."""
+    classes: set[str] = set()
+    def visit(node: Any) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                if key == "evidence_class" and isinstance(child, str):
+                    classes.add(child)
+                elif key == "evidence_classes" and isinstance(child, list):
+                    classes.update(child)
+                else:
+                    visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+    visit(value)
+    return sorted(classes)
+
+
+def require_promotion_evidence(manifest: Mapping[str, Any]) -> None:
+    """Fail closed on unverified/legacy records; passing is necessary, not sufficient.
+
+    Material host/config completeness, claim-specific semantic oracles and
+    independent review remain required; aggregate unknown/warning counts do not
+    establish whether a missing field is material to the claim.
+    """
+    validate_run_manifest(manifest)
+    if (manifest["evidence_classification"] != "verification-candidate"
+            or "synthetic" in manifest["target"]["evidence_classes"]):
+        raise TargetRunError("promotion requires a verification-candidate run, not exploratory or synthetic evidence")
+    if (manifest["target"]["pre_run_tree_state"] != "verified"
+            or manifest["target"]["post_run_tree_state"] != "verified"
+            or manifest["target"]["identity_state"] != "complete"
+            or manifest["termination"]["state"] != "completed"
+            or manifest["oracle"]["state"] != "passed"
+            or manifest["packaging"]["state"] != "complete"):
+        raise TargetRunError("promotion requires complete verified target identity and successful bounded evidence")
 
 
 def _write_zip_atomic(output: Path, entries: Mapping[str, bytes]) -> None:
@@ -1641,33 +1701,51 @@ def run_experiment(
     scenario_path: Path,
     command_path: Path,
     emulator_binary_path: Path,
-    emulator_binary_sha256: str,
-    source_repository: str,
-    source_commit: str,
-    source_tree: str,
+    emulator_binary_sha256: str | None,
+    source_repository: str | None,
+    source_commit: str | None,
+    source_tree: str | None,
     patch_commits: Sequence[str],
     target_root: Path,
     working_directory: Path,
     output_path: Path,
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
+    verified_build: Mapping[str, Any] | None = None,
+    exploratory: bool = False,
 ) -> dict[str, Any]:
     """Run and package one bounded target-machine experiment."""
-    if re.fullmatch(r"[0-9a-f]{64}", emulator_binary_sha256) is None:
-        raise TargetRunError("emulator_binary_sha256 must be a lowercase 64-character digest")
-    _require_string(source_repository, "source_repository", maximum=256)
-    _require_git_sha(source_commit, "source_commit")
-    _require_git_sha(source_tree, "source_tree")
     _require_attestable_emulator_config(emulator_config_path)
-    normalized_patches = _normalize_patch_commits(patch_commits)
-    if (
-        source_repository != PINNED_SOURCE_REPOSITORY
-        or source_commit != PINNED_SOURCE_COMMIT
-        or source_tree != PINNED_SOURCE_TREE
-    ):
-        raise TargetRunError(
-            "emulator source does not match the pinned BB-BL1 baseline; update BB-BL1 first"
-        )
+    if exploratory:
+        if verified_build is not None:
+            raise TargetRunError("exploration cannot carry verified build provenance")
+        if source_repository is not None:
+            if not isinstance(source_repository, str) or re.fullmatch(r"https://[^\s]{1,240}", source_repository) is None:
+                raise TargetRunError("source_repository observation must be an HTTPS repository URL")
+        if len(patch_commits) > 64 or len(set(patch_commits)) != len(patch_commits):
+            raise TargetRunError("patch observations must be unique and bounded to 64 commits")
+        normalized_patches = []
+        for value in patch_commits:
+            _require_git_sha(value, "patch_commit")
+            normalized_patches.append(value)
+        for value, label in ((source_commit, "source_commit"), (source_tree, "source_tree")):
+            if value is not None:
+                _require_git_sha(value, label)
+    else:
+        if not isinstance(emulator_binary_sha256, str) or re.fullmatch(r"[0-9a-f]{64}", emulator_binary_sha256) is None:
+            raise TargetRunError("emulator_binary_sha256 must be a lowercase 64-character digest")
+        _require_string(source_repository, "source_repository", maximum=256)
+        _require_git_sha(source_commit, "source_commit")
+        _require_git_sha(source_tree, "source_tree")
+        normalized_patches = _normalize_patch_commits(patch_commits, verified_build)
+        if (
+            source_repository != PINNED_SOURCE_REPOSITORY
+            or source_commit != PINNED_SOURCE_COMMIT
+            or source_tree != PINNED_SOURCE_TREE
+        ):
+            raise TargetRunError(
+                "emulator source does not match the pinned BB-BL1 baseline; update BB-BL1 first"
+            )
 
     target_root_resolved = _resolve_directory(target_root, "target_root")
     workdir_resolved = _resolve_directory(working_directory, "working_directory")
@@ -1696,7 +1774,15 @@ def run_experiment(
     validate_command(command)
     _preflight_declared_outputs(scenario, workdir_resolved)
 
-    app_root, target_eboot = _verify_target_root(target_root_resolved, target_manifest)
+    if exploratory:
+        try:
+            require_copy_receipt(target_root_resolved)
+        except (OSError, ValueError) as error:
+            raise TargetRunError(f"disposable target copy receipt required: {error}") from error
+        app_root = _resolve_target_directory(target_root_resolved, target_root_resolved / "app", "target_root/app")
+        target_eboot = _resolve_target_file(target_root_resolved, app_root / "eboot.bin", "target_root/app/eboot.bin")
+    else:
+        app_root, target_eboot = _verify_target_root(target_root_resolved, target_manifest)
     _bind_command_target(command, workdir_resolved, app_root, target_eboot)
 
     binary_resolved = emulator_binary_path.resolve()
@@ -1709,7 +1795,7 @@ def run_experiment(
         binary_resolved, label="emulator binary"
     )
     expected_binary_sha256 = f"sha256:{emulator_binary_sha256}"
-    if actual_binary_sha256 != expected_binary_sha256:
+    if (not exploratory or emulator_binary_sha256 is not None) and actual_binary_sha256 != expected_binary_sha256:
         raise TargetRunError(
             f"emulator binary digest mismatch: actual={actual_binary_sha256} expected={expected_binary_sha256}"
         )
@@ -1746,6 +1832,7 @@ def run_experiment(
             "manifest_size_bytes": len(target_raw),
             "packaged_manifest_sha256": _sha256_bytes(safe_target_raw),
             "packaged_manifest_size_bytes": len(safe_target_raw),
+            "evidence_classes": target_evidence_classes(target_manifest),
             "identity_state": target_manifest["identity_completeness"]["state"],
         },
         "host_environment": {
@@ -1805,6 +1892,19 @@ def run_experiment(
             "warnings": ["raw-process-output-excluded"],
         },
     }
+    run_manifest["emulator"]["admission"] = "exploratory-unverified" if exploratory else "source-build" if verified_build else "synthetic-control"
+    run_manifest["evidence_classification"] = "exploratory-unverified" if exploratory else "verification-candidate" if verified_build and "synthetic" not in run_manifest["target"]["evidence_classes"] else "synthetic-control"
+    run_manifest["target"]["pre_run_tree_state"] = "not_checked" if exploratory else "verified"
+    run_manifest["target"]["post_run_tree_state"] = "not_checked"
+    if exploratory:
+        # CLI source fields are declarations, never a binding to observed binary bytes.
+        run_manifest["emulator"]["source_observation"] = run_manifest["emulator"].pop("source")
+        run_manifest["target"]["identity_state"] = "unverified"
+    if verified_build is not None:
+        run_manifest["emulator"]["build_provenance"] = verified_build
+        if normalized_patches:
+            for field in ("patch_repository", "effective_head", "effective_tree"):
+                run_manifest["emulator"]["source"][field] = verified_build["source"][field]
     validate_run_manifest(run_manifest)
 
     package_entries = {
@@ -1826,19 +1926,22 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     run.add_argument("--scenario", type=Path, required=True)
     run.add_argument("--command-file", type=Path, required=True)
     run.add_argument("--emulator-binary", type=Path, required=True)
-    run.add_argument("--emulator-binary-sha256", required=True)
-    run.add_argument("--source-repository", required=True)
-    run.add_argument("--source-commit", required=True)
-    run.add_argument("--source-tree", required=True)
+    run.add_argument("--emulator-binary-sha256")
+    run.add_argument("--source-repository")
+    run.add_argument("--source-commit")
+    run.add_argument("--source-tree")
     run.add_argument("--patch-commit", action="append", default=[])
     run.add_argument("--target-root", type=Path, required=True)
     run.add_argument("--working-directory", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
     run.add_argument("--backend")
     run.add_argument("--emulator-config", type=Path)
+    run.add_argument("--build-manifest", type=Path)
+    run.add_argument("--source-checkout", type=Path)
 
     validate = subparsers.add_parser("validate", help="validate a run manifest")
     validate.add_argument("manifest", type=Path)
+    validate.add_argument("--require-promotion", action="store_true", help="require promotion provenance and successful run; semantic claim review is still required")
     return parser.parse_args(argv)
 
 
@@ -1849,6 +1952,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raw = _read_bytes(args.manifest, maximum=MAX_INPUT_BYTES, label="run manifest")
             manifest = loads_strict(raw.decode("utf-8"))
             validate_run_manifest(manifest)
+            if args.require_promotion:
+                require_promotion_evidence(manifest)
             print("valid")
             return 0
         manifest = run_experiment(
@@ -1866,9 +1971,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=args.output,
             graphics_backend=args.backend,
             emulator_config_path=args.emulator_config,
+            build_manifest_path=args.build_manifest,
+            source_checkout=args.source_checkout,
         )
         print(
-            f"{manifest['termination']['state']} "
+            f"{manifest['evidence_classification']} {manifest['termination']['state']} "
             f"oracle={manifest['oracle']['state']} "
             f"packaging={manifest['packaging']['state']}"
         )

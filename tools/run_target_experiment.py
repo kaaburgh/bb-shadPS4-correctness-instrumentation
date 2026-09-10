@@ -3,7 +3,7 @@
 
 The previous v3 implementation is retained as an internal compatibility library in
 ``tools.run_target_experiment_v3``. This entrypoint adds evidence gates while
-preserving the published v3 run-record shape for detached consumers.
+emitting v4 records that distinguish exploration from verification candidates.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools import run_target_experiment_v3 as _legacy
+from tools import shadps4_build_manifest as _build
 from tools.target_manifest_projection import (
     package_target_manifest as _shared_package_target_manifest,
 )
@@ -33,34 +34,9 @@ for _export_name in dir(_legacy):
 _LEGACY_RUN_EXPERIMENT = _legacy.run_experiment
 _package_target_manifest = _shared_package_target_manifest
 
-RUNNER_VERSION = "1.11.0"
+RUNNER_VERSION = "1.13.1"
 _legacy.RUNNER_VERSION = RUNNER_VERSION
 
-PINNED_BUILD_WORKFLOW_RUN_ID = 31742892228
-PINNED_BUILD_ARTIFACTS: dict[str, dict[str, Any]] = {
-    "windows": {
-        "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
-        "source_tree": "e6026c14092b01702d4e49a5ac6c2f779a072dfe",
-        "workflow_run_id": PINNED_BUILD_WORKFLOW_RUN_ID,
-        "artifact_id": 9198403207,
-        "artifact_name": "shadps4-win64-sdl-2026-08-13-28c84fb",
-        "archive_sha256": "sha256:bb2d73f4b00f4550d95820383cfff2fee880e845a336e12ad82512962f5b1c65",
-        "binary_name": "shadPS4.exe",
-        "binary_sha256": "sha256:4212397ed435f0a1c2c8ddb71dc340e6153fce974558fbd133bae524558c650f",
-        "binary_size_bytes": 67641344,
-    },
-    "linux": {
-        "source_commit": "28c84fb5a7b19c7fb86156a1d6bb3e7e5a6cef64",
-        "source_tree": "e6026c14092b01702d4e49a5ac6c2f779a072dfe",
-        "workflow_run_id": PINNED_BUILD_WORKFLOW_RUN_ID,
-        "artifact_id": 9198177755,
-        "artifact_name": "shadps4-linux-sdl-2026-08-13-28c84fb",
-        "archive_sha256": "sha256:127c01d7b2f3260fdf9c39bdae51a68bed14b560346ce7a8d17c59defb083789",
-        "binary_name": "Shadps4-sdl.AppImage",
-        "binary_sha256": "sha256:7c6512eb2bced183bbda2fe858c503c2a4d6cc3146648f2c859a0477403fbd75",
-        "binary_size_bytes": 35179000,
-    },
-}
 
 
 def _collect_exact_evidence_classes(value: Any, result: set[str]) -> None:
@@ -82,49 +58,34 @@ def _is_explicit_synthetic_control(target_manifest: Mapping[str, Any]) -> bool:
     return provenance_classes == {"synthetic"} and bool(exact_classes) and exact_classes == {"synthetic"}
 
 
-def _pinned_build_for_host() -> Mapping[str, Any]:
-    if os.name == "nt":
-        return PINNED_BUILD_ARTIFACTS["windows"]
-    if sys.platform.startswith("linux"):
-        return PINNED_BUILD_ARTIFACTS["linux"]
-    raise TargetRunError(
-        "non-synthetic target execution has no independently bound BB-BL1 CI artifact for this host"
-    )
-
-
 def _require_non_synthetic_evidence_contract(
     target_manifest: Mapping[str, Any],
     scenario: Mapping[str, Any],
     emulator_binary_path: Path,
-    emulator_binary_sha256: str,
+    emulator_binary_sha256: str | None,
+    build_manifest: Mapping[str, Any] | None = None,
+    source_checkout: Path | None = None,
 ) -> Mapping[str, Any] | None:
-    if _is_explicit_synthetic_control(target_manifest):
+    if build_manifest is None or _is_explicit_synthetic_control(target_manifest):
         return None
     if scenario["oracle"]["kind"] != "process-exit":
         raise TargetRunError(
-            "non-synthetic file-sha256 oracles require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports file oracles only for synthetic controls"
+            "strict non-synthetic file-sha256 oracles require independently attested current-run producer provenance; use exploration for unverified observations"
         )
     if scenario["artifacts"]:
         raise TargetRunError(
-            "non-synthetic declared artifacts require independently attested current-run producer provenance; this BB-ENV1 handoff currently supports declared artifacts only for synthetic controls"
+            "strict non-synthetic declared artifacts require independently attested current-run producer provenance; use exploration for unverified observations"
         )
-    pinned = _pinned_build_for_host()
-    if (pinned.get("source_commit"), pinned.get("source_tree")) != (PINNED_SOURCE_COMMIT, PINNED_SOURCE_TREE):
-        raise TargetRunError("historical CI artifact does not identify the active source baseline; source-build admission is required")
-    actual_sha256, actual_size = _legacy._sha256_file(
-        emulator_binary_path, label="staged emulator binary"
-    )
-    supplied_sha256 = f"sha256:{emulator_binary_sha256}"
-    if (
-        actual_sha256 != pinned["binary_sha256"]
-        or actual_size != pinned["binary_size_bytes"]
-        or supplied_sha256 != pinned["binary_sha256"]
-    ):
-        raise TargetRunError(
-            "non-synthetic target execution requires the exact independently observed upstream "
-            f"Build and Release artifact from workflow run {PINNED_BUILD_WORKFLOW_RUN_ID} for this host"
-        )
-    return pinned
+    if source_checkout is None:
+        raise TargetRunError("strict verification requires --source-checkout")
+    try:
+        _build.verify(build_manifest, source_checkout, emulator_binary_path)
+    except (_build.BuildManifestError, OSError) as error:
+        raise TargetRunError(str(error)) from error
+    actual = build_manifest["binary"]
+    if actual["sha256"] != f"sha256:{emulator_binary_sha256}":
+        raise TargetRunError("caller binary digest differs from build manifest")
+    return build_manifest
 
 
 def _require_regular_unlinked_file(path: Path, label: str) -> os.stat_result:
@@ -232,16 +193,18 @@ def run_experiment(
     scenario_path: Path,
     command_path: Path,
     emulator_binary_path: Path,
-    emulator_binary_sha256: str,
-    source_repository: str,
-    source_commit: str,
-    source_tree: str,
+    emulator_binary_sha256: str | None = None,
+    source_repository: str | None = None,
+    source_commit: str | None = None,
+    source_tree: str | None = None,
     patch_commits: Sequence[str],
     target_root: Path,
     working_directory: Path,
     output_path: Path,
     graphics_backend: str | None = None,
     emulator_config_path: Path | None = None,
+    build_manifest_path: Path | None = None,
+    source_checkout: Path | None = None,
 ) -> dict[str, Any]:
     target_raw, target_manifest = _legacy._load_target_manifest(target_manifest_path)
     safe_target_raw = _package_target_manifest(target_manifest)
@@ -255,6 +218,21 @@ def run_experiment(
     _legacy.validate_command(command)
 
     synthetic_control = _is_explicit_synthetic_control(target_manifest)
+    build_document = None
+    build_raw = None
+    exploratory = build_manifest_path is None and not synthetic_control
+    if build_manifest_path is not None and source_checkout is None:
+        raise TargetRunError("build manifest requires source checkout")
+    if build_manifest_path is not None:
+        try:
+            build_raw, build_document = _build.load(build_manifest_path)
+        except (_build.BuildManifestError, OSError) as error:
+            raise TargetRunError(str(error)) from error
+        declared = build_document["source"]
+        if (source_repository, source_commit, source_tree, list(patch_commits)) != (
+                declared["repository"], declared["commit"], declared["tree"], declared["patch_commits"]):
+            raise TargetRunError("CLI source/patch identity differs from build manifest")
+
     target_root_resolved = _legacy._resolve_directory(target_root, "target_root")
     working_directory_resolved = _legacy._resolve_directory(working_directory, "working_directory")
     if (
@@ -287,11 +265,15 @@ def run_experiment(
                 command, working_directory_resolved, emulator_binary_path
             )
             source_info = _require_regular_unlinked_file(original_binary, "emulator binary")
-            pinned = _pinned_build_for_host()
-            staged_emulator_path = snapshot_root / str(pinned["binary_name"])
-            _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
+            staged_emulator_path = snapshot_root / ("shadps4.exe" if os.name == "nt" else "shadps4")
+            if exploratory:
+                # Preserve relative runtime libraries/assets of existing builds.
+                staged_emulator_path = original_binary
+            else:
+                _stage_emulator_binary(original_binary, staged_emulator_path, source_info)
             _require_non_synthetic_evidence_contract(
-                target_manifest, scenario, staged_emulator_path, emulator_binary_sha256
+                target_manifest, scenario, staged_emulator_path, emulator_binary_sha256,
+                build_document, source_checkout
             )
             staged_command = dict(command)
             staged_argv = list(command["argv"])
@@ -304,6 +286,15 @@ def run_experiment(
             _require_non_synthetic_evidence_contract(
                 target_manifest, scenario, emulator_binary_path, emulator_binary_sha256
             )
+
+        verified_build = None
+        if build_document is not None:
+            try:
+                _build.verify(build_document, source_checkout, staged_emulator_path)
+            except (_build.BuildManifestError, OSError) as error:
+                raise TargetRunError(str(error)) from error
+            verified_build = _build.safe_projection(build_document, build_raw)
+            _write_snapshot(snapshot_root / "build-manifest.json", build_raw, "build manifest")
 
         output_resolved.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(
@@ -325,10 +316,13 @@ def run_experiment(
                 output_path=legacy_output,
                 graphics_backend=graphics_backend,
                 emulator_config_path=emulator_config_path,
+                verified_build=verified_build,
+                exploratory=exploratory,
             )
-            _record_post_run_target_verification(
-                manifest, target_root_resolved, target_manifest
-            )
+            if not exploratory:
+                _record_post_run_target_verification(
+                    manifest, target_root_resolved, target_manifest
+                )
             return _restore_original_command_identity(
                 legacy_output,
                 manifest,

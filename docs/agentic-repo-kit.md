@@ -43,7 +43,7 @@ actual="$(sha256sum "$KIT_PATH" | awk '{print $1}')"
 test "$actual" = "$KIT_SHA256"
 ```
 
-For the current lock this resolves to `agentic-repo-kit-0.1.9.pyz`. The repository does not need a cross-repository secret because the kit repository and releases are public.
+For the current lock this resolves to `agentic-repo-kit-0.1.13.pyz`. The repository does not need a cross-repository secret because the kit repository and releases are public.
 
 If the environment cannot reach GitHub, an operator may provide only the exact `.pyz` named in the lock. Compute its SHA-256 locally and compare it with `distribution.sha256`; the committed lock is the trust anchor. `SHA256SUMS` published with the kit release is useful as an independent release-level cross-check, but it is not required for the consumer check path.
 

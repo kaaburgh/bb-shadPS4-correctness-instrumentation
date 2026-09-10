@@ -3,7 +3,7 @@
 
 Project: **Bloodborne on shadPS4 correctness + instrumentation** (`emulator correctness / graphics instrumentation`)
 
-Profiles compiled into this contract: core, reverse-engineering, proprietary-target, emulator, graphics, upstream-first.
+Profiles compiled into this contract: core.
 
 Read this file before planning or changing the repository. The live roadmap is [`ROADMAP.md`](./ROADMAP.md). For operational details read [`docs/agent-playbook.md`](./docs/agent-playbook.md); for roadmap changes read [`docs/roadmap-authoring.md`](./docs/roadmap-authoring.md).
 
@@ -53,67 +53,75 @@ When a required capability is missing:
 
 Failure to acquire a tool inside one sandbox is not, by itself, sufficient evidence to classify work `LOCAL ONLY`, mark the underlying capability unavailable, or close the task as impossible.
 
-## Reverse engineering and evidence
+## Exploration is the default
 
-Prefer **observe → hypothesize → instrument → test → update model → patch**. If the cause is unknown, observability comes before a final fix. Choose experiments for information gain: one experiment that eliminates several hypotheses is better than several narrow confirmation attempts.
+Reproducibility is required for promoted results, not for every failed or
+intermediate experiment. Failure to satisfy promotion-grade provenance must
+prevent promotion of a claim, not prevent the experiment itself.
 
-Keep evidence classes distinct: `static`, `runtime`, `synthetic`, `reported`, and `assumed`. A plausible symbol/function name is not a fact. Tie target-specific findings to exact target/version provenance.
+Ordinary reverse-engineering work may continue from previous agent state and reuse
+persistent source checkouts, dirty/uncommitted diagnostic changes, existing
+out-of-tree build directories, incremental CMake/Ninja builds, compiler/dependency
+caches, downloaded/fetched dependencies, previously built binaries, captures,
+logs and generated artifacts. Inspect existing state first; preserve useful
+negative results and label reused observations with their limitations. Do not
+require a clean workspace/worktree, fresh target copy, build manifest or provenance
+package before an experiment without a concrete technical reason.
 
-Validation evidence must be independent of the transformation or mapping being validated. Do not validate a parser-derived address, mapping, decode, or identity by feeding values produced through that same derivation back into it. Prefer an independently pinned relationship, a second implementation/tool, raw-byte observation, runtime observation, or a structural invariant that can fail independently. If only internal consistency is checked, describe it as such rather than as independent validation.
+Use the existing durable source checkout and build directory by default. Build
+incrementally with `cmake --build <existing-build-directory> --parallel <jobs>`.
+Configure only when missing or when changed build inputs require it. Do not clean,
+reconfigure or rebuild from scratch as a ritual. Use the strict
+`tools/shadps4_build_manifest.py build` path for promotion, explicitly requested
+reproducibility verification, or a concrete suspicion of stale/corrupt build state.
+Generated clean-checkout end-to-end recommendations apply to promotion verification,
+not admission to exploratory tasks. See `docs/baseline/source-builds.md` and the
+`docs/experiments/target-execution-feasibility.md`.
 
-Machine-readable derived RE artifacts must carry enough provenance to reject stale or semantically incompatible evidence: at minimum a schema/version identifier, identities or hashes for all material inputs that affect interpretation, and producer/tool or analysis-model identity where those can change semantics. Consumers should fail closed on missing or incompatible provenance instead of silently accepting legacy output.
+## Proprietary inputs and reusable working state
 
-Preserve ambiguity in both machine output and prose. If uniqueness is not established, emit an explicit ambiguous/unmapped result rather than selecting a convenient candidate by ordering, nearest address, fuzzy score, or other arbitrary tie-break. Heuristic relationships may rank investigation leads but remain hypotheses until stronger evidence establishes identity.
+Original operator-owned game/package inputs are immutable. Never execute a
+writable target against those originals or delete them. Prepare one separate,
+verified disposable Bloodborne working copy (no links back to originals) and reuse
+it across exploratory runs, including its working profile/cache state. The copy
+helper verifies creation and writes a private, directory-bound receipt required
+by exploratory runs. Use its `--verify-existing` option once for an older copy
+without a receipt; it need not run before each experiment. Exploration does
+not require a full expensive pre/post target hash pass unless the hypothesis needs
+one. Current working state may drift; record that as unverified. Recheck exact
+identity for promotion. Never commit proprietary payloads, private dumps, secrets,
+unrestricted logs or unnecessarily large captures. Safe metadata and tooling may
+be retained; original inputs stay outside packaging.
 
-Treat ABI and calling convention as target evidence, not a compiler-default assumption. Before interpreting arguments across a closed-target call boundary or designing a hook/trampoline around it, establish the relevant register/stack behavior from real call sites, callee entry/exit behavior, known-arity calls, or equivalent direct evidence when practical.
+## Observations and promotion
 
-For runtime experiments, define success with an oracle that directly distinguishes the claimed target state or behavior. Liveness, a changed frame/hash, non-empty output, or a generic timing delta proves only that something happened unless that is exactly the claim being tested. Declare termination/liveness expectations and bound waits, retries, logging, captures, and total runtime so a hung or noisy run fails closed rather than producing accidental evidence.
+Keep `static`, `runtime`, `synthetic`, `reported` and `assumed` evidence distinct,
+and separately record verification status. Exploration is `exploratory-unverified`;
+a successful process or file oracle does not upgrade it. Synthetic controls prove
+harness capability only. Existing captures/logs may inform hypotheses without
+becoming current-run evidence. Preserve ambiguity and negative findings.
 
-Keep harness capability separate from target-specific evidence. A synthetic fixture, redistributable control target, or mock can establish that input injection, breakpoint control, capture, decoding, or artifact generation works; it does not establish the corresponding behavior on the exact target until that target is run under the stated scenario and oracle.
+Promotion requires exact source/build/patch, target/content/update/config and
+material host OS/CPU/GPU/driver/backend identities, scenario/tool provenance,
+bounded termination and a claim-specific independent oracle. Source provenance
+uses the existing strict manifest producer/verifier: clean exact source, fresh
+build directory, complete linear patch chain and matching binary bytes. Do not
+retrospectively bless an arbitrary binary or weaken the strict manifest schema.
+The runner's `validate --require-promotion` rejects exploratory, synthetic,
+incomplete and unsuccessful records; passing it is necessary but still needs
+claim-specific semantic review and material configuration verification. Source-build
+admission alone does not prove gameplay, correctness or performance.
 
-Substantial findings belong under `docs/re/`; reproducible experiments and negative results belong under `docs/experiments/`. Save signatures, structures, call sequences, scripts, parsers, and other reusable RE outputs in the repository when licensing permits.
-
-## Proprietary target material
-
-Do not commit proprietary executables/assets, private dumps, secrets, credentials, or unnecessarily large captures. Commit only the minimal derived metadata and tooling needed to reproduce and review the work.
-
-Treat operator-supplied proprietary target trees as immutable evidence inputs. Verify the exact target/fixture identity before use and, when the target or harness can write to its mounted tree, execute against a verified copy, isolated work directory, overlay, or equivalent mechanism rather than mutating the source evidence in place. Reject ambiguous target/fixture selection instead of choosing one silently.
-
-When a target machine is required, prepare the smallest reproducible one-shot experiment. Prefer a script/tool that verifies the target/fixture identity, executes one bounded scenario, and emits a self-contained artifact containing only safe metadata, hashes/version identifiers, configuration, bounded logs, and the requested captures/dumps.
-
-The detached machine-readable run record should have an explicit schema/version and preserve enough provenance to replay and audit the evidence without redistributing the target: target/fixture identities, scenario/config identity, harness/tool versions or hashes, material environment facts, termination result, semantic oracle results, and artifact names/digests. Sanitize private host paths, user identifiers, credentials, and unrelated environment data. Do not embed proprietary payload bytes in the run record merely for convenience.
-
-## Emulator correctness
-
-Separate guest semantics from host implementation details and from title-visible symptoms. A bug visible in one game is not automatically title-specific; first establish which emulated contract is violated and whether a generic fix is possible.
-
-Reproducibility must identify the emulator source baseline (repository + exact commit), relevant build/configuration, guest/title build identity, host OS/CPU/GPU/driver/backend where they affect behavior, and the exact scenario.
-
-Correctness evidence precedes performance specialization. Instrumentation must make its own overhead measurable so profiling conclusions are not artifacts of tracing.
-
-## Graphics and GPU work
-
-Do not infer the rendering pipeline from UI settings alone. Observe the relevant API/backend, device/queue/swapchain/resource descriptors, formats, resolutions, synchronization, barriers, render/depth targets, shader/pipeline identifiers, and timing paths needed by the question.
-
-Prefer objective validation: frame/resource captures, event sequences, descriptors/state dumps, screenshot or pixel comparisons, and timing distributions. The acceptance oracle must prove the intended checkpoint or graphics state: a changed frame/hash, nonzero pixel delta, or generic GPU activity is not sufficient evidence of a particular screen/resource/state transition unless that change itself is the claim. Use checkpoint-specific regions, descriptors, event/resource identities, or other semantic invariants when full-frame/global thresholds would be misleading.
-
-Keep expensive tracing out of hot paths unless explicitly running a diagnostic mode; avoid per-draw/per-frame filesystem I/O, allocations, global locks, and unbounded logging.
-
-## Upstream-first changes
-
-When the project sits on an upstream codebase, first ask whether the observed behavior is a generic semantic/correctness issue. Prefer a minimal generic fix or diagnostic that can be reviewed upstream over a title-specific workaround when evidence supports it.
-
-Keep target-specific reproduction and upstream-generic reasoning separable. Where practical, add synthetic/unit regression coverage independent of proprietary content. If a guarded specialization is necessary, document why the generic path cannot safely express the optimization or fix.
-
-## Project-specific baseline identity
-
-Any correctness, profiling, or performance claim must identify the relevant baseline precisely enough to reproduce and compare it:
-
-1. **shadPS4 source baseline** — upstream repository, exact commit SHA, and relevant local patches;
-2. **Bloodborne target baseline** — game version/build, content/update identity, and relevant configuration or mod state;
-3. **host execution environment** — OS, CPU, GPU, GPU driver, graphics backend, and relevant emulator configuration.
-
-Do not compare captures, benchmarks, or correctness observations across materially different baselines without recording the difference explicitly.
+Prefer observe → hypothesize → instrument → test → update model → patch. Dirty
+local diagnostic/experimental patches are permitted before a semantic seam is
+confirmed; promoting a correctness fix requires evidence of the violated guest
+contract. Prefer generic upstreamable fixes where supported. No unrelated emulator
+correctness/performance changes. Measure instrumentation overhead before promoting
+profiling conclusions. Preserve technical dependencies and correctness-before-
+optimization gates; BB-ENV1 verification status is not permission to explore. A named feasibility environment is resolved when the required
+target/tool/host route is available; incomplete verification in ENV1 does not mean
+the environment remains unresolved. Generated `GATED` readiness guidance must not
+be interpreted as requiring completed ENV1 for intermediate exploration.
 
 ## agentic-repo-kit artifact and check procedure
 

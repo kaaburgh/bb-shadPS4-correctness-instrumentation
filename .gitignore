@@ -1,0 +1,5 @@
+# Local source/build workspaces and private target-run inputs; never publish bytes.
+.astra-repos/
+.astra-local/
+__pycache__/
+*.pyc

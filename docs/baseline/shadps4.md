@@ -65,7 +65,9 @@ git -C shadPS4 submodule sync --recursive
 git -C shadPS4 submodule update --init --recursive
 ```
 
-Before configuring a build, verify all of the following:
+For promotion/verification against the pinned baseline, verify the following.
+Ordinary exploration reuses the existing checkout/build and permits dirty source;
+it does not need these admission checks:
 
 ```bash
 git -C shadPS4 rev-parse HEAD
@@ -80,7 +82,13 @@ means uninitialized, `+` means a different commit, and `U` means a conflict. Any
 mismatch makes the checkout unsupported for baseline evidence; do not repair it
 by advancing a branch or submodule.
 
-## Build provenance contract
+## Promotion build provenance contract
+
+Use the [source-first build producer and manifest verifier](source-builds.md)
+for opt-in BB-ENV1 verification/promotion, including Ubuntu RelWithDebInfo builds and
+fully identified linear patch stacks. The profiles below remain examples;
+they do not constrain admission to one CI binary.
+
 
 The initial reference build profile mirrors the material compile options of the
 Windows SDL `Release` profile defined by upstream's pinned
@@ -101,7 +109,7 @@ used because they remain part of the actual build environment.
 Other upstream-supported configurations are allowed, but captures or comparisons
 must not treat different configurations as the same build.
 
-For every produced binary, preserve at least:
+For every binary used in promoted evidence, preserve at least:
 
 - upstream repository URL, upstream base SHA, effective source commit and tree;
 - ordered local/fork patch commit SHAs, or the explicit value `none`;
@@ -117,7 +125,7 @@ The pinned upstream workflow uses moving runner/action inputs in places (for
 example runner labels and a CMake setup action), so a workflow file plus commit
 SHA is not enough to reconstruct the toolchain. Record the actual resolved tool
 versions and workflow run identity. BB-BL3 will define the broader host/run
-environment manifest; it does not remove these source/build requirements.
+environment manifest; it does not remove these source/build requirements for promoted evidence. Ordinary exploration follows the persistent incremental default in [source-builds.md](source-builds.md).
 
 Keep build output outside the source checkout, as in the reference command, so a
 post-build source status can still expose accidental source changes. Generated
@@ -130,7 +138,9 @@ vendor the shadPS4 tree or add it as a moving submodule here. Source changes are
 reviewed in the native shadPS4 history, while this repository records the exact
 source identity used by experiments and decisions.
 
-Use this workflow for a change to shadPS4:
+For exploration, edit the existing durable checkout directly and build incrementally;
+uncommitted diagnostic changes are allowed. Use the following commit workflow
+when promoting/publishing a change to shadPS4:
 
 1. Create or reuse a shadPS4 fork only when the first source change is needed.
    Add the official repository as remote `upstream` and fetch the exact active
