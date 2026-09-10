@@ -27,7 +27,22 @@ class ExplorationTests(unittest.TestCase):
         self.args = self.fixture.run_args()
         original = self.args["target_root"]
         disposable = self.fixture.root / "disposable"
-        target_copy.prepare(original / "app", disposable, target_copy.identity(original / "app"))
+        update_source = self.fixture.root / "update-original"
+        (update_source / "data").mkdir(parents=True)
+        (update_source / "data/control.bin").write_bytes(b"synthetic-content-update")
+        target_manifest = json.loads(self.args["target_manifest_path"].read_text())
+        target_manifest["content"]["resolved_tree"].update(
+            target_copy.resolved_identity(original / "app", update_source)
+        )
+        self.exploratory_manifest_path = self.fixture.root / "exploratory-target-manifest.json"
+        self.exploratory_manifest_path.write_bytes(runner._json_bytes(target_manifest))
+        target_copy.prepare(
+            original / "app",
+            disposable,
+            target_copy.identity(original / "app"),
+            update_source=update_source,
+            update_expected=target_copy.identity(update_source),
+        )
         command = json.loads(self.args["command_path"].read_text())
         command["argv"][1] = str(disposable / "app")
         self.args["command_path"].write_bytes(runner._json_bytes(command))
@@ -35,6 +50,7 @@ class ExplorationTests(unittest.TestCase):
 
     def exploratory_args(self):
         args = dict(self.args)
+        args["target_manifest_path"] = self.exploratory_manifest_path
         for key in ("build_manifest_path", "source_repository", "source_commit", "source_tree",
                     "emulator_binary_sha256"):
             args.pop(key)
@@ -196,6 +212,12 @@ class ExplorationTests(unittest.TestCase):
 
     def test_exploration_requires_receipt_before_execution(self):
         (self.args["target_root"] / target_copy.RECEIPT_NAME).unlink()
+        with mock.patch.object(runner._legacy, "_execute_command", side_effect=AssertionError("must not execute")):
+            with self.assertRaisesRegex(runner.TargetRunError, "receipt required"):
+                runner.run_experiment(**self.exploratory_args())
+
+    def test_exploration_requires_update_sibling_before_execution(self):
+        shutil.rmtree(self.args["target_root"] / target_copy.UPDATE_DIR_NAME)
         with mock.patch.object(runner._legacy, "_execute_command", side_effect=AssertionError("must not execute")):
             with self.assertRaisesRegex(runner.TargetRunError, "receipt required"):
                 runner.run_experiment(**self.exploratory_args())

@@ -1776,7 +1776,23 @@ def run_experiment(
 
     if exploratory:
         try:
-            require_copy_receipt(target_root_resolved)
+            update_installed = target_manifest["content"]["update"]["state"] == "installed"
+            # The helper records the resolved app view only for the supported
+            # base-plus-update disposable layout.  DLC/file-replacement views
+            # need a future copy contract of their own; they still cannot run
+            # with a missing required sibling update.
+            expected_resolved_tree = (
+                target_manifest["content"]["resolved_tree"]
+                if update_installed
+                and not target_manifest["content"]["dlc"]
+                and not target_manifest["configuration"]["active_modifications"]
+                else None
+            )
+            require_copy_receipt(
+                target_root_resolved,
+                require_update=update_installed,
+                expected_resolved_tree=expected_resolved_tree,
+            )
         except (OSError, ValueError) as error:
             raise TargetRunError(f"disposable target copy receipt required: {error}") from error
         app_root = _resolve_target_directory(target_root_resolved, target_root_resolved / "app", "target_root/app")

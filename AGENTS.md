@@ -83,12 +83,15 @@ not admission to exploratory tasks. See `docs/baseline/source-builds.md` and the
 Original operator-owned game/package inputs are immutable. Never execute a
 writable target against those originals or delete them. Prepare one separate,
 verified disposable Bloodborne working copy (no links back to originals) and reuse
-it across exploratory runs, including its working profile/cache state. The copy
-helper verifies creation and writes a private, directory-bound receipt required
-by exploratory runs. Use its `--verify-existing` option once for an older copy
-without a receipt; it need not run before each experiment. Exploration does
-not require a full expensive pre/post target hash pass unless the hypothesis needs
-one. Current working state may drift; record that as unverified. Recheck exact
+it across exploratory runs, including its working profile/cache state. For an
+installed update, the copy must contain independent `app` and shadPS4-native
+`app-UPDATE` siblings. The copy helper verifies both components, records their
+resolved identity, and writes a private, directory-bound receipt required by
+exploratory runs. Use its `--verify-existing` option once for an older copy
+without a receipt; it can add the update sibling without recopying an unchanged
+base. It need not run before each experiment. Exploration does not require a
+full expensive pre/post target hash pass unless the hypothesis needs one.
+Current working state may drift; record that as unverified. Recheck exact
 identity for promotion. Never commit proprietary payloads, private dumps, secrets,
 unrestricted logs or unnecessarily large captures. Safe metadata and tooling may
 be retained; original inputs stay outside packaging.
