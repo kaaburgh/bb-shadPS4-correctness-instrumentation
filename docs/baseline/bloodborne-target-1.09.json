@@ -1,0 +1,77 @@
+{
+  "$schema": "../../schemas/bloodborne-target-manifest.schema.json",
+  "manifest_kind": "bloodborne-target-identity",
+  "schema_version": 1,
+  "provenance": {
+    "evidence_classes": [
+      "static",
+      "runtime"
+    ],
+    "collected_at": "2026-09-10T15:56:48Z",
+    "producer": {
+      "name": "bb-target-manifest-1.09-baseline",
+      "version": "1.0.0"
+    }
+  },
+  "identity_completeness": {
+    "state": "complete",
+    "unknown_fields": []
+  },
+  "target": {
+    "name": "Bloodborne",
+    "title_id": {
+      "value": "CUSA03173",
+      "evidence_class": "static"
+    },
+    "distribution_region": "europe"
+  },
+  "build": {
+    "app_version": "01.09",
+    "master_version": "01.00",
+    "eboot": {
+      "sha256": "d65f0b4f01d59166aed16f8604196d8b7dd805abbf0758b356e8f1354c9429f9",
+      "size_bytes": 93825704,
+      "evidence_class": "static"
+    },
+    "param_sfo": {
+      "sha256": "7c998973e4ab800f1cc6c2a73e2739ca1a5def8d1af254efd3f8cf91202f419d",
+      "size_bytes": 1760,
+      "evidence_class": "static"
+    }
+  },
+  "content": {
+    "base": {
+      "content_id": "EP9000-CUSA03173_00-BLOODBORNE0000EU",
+      "version": "01.00",
+      "source_package": null
+    },
+    "update": {
+      "state": "installed",
+      "component": {
+        "content_id": "EP9000-CUSA03173_00-BLOODBORNE0000EU",
+        "version": "01.09",
+        "source_package": {
+          "sha256": "8b0222205bb16695914254cedd3a68be15aa0f9915a98001eb8f1ec0038cd317",
+          "size_bytes": 181338112,
+          "evidence_class": "static"
+        }
+      }
+    },
+    "dlc": {},
+    "resolved_tree": {
+      "algorithm": "sha256-tree-v1",
+      "sha256": "743bd38658fcb96fbf9418386e2eb2dcc63fd1c7408c59afd30e5aef726b55b8",
+      "file_count": 28849,
+      "total_bytes": 31438444067,
+      "evidence_class": "static"
+    }
+  },
+  "configuration": {
+    "settings": {},
+    "active_modifications": {},
+    "modification_order": {
+      "value": [],
+      "evidence_class": "static"
+    }
+  }
+}

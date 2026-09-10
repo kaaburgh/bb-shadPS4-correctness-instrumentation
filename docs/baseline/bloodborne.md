@@ -4,6 +4,40 @@ BB-BL2 defines a versioned, payload-free identity for the Bloodborne side of a r
 
 The machine-readable contract is [JSON Schema draft 2020-12](../../schemas/bloodborne-target-manifest.schema.json). A fully synthetic, non-target example is [included here](./examples/bloodborne-target-manifest.synthetic.json).
 
+## Active target baseline
+
+The active node baseline is the real EU `CUSA03173` target at effective game
+version `01.09`. Its safe, payload-free identity is recorded in
+[`bloodborne-target-1.09.json`](./bloodborne-target-1.09.json). The manifest
+records the base component as `01.00`, the installed update component as `01.09`,
+the resolved overlay tree, and the absence of DLC or active target
+modifications.
+
+The existing working view is a base directory named `CUSA03173` with a sibling
+update directory named `CUSA03173-UPDATE`. This is the supported shadPS4 update
+mechanism: when `/app0` is mounted, the pinned `v0.18.0` source probes the
+`-UPDATE` sibling (then `-patch` as fallback) and adds it as a read-only overlay
+above the base. The update is not applied by copying files into the base, and
+`-p/--patch` is a memory-patch option rather than a PKG installer. The relevant
+upstream implementation is [`fs.cpp` at the pinned baseline](https://github.com/shadps4-emu/shadPS4/blob/e3ce810f3a653f43ac64ebab63023de281a4103a/src/core/file_sys/fs.cpp#L89-L145).
+
+The update directory's `sce_sys/param.sfo` identifies `CUSA03173` and
+`APP_VER=01.09`; the current manifest also binds its `eboot.bin` and
+`param.sfo` digests. A bounded exploratory launch on 2026-09-10 independently
+reported `Game id: CUSA03173` and `App Version: 01.09`, initialized Vulkan, and
+reached Bloodborne resource/pipeline activity before its intentional timeout.
+This is launch/liveness evidence only; it is not a gameplay checkpoint or a
+correctness claim.
+
+## Historical 01.00 observations
+
+Any earlier runtime observations or captures made against base-only `01.00`, or
+before the `CUSA03173-UPDATE` overlay was active, are retained as historical
+artifacts but are stale relative to the active `01.09` manifest. They must not be
+compared with new correctness, profiling, or performance evidence without an
+explicit baseline-difference note. New observations should reference
+`bloodborne-target-1.09.json`.
+
 ## Identity boundary
 
 The manifest describes the guest/title inputs only. The shadPS4 repository, commit, and patches belong to BB-BL1. Host OS, CPU, GPU, driver, graphics backend, and emulator configuration belong to BB-BL3. A reproducible runtime record will reference all three manifests rather than copying their fields into this one.

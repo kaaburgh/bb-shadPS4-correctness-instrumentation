@@ -27,6 +27,14 @@ existing durable checkout, out-of-tree build, dependency/compiler caches and
 binary; dirty/uncommitted instrumentation is allowed. See the
 [persistent incremental build default](../baseline/source-builds.md).
 
+The active node target is the EU `CUSA03173` view recorded in
+[`bloodborne-target-1.09.json`](../baseline/bloodborne-target-1.09.json): retain
+the existing base component at `01.00` together with the sibling
+`CUSA03173-UPDATE` component at effective `01.09`. Launch the base path so the
+pinned shadPS4 overlay mechanism supplies the update; do not launch the update
+directory as a separate game or copy its files into the base. This view is
+reusable between exploratory runs and does not require another full target copy.
+
 Original operator-owned game/package inputs stay immutable. Once, prepare a
 separate verified disposable target working copy with no links to originals.
 [`prepare_env1_target_copy.py`](../../tools/prepare_env1_target_copy.py) supports
@@ -156,6 +164,13 @@ configuration and an independent semantic oracle appropriate to the promoted
 claim. A `verification-candidate` or passed process-exit oracle proves neither
 menu/gameplay nor graphics correctness nor performance. Missing promotion-grade
 provenance blocks promotion of a claim, never ordinary exploration.
+
+The separate direct SDL exploratory launch recorded in
+[`bloodborne-1.09-exploratory-launch.md`](./bloodborne-1.09-exploratory-launch.md)
+reported `Game id: CUSA03173` and `App Version: 01.09` after Vulkan and
+Bloodborne resource/pipeline initialization. It is launch/liveness evidence
+only; it is not a supported-run record, semantic checkpoint, or correctness
+evidence.
 
 Full manifests are maintainer-owned local build observations, not signed
 third-party attestations or protection against deliberate forgery. Detached
